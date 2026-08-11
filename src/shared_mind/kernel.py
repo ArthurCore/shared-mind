@@ -115,15 +115,32 @@ class Kernel:
     MAX_PROPOSAL_BYTES = 1024 * 1024
     MAX_PROPOSAL_DEPTH = 64
     SUPPORTED_VERSIONS = {
-        "schema": "1.2.0",
+        "schema": "1.3.0",
         "conflict_rules": "conflict-rules@1",
         "projection": "markdown-projection@3",
     }
-    READABLE_SCHEMA_VERSIONS = frozenset({"1.0.0", "1.1.0", "1.2.0"})
+    READABLE_SCHEMA_VERSIONS = frozenset(
+        {"1.0.0", "1.1.0", "1.2.0", "1.3.0"}
+    )
     _RECORD_ID = re.compile(
         r"^[a-z][a-z0-9_]{1,31}_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
     )
     _IDEMPOTENCY_KEY = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
+    _LEGACY_RECEIPT_PIN_NAME = "legacy_receipt_history_v1"
+    _RECEIPT_COLUMNS = (
+        "id",
+        "idempotency_key",
+        "proposal_hash",
+        "proposal_id",
+        "outcome",
+        "reason_codes",
+        "ledger_seq",
+        "state_root",
+        "conflict_ids",
+        "proposer",
+        "document",
+        "schema_version",
+    )
 
     def __init__(
         self,
@@ -145,6 +162,9 @@ class Kernel:
         )
         self.decision_receipt_validator = build_definition_validator(
             "DecisionReceipt", contract
+        )
+        self.legacy_decision_receipt_validator = build_definition_validator(
+            "DecisionReceiptV1_2", contract
         )
         self.actor_ref_validator = build_definition_validator("ActorRef", contract)
         registry_errors = list(self.contract_validator.iter_errors(registry))
@@ -172,78 +192,85 @@ class Kernel:
         self.connection.close()
 
     def _create_schema(self) -> None:
-        self.connection.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS sources (
-              revision_id TEXT PRIMARY KEY,
-              content_hash TEXT NOT NULL,
-              document TEXT NOT NULL,
-              content BLOB NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS claims (
-              claim_id TEXT PRIMARY KEY,
-              proposition_hash TEXT NOT NULL,
-              proposition TEXT NOT NULL,
-              document TEXT NOT NULL,
-              status TEXT NOT NULL,
-              version INTEGER NOT NULL,
-              superseded_by TEXT
-            );
-            CREATE TABLE IF NOT EXISTS evidence (
-              evidence_link_id TEXT PRIMARY KEY,
-              claim_id TEXT NOT NULL REFERENCES claims(claim_id),
-              source_revision_id TEXT NOT NULL REFERENCES sources(revision_id),
-              document TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS conflicts (
-              conflict_id TEXT PRIMARY KEY,
-              family_key TEXT NOT NULL,
-              kind TEXT NOT NULL,
-              member_digest TEXT NOT NULL,
-              members TEXT NOT NULL,
-              status TEXT NOT NULL,
-              episode INTEGER NOT NULL,
-              version INTEGER NOT NULL,
-              resolution TEXT,
-              opened_seq INTEGER NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS ledger (
-              seq INTEGER PRIMARY KEY AUTOINCREMENT,
-              prev_hash TEXT,
-              entry_hash TEXT NOT NULL UNIQUE,
-              proposal_hash TEXT NOT NULL,
-              proposal TEXT NOT NULL,
-              events TEXT NOT NULL,
-              pre_state_root TEXT NOT NULL,
-              state_root TEXT NOT NULL,
-              committed_at TEXT NOT NULL,
-              document TEXT
-            );
-            CREATE TABLE IF NOT EXISTS receipts (
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              idempotency_key TEXT NOT NULL,
-              proposal_hash TEXT NOT NULL,
-              proposal_id TEXT NOT NULL,
-              outcome TEXT NOT NULL,
-              reason_codes TEXT NOT NULL,
-              ledger_seq INTEGER,
-              state_root TEXT NOT NULL,
-              conflict_ids TEXT NOT NULL,
-              proposer TEXT,
-              document TEXT,
-              schema_version TEXT
-            );
-            CREATE TABLE IF NOT EXISTS kernel_metadata (
-              name TEXT PRIMARY KEY,
-              value TEXT NOT NULL
-            );
-            """
+        statements = (
+            """CREATE TABLE IF NOT EXISTS sources (
+                 revision_id TEXT PRIMARY KEY,
+                 content_hash TEXT NOT NULL,
+                 document TEXT NOT NULL,
+                 content BLOB NOT NULL
+               )""",
+            """CREATE TABLE IF NOT EXISTS claims (
+                 claim_id TEXT PRIMARY KEY,
+                 proposition_hash TEXT NOT NULL,
+                 proposition TEXT NOT NULL,
+                 document TEXT NOT NULL,
+                 status TEXT NOT NULL,
+                 version INTEGER NOT NULL,
+                 superseded_by TEXT
+               )""",
+            """CREATE TABLE IF NOT EXISTS evidence (
+                 evidence_link_id TEXT PRIMARY KEY,
+                 claim_id TEXT NOT NULL REFERENCES claims(claim_id),
+                 source_revision_id TEXT NOT NULL REFERENCES sources(revision_id),
+                 document TEXT NOT NULL
+               )""",
+            """CREATE TABLE IF NOT EXISTS conflicts (
+                 conflict_id TEXT PRIMARY KEY,
+                 family_key TEXT NOT NULL,
+                 kind TEXT NOT NULL,
+                 member_digest TEXT NOT NULL,
+                 members TEXT NOT NULL,
+                 status TEXT NOT NULL,
+                 episode INTEGER NOT NULL,
+                 version INTEGER NOT NULL,
+                 resolution TEXT,
+                 opened_seq INTEGER NOT NULL
+               )""",
+            """CREATE TABLE IF NOT EXISTS ledger (
+                 seq INTEGER PRIMARY KEY AUTOINCREMENT,
+                 prev_hash TEXT,
+                 entry_hash TEXT NOT NULL UNIQUE,
+                 proposal_hash TEXT NOT NULL,
+                 proposal TEXT NOT NULL,
+                 events TEXT NOT NULL,
+                 pre_state_root TEXT NOT NULL,
+                 state_root TEXT NOT NULL,
+                 committed_at TEXT NOT NULL,
+                 document TEXT
+               )""",
+            """CREATE TABLE IF NOT EXISTS receipts (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 idempotency_key TEXT NOT NULL,
+                 proposal_hash TEXT NOT NULL,
+                 proposal_id TEXT NOT NULL,
+                 outcome TEXT NOT NULL,
+                 reason_codes TEXT NOT NULL,
+                 ledger_seq INTEGER,
+                 state_root TEXT NOT NULL,
+                 conflict_ids TEXT NOT NULL,
+                 proposer TEXT,
+                 document TEXT,
+                 schema_version TEXT
+               )""",
+            """CREATE TABLE IF NOT EXISTS kernel_metadata (
+                 name TEXT PRIMARY KEY,
+                 value TEXT NOT NULL
+               )""",
         )
-        self._migrate_schema()
-        self._ensure_indexes()
-        self._pin_predicate_registry()
-        create_continuity_schema(self.connection)
-        self._create_immutability_triggers()
+        self.connection.execute("BEGIN IMMEDIATE")
+        try:
+            for statement in statements:
+                self.connection.execute(statement)
+            self._migrate_schema()
+            self._ensure_indexes()
+            self._pin_predicate_registry()
+            create_continuity_schema(self.connection)
+            self._create_immutability_triggers()
+            self.connection.execute("COMMIT")
+        except Exception:
+            if self.connection.in_transaction:
+                self.connection.execute("ROLLBACK")
+            raise
 
     def _has_current_schema(self) -> bool:
         required_columns = {
@@ -373,6 +400,22 @@ class Kernel:
             is None
         ):
             return False
+        unpinned_legacy_rejection = (
+            self.connection.execute(
+                "SELECT 1 FROM receipts WHERE ledger_seq IS NULL "
+                "AND document IS NULL AND schema_version IS NULL "
+                "AND outcome IN ('VALIDATION_ERROR', 'TRANSACTION_CONFLICT') "
+                "LIMIT 1"
+            ).fetchone()
+            is not None
+            and self.connection.execute(
+                "SELECT 1 FROM kernel_metadata WHERE name = ?",
+                (self._LEGACY_RECEIPT_PIN_NAME,),
+            ).fetchone()
+            is None
+        )
+        if unpinned_legacy_rejection:
+            return False
         return (
             self.connection.execute(
                 "SELECT 1 FROM receipts "
@@ -449,34 +492,41 @@ class Kernel:
         receipt_columns = {
             row["name"] for row in self.connection.execute("PRAGMA table_info(receipts)")
         }
-        if "id" not in receipt_columns:
-            self.connection.executescript(
-                """
-                ALTER TABLE receipts RENAME TO receipts_legacy;
-                CREATE TABLE receipts (
-                  id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  idempotency_key TEXT NOT NULL,
-                  proposal_hash TEXT NOT NULL,
-                  proposal_id TEXT NOT NULL,
-                  outcome TEXT NOT NULL,
-                  reason_codes TEXT NOT NULL,
-                  ledger_seq INTEGER,
-                  state_root TEXT NOT NULL,
-                  conflict_ids TEXT NOT NULL,
-                  proposer TEXT,
-                  document TEXT,
-                  schema_version TEXT
-                );
-                INSERT INTO receipts(
-                  idempotency_key, proposal_hash, proposal_id, outcome,
-                  reason_codes, ledger_seq, state_root, conflict_ids
-                )
-                SELECT idempotency_key, proposal_hash, proposal_id, outcome,
-                       reason_codes, ledger_seq, state_root, conflict_ids
-                FROM receipts_legacy;
-                DROP TABLE receipts_legacy;
-                """
+        migrated_physical_legacy_receipts = "id" not in receipt_columns
+        if migrated_physical_legacy_receipts:
+            self.connection.execute(
+                "ALTER TABLE receipts RENAME TO receipts_legacy"
             )
+            self._receipt_migration_checkpoint("receipts_renamed")
+            self.connection.execute(
+                """CREATE TABLE receipts (
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     idempotency_key TEXT NOT NULL,
+                     proposal_hash TEXT NOT NULL,
+                     proposal_id TEXT NOT NULL,
+                     outcome TEXT NOT NULL,
+                     reason_codes TEXT NOT NULL,
+                     ledger_seq INTEGER,
+                     state_root TEXT NOT NULL,
+                     conflict_ids TEXT NOT NULL,
+                     proposer TEXT,
+                     document TEXT,
+                     schema_version TEXT
+                   )"""
+            )
+            self._receipt_migration_checkpoint("receipts_created")
+            self.connection.execute(
+                """INSERT INTO receipts(
+                     idempotency_key, proposal_hash, proposal_id, outcome,
+                     reason_codes, ledger_seq, state_root, conflict_ids
+                   )
+                   SELECT idempotency_key, proposal_hash, proposal_id, outcome,
+                          reason_codes, ledger_seq, state_root, conflict_ids
+                   FROM receipts_legacy"""
+            )
+            self._receipt_migration_checkpoint("receipts_copied")
+            self.connection.execute("DROP TABLE receipts_legacy")
+            self._receipt_migration_checkpoint("receipts_legacy_dropped")
         receipt_columns = {
             row["name"] for row in self.connection.execute("PRAGMA table_info(receipts)")
         }
@@ -491,8 +541,162 @@ class Kernel:
         self.connection.execute(
             "UPDATE receipts SET schema_version = ? "
             "WHERE document IS NOT NULL AND schema_version IS NULL",
-            (self.SUPPORTED_VERSIONS["schema"],),
+            ("1.2.0",),
         )
+        if migrated_physical_legacy_receipts:
+            self._pin_migrated_legacy_receipts(
+                migration_origin="idempotency-key-primary-key"
+            )
+            self._receipt_migration_checkpoint("legacy_receipts_pinned")
+        elif self._can_pin_unmarked_legacy_receipts():
+            self._pin_migrated_legacy_receipts(
+                migration_origin="receipt-order-boundary"
+            )
+
+    @classmethod
+    def _receipt_row_fingerprint(cls, row: sqlite3.Row) -> str:
+        return sha256_json({column: row[column] for column in cls._RECEIPT_COLUMNS})
+
+    def _receipt_migration_checkpoint(self, _stage: str) -> None:
+        """Internal fault-injection seam for atomic migration conformance tests."""
+
+    def _pin_migrated_legacy_receipts(self, *, migration_origin: str) -> None:
+        ledger_schema_versions = sorted(
+            {
+                str(json.loads(row["proposal"])["versions"]["schema"])
+                for row in self.connection.execute(
+                    "SELECT proposal FROM ledger ORDER BY seq"
+                )
+            }
+        )
+        candidates = (
+            self.connection.execute(
+                "SELECT * FROM receipts WHERE ledger_seq IS NULL "
+                "AND document IS NULL AND schema_version IS NULL "
+                "AND proposer IS NULL "
+                "AND outcome IN ('VALIDATION_ERROR', 'TRANSACTION_CONFLICT') "
+                "ORDER BY id"
+            ).fetchall()
+            if migration_origin == "idempotency-key-primary-key"
+            else self._legacy_receipt_pin_candidates()
+        )
+        fingerprints = [self._receipt_row_fingerprint(row) for row in candidates]
+        self.connection.execute(
+            "INSERT OR REPLACE INTO kernel_metadata(name, value) VALUES (?, ?)",
+            (
+                self._LEGACY_RECEIPT_PIN_NAME,
+                canonical_json(
+                    {
+                        "ledger_schema_versions": ledger_schema_versions,
+                        "migration_origin": migration_origin,
+                        "receipt_hashes": fingerprints,
+                    }
+                ),
+            ),
+        )
+
+    def _can_pin_unmarked_legacy_receipts(self) -> bool:
+        if (
+            self.connection.execute(
+                "SELECT 1 FROM kernel_metadata WHERE name = ?",
+                (self._LEGACY_RECEIPT_PIN_NAME,),
+            ).fetchone()
+            is not None
+        ):
+            return False
+        return bool(self._legacy_receipt_pin_candidates())
+
+    def _legacy_receipt_pin_candidates(self) -> list[sqlite3.Row]:
+        try:
+            ledger_schema_by_seq = {
+                int(row["seq"]): str(
+                    json.loads(row["proposal"])["versions"]["schema"]
+                )
+                for row in self.connection.execute(
+                    "SELECT seq, proposal FROM ledger ORDER BY seq"
+                )
+            }
+        except (KeyError, TypeError, json.JSONDecodeError):
+            return []
+        receipt_rows = self.connection.execute(
+            "SELECT * FROM receipts ORDER BY id"
+        ).fetchall()
+        legacy_accepted_ids = {
+            int(row["id"])
+            for row in receipt_rows
+            if row["ledger_seq"] is not None
+            and row["document"] is None
+            and ledger_schema_by_seq.get(int(row["ledger_seq"]))
+            in {"1.0.0", "1.1.0"}
+        }
+        document_era_ids = [
+            int(row["id"])
+            for row in receipt_rows
+            if row["ledger_seq"] is not None
+            and (
+                row["document"] is not None
+                or ledger_schema_by_seq.get(int(row["ledger_seq"]))
+                not in {"1.0.0", "1.1.0"}
+            )
+        ]
+        document_era_boundary = min(document_era_ids, default=None)
+        if not legacy_accepted_ids and document_era_boundary is None:
+            return []
+        return [
+            row
+            for row in receipt_rows
+            if row["ledger_seq"] is None
+            and row["document"] is None
+            and row["schema_version"] is None
+            and row["proposer"] is None
+            and row["outcome"]
+            in {"VALIDATION_ERROR", "TRANSACTION_CONFLICT"}
+            and (
+                document_era_boundary is None
+                or int(row["id"]) < document_era_boundary
+            )
+        ]
+
+    def _pinned_legacy_receipt_hashes(self) -> frozenset[str]:
+        row = self.connection.execute(
+            "SELECT value FROM kernel_metadata WHERE name = ?",
+            (self._LEGACY_RECEIPT_PIN_NAME,),
+        ).fetchone()
+        if row is None:
+            return frozenset()
+        try:
+            pin = json.loads(row["value"])
+            if (
+                set(pin)
+                != {
+                    "ledger_schema_versions",
+                    "migration_origin",
+                    "receipt_hashes",
+                }
+                or pin["migration_origin"]
+                not in {
+                    "idempotency-key-primary-key",
+                    "receipt-order-boundary",
+                }
+                or not isinstance(pin["ledger_schema_versions"], list)
+                or any(
+                    version not in self.READABLE_SCHEMA_VERSIONS
+                    for version in pin["ledger_schema_versions"]
+                )
+                or (
+                    not pin["ledger_schema_versions"]
+                    and pin["migration_origin"]
+                    != "idempotency-key-primary-key"
+                )
+                or not isinstance(pin["receipt_hashes"], list)
+                or any(
+                    not isinstance(value, str) for value in pin["receipt_hashes"]
+                )
+            ):
+                return frozenset()
+            return frozenset(pin["receipt_hashes"])
+        except (TypeError, json.JSONDecodeError):
+            return frozenset()
 
     def _create_immutability_triggers(self) -> None:
         """Reject ordinary DML that violates append-only/immutable records.
@@ -502,48 +706,48 @@ class Kernel:
         ledger, receipts, or an existing source revision.
         """
 
-        self.connection.executescript(
-            """
-            CREATE TRIGGER IF NOT EXISTS ledger_no_update
-            BEFORE UPDATE ON ledger
-            BEGIN
-              SELECT RAISE(ABORT, 'LEDGER_APPEND_ONLY');
-            END;
-            CREATE TRIGGER IF NOT EXISTS ledger_no_delete
-            BEFORE DELETE ON ledger
-            BEGIN
-              SELECT RAISE(ABORT, 'LEDGER_APPEND_ONLY');
-            END;
-            CREATE TRIGGER IF NOT EXISTS receipts_no_update
-            BEFORE UPDATE ON receipts
-            BEGIN
-              SELECT RAISE(ABORT, 'RECEIPT_APPEND_ONLY');
-            END;
-            CREATE TRIGGER IF NOT EXISTS receipts_no_delete
-            BEFORE DELETE ON receipts
-            BEGIN
-              SELECT RAISE(ABORT, 'RECEIPT_APPEND_ONLY');
-            END;
-            CREATE TRIGGER IF NOT EXISTS sources_no_update
-            BEFORE UPDATE ON sources
-            BEGIN
-              SELECT RAISE(ABORT, 'SOURCE_REVISION_IMMUTABLE');
-            END;
-            CREATE TRIGGER IF NOT EXISTS sources_no_delete
-            BEFORE DELETE ON sources
-            BEGIN
-              SELECT RAISE(ABORT, 'SOURCE_REVISION_IMMUTABLE');
-            END;
-            CREATE TRIGGER IF NOT EXISTS sources_no_duplicate_insert
-            BEFORE INSERT ON sources
-            WHEN EXISTS (
-              SELECT 1 FROM sources WHERE revision_id = NEW.revision_id
-            )
-            BEGIN
-              SELECT RAISE(ABORT, 'SOURCE_REVISION_IMMUTABLE');
-            END;
-            """
+        statements = (
+            """CREATE TRIGGER IF NOT EXISTS ledger_no_update
+               BEFORE UPDATE ON ledger
+               BEGIN
+                 SELECT RAISE(ABORT, 'LEDGER_APPEND_ONLY');
+               END""",
+            """CREATE TRIGGER IF NOT EXISTS ledger_no_delete
+               BEFORE DELETE ON ledger
+               BEGIN
+                 SELECT RAISE(ABORT, 'LEDGER_APPEND_ONLY');
+               END""",
+            """CREATE TRIGGER IF NOT EXISTS receipts_no_update
+               BEFORE UPDATE ON receipts
+               BEGIN
+                 SELECT RAISE(ABORT, 'RECEIPT_APPEND_ONLY');
+               END""",
+            """CREATE TRIGGER IF NOT EXISTS receipts_no_delete
+               BEFORE DELETE ON receipts
+               BEGIN
+                 SELECT RAISE(ABORT, 'RECEIPT_APPEND_ONLY');
+               END""",
+            """CREATE TRIGGER IF NOT EXISTS sources_no_update
+               BEFORE UPDATE ON sources
+               BEGIN
+                 SELECT RAISE(ABORT, 'SOURCE_REVISION_IMMUTABLE');
+               END""",
+            """CREATE TRIGGER IF NOT EXISTS sources_no_delete
+               BEFORE DELETE ON sources
+               BEGIN
+                 SELECT RAISE(ABORT, 'SOURCE_REVISION_IMMUTABLE');
+               END""",
+            """CREATE TRIGGER IF NOT EXISTS sources_no_duplicate_insert
+               BEFORE INSERT ON sources
+               WHEN EXISTS (
+                 SELECT 1 FROM sources WHERE revision_id = NEW.revision_id
+               )
+               BEGIN
+                 SELECT RAISE(ABORT, 'SOURCE_REVISION_IMMUTABLE');
+               END""",
         )
+        for statement in statements:
+            self.connection.execute(statement)
 
     def register_source(self, source: dict[str, Any], content: bytes) -> Receipt:
         """Compatibility convenience that commits a source Proposal.
@@ -842,6 +1046,7 @@ class Kernel:
         conflicts: tuple[str, ...],
         *,
         proposer: dict[str, Any] | None = None,
+        receipt_schema_version: str | None = None,
         head_before: str | None = None,
         decided_at: str | None = None,
     ) -> Receipt:
@@ -858,6 +1063,7 @@ class Kernel:
                     root,
                     conflicts,
                     proposer=proposer,
+                    receipt_schema_version=receipt_schema_version,
                     head_before=head_before,
                     decided_at=decided_at,
                 )
@@ -889,6 +1095,9 @@ class Kernel:
                 "SELECT COALESCE(MAX(id), 0) + 1 FROM receipts"
             ).fetchone()[0]
         )
+        schema_version = receipt_schema_version or self.SUPPORTED_VERSIONS["schema"]
+        if schema_version not in {"1.2.0", self.SUPPORTED_VERSIONS["schema"]}:
+            raise ValidationFailure("UNSUPPORTED_RECEIPT_SCHEMA_VERSION")
         document = {
             "object_type": "DECISION_RECEIPT",
             "receipt_id": f"receipt_decision_{ordinal:020d}",
@@ -904,7 +1113,6 @@ class Kernel:
                 if isinstance(key, str) and self._IDEMPOTENCY_KEY.fullmatch(key)
                 else None
             ),
-            "proposer": copy.deepcopy(proposer),
             "outcome": outcome,
             "reason_codes": list(reasons),
             "head_before": head_before,
@@ -913,7 +1121,13 @@ class Kernel:
             "conflict_ids": list(conflicts),
             "decided_at": decided_at or self._utc_now(),
         }
-        if next(self.decision_receipt_validator.iter_errors(document), None) is not None:
+        stored_proposer: dict[str, Any] | None = None
+        validator = self.legacy_decision_receipt_validator
+        if schema_version == self.SUPPORTED_VERSIONS["schema"]:
+            stored_proposer = copy.deepcopy(proposer)
+            document["proposer"] = copy.deepcopy(proposer)
+            validator = self.decision_receipt_validator
+        if next(validator.iter_errors(document), None) is not None:
             raise ValidationFailure("DECISION_RECEIPT_SCHEMA_INVALID")
         cursor = self.connection.execute(
             """INSERT INTO receipts(
@@ -930,9 +1144,13 @@ class Kernel:
                 ledger_seq,
                 root,
                 canonical_json(conflicts),
-                None if proposer is None else canonical_json(proposer),
+                (
+                    None
+                    if stored_proposer is None
+                    else canonical_json(stored_proposer)
+                ),
                 canonical_json(document),
-                self.SUPPORTED_VERSIONS["schema"],
+                schema_version,
             ),
         )
         row = self.connection.execute(
@@ -1843,6 +2061,7 @@ class Kernel:
         rows = self.connection.execute("SELECT * FROM ledger ORDER BY seq").fetchall()
         errors = self._verify_ledger_rows(rows)
         errors.extend(self._verify_receipt_documents())
+        errors.extend(self._verify_accepted_receipt_coverage(rows))
         head_hash = rows[-1]["entry_hash"] if rows else None
         current_root = self.state_root()
         if rows and rows[-1]["state_root"] != current_root:
@@ -1885,11 +2104,15 @@ class Kernel:
             "FROM receipts ORDER BY id"
         ):
             linked_schema = self._linked_receipt_schema(row["ledger_seq"])
+            complete_schema = row["schema_version"] in {
+                "1.2.0",
+                self.SUPPORTED_VERSIONS["schema"],
+            }
             if (
-                row["schema_version"] != self.SUPPORTED_VERSIONS["schema"]
+                not complete_schema
                 or (
                     row["ledger_seq"] is not None
-                    and linked_schema != self.SUPPORTED_VERSIONS["schema"]
+                    and linked_schema != row["schema_version"]
                 )
                 or row["document"] is None
             ):
@@ -1940,7 +2163,7 @@ class Kernel:
                     )
                     if sha256_json(envelope) != row["entry_hash"]:
                         errors.append(f"ENTRY_HASH_MISMATCH:{seq}")
-                elif schema_version in {"1.1.0", self.SUPPORTED_VERSIONS["schema"]}:
+                elif schema_version in self.READABLE_SCHEMA_VERSIONS - {"1.0.0"}:
                     if proposal["versions"].get(
                         "predicate_registry_hash"
                     ) != sha256_json(self.registry):
@@ -2017,22 +2240,150 @@ class Kernel:
             expected_prev = row["entry_hash"]
         return errors
 
-    def _verify_receipt_documents(self) -> list[str]:
+    @staticmethod
+    def _conflict_ids_from_events(events: list[dict[str, Any]]) -> tuple[str, ...]:
+        conflict_ids: set[str] = set()
+        for event in events:
+            event_type = event.get("event_type", event.get("type"))
+            if event_type != "CONFLICT_OPENED":
+                continue
+            conflict = event.get("conflict")
+            conflict_id = (
+                conflict.get("conflict_id")
+                if isinstance(conflict, dict)
+                else event.get("conflict_id")
+            )
+            if isinstance(conflict_id, str):
+                conflict_ids.add(conflict_id)
+        return tuple(sorted(conflict_ids))
+
+    def _verify_accepted_receipt_coverage(
+        self, ledger_rows: list[sqlite3.Row]
+    ) -> list[str]:
+        errors: list[str] = []
+        receipt_counts = {
+            int(row["ledger_seq"]): int(row["receipt_count"])
+            for row in self.connection.execute(
+                "SELECT ledger_seq, COUNT(*) AS receipt_count FROM receipts "
+                "WHERE ledger_seq IS NOT NULL "
+                "AND outcome IN ('COMMITTED', 'FACT_CONFLICT') "
+                "GROUP BY ledger_seq"
+            )
+        }
+        for ledger in ledger_rows:
+            sequence = int(ledger["seq"])
+            count = receipt_counts.get(sequence, 0)
+            if count != 1:
+                errors.append(
+                    f"ACCEPTED_RECEIPT_COVERAGE_MISMATCH:{sequence}:{count}"
+                )
+        return errors
+
+    def _verify_receipt_documents(
+        self, receipt_rows: list[sqlite3.Row] | None = None
+    ) -> list[str]:
         errors: list[str] = []
         expected_head: str | None = None
-        for row in self.connection.execute("SELECT * FROM receipts ORDER BY id"):
+        pinned_legacy_receipts = self._pinned_legacy_receipt_hashes()
+        ledger_roots = self.connection.execute(
+            "SELECT entry_hash, pre_state_root, state_root "
+            "FROM ledger ORDER BY seq"
+        ).fetchall()
+        state_root_by_head: dict[str | None, str] = {
+            None: (
+                str(ledger_roots[0]["pre_state_root"])
+                if ledger_roots
+                else self.state_root()
+            )
+        }
+        state_root_by_head.update(
+            {
+                str(ledger["entry_hash"]): str(ledger["state_root"])
+                for ledger in ledger_roots
+            }
+        )
+        rows = (
+            receipt_rows
+            if receipt_rows is not None
+            else self.connection.execute("SELECT * FROM receipts ORDER BY id").fetchall()
+        )
+        for row in rows:
             if row["document"] is None:
+                if row["ledger_seq"] is None:
+                    legacy_genesis_root = sha256_json(
+                        {
+                            table: []
+                            for table in (
+                                "sources",
+                                "claims",
+                                "evidence",
+                                "conflicts",
+                            )
+                        }
+                    )
+                    expected_legacy_root = (
+                        legacy_genesis_root
+                        if expected_head is None
+                        else state_root_by_head.get(expected_head)
+                    )
+                    legacy_rejected_mismatch = (
+                        row["schema_version"] not in {None, "1.0.0", "1.1.0"}
+                        or row["outcome"]
+                        not in {"VALIDATION_ERROR", "TRANSACTION_CONFLICT"}
+                        or row["proposer"] is not None
+                        or row["state_root"]
+                        != expected_legacy_root
+                        or self._receipt_row_fingerprint(row)
+                        not in pinned_legacy_receipts
+                    )
+                    if legacy_rejected_mismatch:
+                        errors.append(f"RECEIPT_DOCUMENT_MISMATCH:{row['id']}")
+                    continue
                 legacy_schema = self._linked_receipt_schema(row["ledger_seq"])
                 if legacy_schema not in {"1.0.0", "1.1.0"}:
                     errors.append(f"RECEIPT_DOCUMENT_MISMATCH:{row['id']}")
                 else:
                     ledger = self.connection.execute(
-                        "SELECT entry_hash FROM ledger WHERE seq = ?",
+                        "SELECT * FROM ledger WHERE seq = ?",
                         (row["ledger_seq"],),
                     ).fetchone()
                     if ledger is None:
                         errors.append(f"RECEIPT_DOCUMENT_MISMATCH:{row['id']}")
                     else:
+                        try:
+                            proposal = json.loads(ledger["proposal"])
+                            events = json.loads(ledger["events"])
+                            conflict_ids = self._conflict_ids_from_events(events)
+                            row_mismatch = (
+                                row["proposal_id"] != proposal["proposal_id"]
+                                or row["proposal_hash"] != ledger["proposal_hash"]
+                                or row["idempotency_key"]
+                                != proposal["idempotency_key"]
+                                or row["outcome"]
+                                != (
+                                    "FACT_CONFLICT"
+                                    if conflict_ids
+                                    else "COMMITTED"
+                                )
+                                or json.loads(row["reason_codes"]) != []
+                                or json.loads(row["conflict_ids"])
+                                != list(conflict_ids)
+                                or row["state_root"] != ledger["state_root"]
+                                or ledger["prev_hash"] != expected_head
+                            )
+                            if row_mismatch:
+                                errors.append(
+                                    f"RECEIPT_DOCUMENT_MISMATCH:{row['id']}"
+                                )
+                        except (
+                            KeyError,
+                            TypeError,
+                            ValueError,
+                            json.JSONDecodeError,
+                        ):
+                            errors.append(
+                                f"RECEIPT_DOCUMENT_MISMATCH:{row['id']}"
+                            )
                         expected_head = str(ledger["entry_hash"])
                 continue
             try:
@@ -2040,6 +2391,27 @@ class Kernel:
                 proposal_id = row["proposal_id"]
                 key = row["idempotency_key"]
                 receipt_order_mismatch = False
+                schema_mismatch = False
+                rejected_state_root_mismatch = False
+                stored_proposer = (
+                    json.loads(row["proposer"])
+                    if row["proposer"] is not None
+                    else None
+                )
+                document_has_proposer = "proposer" in document
+                if row["schema_version"] == self.SUPPORTED_VERSIONS["schema"]:
+                    validator = self.decision_receipt_validator
+                elif row["schema_version"] == "1.2.0":
+                    validator = (
+                        self.decision_receipt_validator
+                        if document_has_proposer
+                        else self.legacy_decision_receipt_validator
+                    )
+                    if not document_has_proposer and stored_proposer is not None:
+                        schema_mismatch = True
+                else:
+                    validator = self.decision_receipt_validator
+                    schema_mismatch = True
                 expected = {
                     "object_type": "DECISION_RECEIPT",
                     "receipt_id": f"receipt_decision_{int(row['id']):020d}",
@@ -2056,16 +2428,16 @@ class Kernel:
                         and self._IDEMPOTENCY_KEY.fullmatch(key)
                         else None
                     ),
-                    "proposer": (
-                        json.loads(row["proposer"])
-                        if row["proposer"] is not None
-                        else None
-                    ),
                     "outcome": row["outcome"],
                     "reason_codes": json.loads(row["reason_codes"]),
                     "conflict_ids": json.loads(row["conflict_ids"]),
                 }
+                if document_has_proposer:
+                    expected["proposer"] = stored_proposer
                 if row["ledger_seq"] is None:
+                    rejected_state_root_mismatch = (
+                        row["state_root"] != state_root_by_head.get(expected_head)
+                    )
                     expected.update(
                         {
                             "head_before": expected_head,
@@ -2075,7 +2447,9 @@ class Kernel:
                     )
                 else:
                     ledger = self.connection.execute(
-                        "SELECT prev_hash, entry_hash, document FROM ledger WHERE seq = ?",
+                        "SELECT prev_hash, entry_hash, proposal_hash, proposal, "
+                        "events, state_root, committed_at, document "
+                        "FROM ledger WHERE seq = ?",
                         (row["ledger_seq"],),
                     ).fetchone()
                     if ledger is None or ledger["document"] is None:
@@ -2083,27 +2457,62 @@ class Kernel:
                         if ledger is not None:
                             expected_head = str(ledger["entry_hash"])
                         continue
+                    linked_proposal = json.loads(ledger["proposal"])
+                    linked_events = json.loads(ledger["events"])
+                    linked_schema = linked_proposal["versions"]["schema"]
+                    if linked_schema != row["schema_version"]:
+                        schema_mismatch = True
+                    linked_conflict_ids = self._conflict_ids_from_events(
+                        linked_events
+                    )
+                    linked_outcome = (
+                        "FACT_CONFLICT" if linked_conflict_ids else "COMMITTED"
+                    )
+                    linked_proposer = self._representable_proposer(linked_proposal)
+                    if document_has_proposer:
+                        expected["proposer"] = linked_proposer
+                        if stored_proposer != linked_proposer:
+                            schema_mismatch = True
+                    row_mismatch = (
+                        row["proposal_id"] != linked_proposal["proposal_id"]
+                        or row["proposal_hash"] != ledger["proposal_hash"]
+                        or row["idempotency_key"]
+                        != linked_proposal["idempotency_key"]
+                        or row["outcome"] != linked_outcome
+                        or json.loads(row["reason_codes"]) != []
+                        or json.loads(row["conflict_ids"])
+                        != list(linked_conflict_ids)
+                        or row["state_root"] != ledger["state_root"]
+                    )
                     receipt_order_mismatch = ledger["prev_hash"] != expected_head
                     expected.update(
                         {
+                            "proposal_id": linked_proposal["proposal_id"],
+                            "proposal_hash": ledger["proposal_hash"],
+                            "idempotency_key": linked_proposal["idempotency_key"],
+                            "outcome": linked_outcome,
+                            "reason_codes": [],
+                            "conflict_ids": list(linked_conflict_ids),
                             "head_before": ledger["prev_hash"],
                             "head_after": ledger["entry_hash"],
                             "ledger_entry_id": json.loads(ledger["document"])[
                                 "entry_id"
                             ],
+                            "decided_at": ledger["committed_at"],
                         }
                     )
                     expected_head = str(ledger["entry_hash"])
                 mismatch = (
                     receipt_order_mismatch
-                    or row["schema_version"] != self.SUPPORTED_VERSIONS["schema"]
-                    or next(
-                        self.decision_receipt_validator.iter_errors(document),
-                        None,
-                    )
-                    is not None
+                    or rejected_state_root_mismatch
+                    or (row["ledger_seq"] is not None and row_mismatch)
+                    or schema_mismatch
+                    or next(validator.iter_errors(document), None) is not None
                     or row["document"] != canonical_json(document)
-                    or any(document.get(field) != value for field, value in expected.items())
+                    or any(
+                        document.get(field) != value
+                        for field, value in expected.items()
+                    )
                 )
                 if mismatch:
                     errors.append(f"RECEIPT_DOCUMENT_MISMATCH:{row['id']}")
@@ -2115,20 +2524,30 @@ class Kernel:
         if str(database) == self.database and str(database) != ":memory:":
             raise ValidationFailure("REPLAY_TARGET_MUST_DIFFER")
         rows = self.connection.execute("SELECT * FROM ledger ORDER BY seq").fetchall()
+        receipt_rows = self.connection.execute(
+            "SELECT * FROM receipts ORDER BY id"
+        ).fetchall()
         errors = self._verify_ledger_rows(rows)
+        errors.extend(self._verify_receipt_documents(receipt_rows))
+        errors.extend(self._verify_accepted_receipt_coverage(rows))
         if errors:
             raise ValidationFailure(errors[0])
         target = Kernel(database, copy.deepcopy(self.registry))
         try:
             with target._authorized_writes():
-                self._replay_rows(target, rows)
+                self._replay_rows(target, rows, receipt_rows)
             return target
         except Exception:
             target._rollback_if_needed()
             target.close()
             raise
 
-    def _replay_rows(self, target: Kernel, rows: list[sqlite3.Row]) -> None:
+    def _replay_rows(
+        self,
+        target: Kernel,
+        rows: list[sqlite3.Row],
+        receipt_rows: list[sqlite3.Row],
+    ) -> None:
         if any(
             target.connection.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone()
             for table in (
@@ -2140,6 +2559,7 @@ class Kernel:
                 "open_questions",
                 "work_items",
                 "ledger",
+                "receipts",
             )
         ):
             raise ValidationFailure("REPLAY_TARGET_NOT_EMPTY")
@@ -2192,54 +2612,29 @@ class Kernel:
                     row["document"] if schema_version != "1.0.0" else None,
                 ),
             )
-            conflict_ids = tuple(
-                sorted(
-                    {
-                        (
-                            event["conflict"]["conflict_id"]
-                            if "conflict" in event
-                            else event["conflict_id"]
-                        )
-                        for event in events
-                        if event.get("event_type") == "CONFLICT_OPENED"
-                        or event.get("type") == "CONFLICT_OPENED"
-                    }
-                )
-            )
-            if schema_version == "1.0.0" or row["document"] is None:
-                target.connection.execute(
-                    """INSERT INTO receipts(
-                         idempotency_key, proposal_hash, proposal_id, outcome,
-                         reason_codes, ledger_seq, state_root, conflict_ids, document
-                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)""",
-                    (
-                        proposal["idempotency_key"],
-                        row["proposal_hash"],
-                        proposal["proposal_id"],
-                        "FACT_CONFLICT" if conflict_ids else "COMMITTED",
-                        "[]",
-                        row["seq"],
-                        row["state_root"],
-                        canonical_json(conflict_ids),
-                    ),
-                )
-            else:
-                target._insert_receipt(
-                    proposal["idempotency_key"],
-                    row["proposal_hash"],
-                    proposal["proposal_id"],
-                    "FACT_CONFLICT" if conflict_ids else "COMMITTED",
-                    (),
-                    row["seq"],
-                    row["state_root"],
-                    conflict_ids,
-                    proposer=target._representable_proposer(proposal),
-                    head_before=row["prev_hash"],
-                    decided_at=stored_committed_at,
-                )
             target.connection.execute("COMMIT")
             expected_prev = row["entry_hash"]
             previous_schema = schema_version
+        target.connection.execute("BEGIN IMMEDIATE")
+        legacy_pin = self.connection.execute(
+            "SELECT value FROM kernel_metadata WHERE name = ?",
+            (self._LEGACY_RECEIPT_PIN_NAME,),
+        ).fetchone()
+        if legacy_pin is not None:
+            target.connection.execute(
+                "INSERT OR REPLACE INTO kernel_metadata(name, value) VALUES (?, ?)",
+                (self._LEGACY_RECEIPT_PIN_NAME, legacy_pin["value"]),
+            )
+        for receipt in receipt_rows:
+            target.connection.execute(
+                """INSERT INTO receipts(
+                     id, idempotency_key, proposal_hash, proposal_id, outcome,
+                     reason_codes, ledger_seq, state_root, conflict_ids, proposer,
+                     document, schema_version
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                tuple(receipt[column] for column in self._RECEIPT_COLUMNS)
+            )
+        target.connection.execute("COMMIT")
 
     def _seed_legacy_sources(
         self, target: Kernel, rows: list[sqlite3.Row]

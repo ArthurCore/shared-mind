@@ -16,6 +16,7 @@ from typing import Any, Protocol
 from ..canonical import canonical_json, sha256_bytes
 from ..kernel import Kernel
 from ..service import EXIT_INTERNAL_ERROR, OperationResult, WorkspaceService
+from ..workspace import MAX_SOURCE_BYTES
 
 
 CONTRACT_VERSION = "external-adapter-contract@1"
@@ -63,6 +64,14 @@ class AdapterSource:
             raise ValueError("source media_type must be a non-empty string")
         if not isinstance(self.content, bytes):
             raise TypeError("source content must be immutable bytes")
+        if len(self.content) > MAX_SOURCE_BYTES:
+            raise AdapterFailure(
+                "ADAPTER_SOURCE_TOO_LARGE",
+                stage="CREATE",
+                message=(
+                    f"adapter source exceeds the {MAX_SOURCE_BYTES}-byte limit"
+                ),
+            )
 
 
 @dataclass(frozen=True)
@@ -293,6 +302,15 @@ def run_import(
             stage = "SNAPSHOT"
             snapshot = adapter.snapshot(probe)
             _validate_snapshot_identity(adapter.spec, probe, snapshot)
+            if len(snapshot.content) > MAX_SOURCE_BYTES:
+                raise AdapterFailure(
+                    "ADAPTER_SOURCE_TOO_LARGE",
+                    stage="SNAPSHOT",
+                    message=(
+                        "adapter snapshot exceeds the "
+                        f"{MAX_SOURCE_BYTES}-byte limit"
+                    ),
+                )
             if sha256_bytes(snapshot.content) != snapshot.content_hash:
                 raise AdapterFailure(
                     "ADAPTER_SNAPSHOT_HASH_MISMATCH", stage="SNAPSHOT"
@@ -318,6 +336,9 @@ def run_import(
                 raise AdapterFailure(
                     "ADAPTER_NONDETERMINISTIC_PLAN", stage="PLAN"
                 )
+            first_plan = _pin_plan_versions(
+                first_plan, service.current_version_bundle()
+            )
             _enforce_plan_policy(first_plan, mapping)
 
             validation = service.validate_proposal(first_plan)
@@ -413,6 +434,14 @@ def _enforce_plan_policy(
         raise AdapterFailure(
             "ADAPTER_MAPPING_OPERATION_NOT_ALLOWED", stage="PLAN"
         )
+
+
+def _pin_plan_versions(proposal: Any, versions: dict[str, str]) -> Any:
+    if not isinstance(proposal, dict):
+        return proposal
+    normalized = dict(proposal)
+    normalized["versions"] = dict(versions)
+    return normalized
 
 
 def _json_document(snapshot: AdapterSnapshot) -> dict[str, Any]:

@@ -620,7 +620,9 @@ def _build_context_projection(connection: sqlite3.Connection) -> dict[str, Any]:
             if _find_status(record["row"]) in active_statuses
         )
 
-    history_by_id = _selected_history_sequences(connection, selected_ids)
+    history_by_id, history_count_by_id = _selected_history_sequences(
+        connection, selected_ids
+    )
     history_refs = {
         sequence: f"project.json#/ledger/entries/{sequence - 1}"
         for sequences in history_by_id.values()
@@ -629,16 +631,32 @@ def _build_context_projection(connection: sqlite3.Connection) -> dict[str, Any]:
     for claim in claims:
         identifier = claim["claim"]["claim_id"]
         if identifier in selected_ids:
-            _set_context_history(claim, identifier, history_by_id, history_refs)
+            _set_context_history(
+                claim,
+                identifier,
+                history_by_id,
+                history_count_by_id,
+                history_refs,
+            )
     for conflict in open_conflicts:
         _set_context_history(
-            conflict, conflict["conflict_id"], history_by_id, history_refs
+            conflict,
+            conflict["conflict_id"],
+            history_by_id,
+            history_count_by_id,
+            history_refs,
         )
     for records, active_statuses in active_continuity:
         for record in records:
             if _find_status(record["row"]) in active_statuses:
                 identifier = _row_identifier(record["row"])
-                _set_context_history(record, identifier, history_by_id, history_refs)
+                _set_context_history(
+                    record,
+                    identifier,
+                    history_by_id,
+                    history_count_by_id,
+                    history_refs,
+                )
 
     head = connection.execute(
         "SELECT seq, entry_hash FROM ledger ORDER BY seq DESC LIMIT 1"
@@ -661,29 +679,23 @@ def _build_context_projection(connection: sqlite3.Connection) -> dict[str, Any]:
 
 def _selected_history_sequences(
     connection: sqlite3.Connection, identifiers: set[str]
-) -> dict[str, set[int]]:
+) -> tuple[dict[str, set[int]], dict[str, int]]:
     if not identifiers:
-        return {}
+        return {}, {}
     selected = canonical_json(sorted(identifiers))
     statement = """
         WITH selected(object_id) AS (
           SELECT value FROM json_each(?)
-        ), referenced(object_id, seq) AS (
-          SELECT selected.object_id, ledger.seq
-          FROM ledger AS ledger
-          CROSS JOIN json_tree(ledger.proposal) AS node
-          JOIN selected ON selected.object_id = node.value
-          WHERE node.type = 'text'
-            AND (node.key = 'id' OR substr(node.key, -3) = '_id')
-          UNION
-          SELECT selected.object_id, ledger.seq
-          FROM ledger AS ledger
-          CROSS JOIN json_tree(ledger.events) AS node
-          JOIN selected ON selected.object_id = node.value
-          WHERE node.type = 'text'
-            AND (node.key = 'id' OR substr(node.key, -3) = '_id')
         )
-        SELECT object_id, seq FROM referenced ORDER BY object_id, seq
+        SELECT DISTINCT selected.object_id, ledger.seq
+        FROM ledger AS ledger
+        CROSS JOIN json_tree(
+          '[' || ledger.proposal || ',' || ledger.events || ']'
+        ) AS node
+        JOIN selected ON selected.object_id = node.value
+        WHERE node.type = 'text'
+          AND (node.key = 'id' OR substr(node.key, -3) = '_id')
+        ORDER BY selected.object_id, ledger.seq
     """
     try:
         rows = connection.execute(statement, (selected,)).fetchall()
@@ -694,19 +706,23 @@ def _selected_history_sequences(
     result: dict[str, set[int]] = {}
     for row in rows:
         result.setdefault(str(row[0]), set()).add(int(row[1]))
-    return result
+    return result, {
+        identifier: len(sequences) for identifier, sequences in result.items()
+    }
 
 
 def _set_context_history(
     record: dict[str, Any],
     identifier: str,
     history_by_id: Mapping[str, set[int]],
+    history_count_by_id: Mapping[str, int],
     history_ref_by_sequence: Mapping[int, str],
 ) -> None:
     sequences = sorted(history_by_id.get(identifier, set()))
-    omitted = max(0, len(sequences) - MAX_CONTEXT_HISTORY_REFS)
-    if omitted:
+    total = history_count_by_id.get(identifier, len(sequences))
+    if len(sequences) > MAX_CONTEXT_HISTORY_REFS:
         sequences = sequences[-MAX_CONTEXT_HISTORY_REFS:]
+    omitted = max(0, total - len(sequences))
     record["history_sequences"] = sequences
     record["history_refs"] = [history_ref_by_sequence[item] for item in sequences]
     if omitted:

@@ -121,6 +121,341 @@ class LegacyMigrationConformanceTest(unittest.TestCase):
         self.assertEqual(kernel.state_root(), replayed.state_root())
         self.assertTrue(replayed.verify_ledger()["valid"])
 
+    def test_baseline_rejected_receipts_reopen_and_replay_exactly(self) -> None:
+        kernel = Kernel(self.database, self.registry)
+        self.addCleanup(kernel.close)
+
+        source_rows = [
+            dict(row)
+            for row in kernel.connection.execute(
+                "SELECT * FROM receipts ORDER BY id"
+            )
+        ]
+        verification = kernel.verify_ledger()
+
+        self.assertTrue(verification["valid"], verification["errors"])
+        self.assertEqual(
+            ["COMMITTED", "VALIDATION_ERROR", "TRANSACTION_CONFLICT"],
+            [row["outcome"] for row in source_rows],
+        )
+        self.assertEqual(
+            [None, None, None],
+            [row["schema_version"] for row in source_rows],
+        )
+        self.assertEqual([None, None, None], [row["document"] for row in source_rows])
+
+        replayed = kernel.replay(self.replay_database)
+        self.addCleanup(replayed.close)
+        replay_rows = [
+            dict(row)
+            for row in replayed.connection.execute(
+                "SELECT * FROM receipts ORDER BY id"
+            )
+        ]
+
+        self.assertEqual(source_rows, replay_rows)
+        self.assertTrue(replayed.verify_ledger()["valid"])
+
+    def test_staged_legacy_receipt_migration_backfills_provenance_pin(self) -> None:
+        initially_migrated = Kernel(self.database, self.registry)
+        initially_migrated.close()
+        connection = sqlite3.connect(self.database, isolation_level=None)
+        try:
+            connection.execute("DROP TRIGGER receipts_no_update")
+            connection.execute(
+                "UPDATE receipts SET schema_version = NULL "
+                "WHERE document IS NULL"
+            )
+            connection.execute(
+                "DELETE FROM kernel_metadata WHERE name = ?",
+                (Kernel._LEGACY_RECEIPT_PIN_NAME,),
+            )
+        finally:
+            connection.close()
+
+        reopened = Kernel(self.database, self.registry)
+        self.addCleanup(reopened.close)
+        source_rows = [
+            dict(row)
+            for row in reopened.connection.execute(
+                "SELECT * FROM receipts ORDER BY id"
+            )
+        ]
+
+        self.assertTrue(reopened.verify_ledger()["valid"])
+        self.assertEqual([None, None, None], [row["schema_version"] for row in source_rows])
+        self.assertIsNotNone(
+            reopened.connection.execute(
+                "SELECT value FROM kernel_metadata WHERE name = ?",
+                (Kernel._LEGACY_RECEIPT_PIN_NAME,),
+            ).fetchone()
+        )
+        replayed = reopened.replay(
+            Path(self.temp.name) / "staged-legacy-replay.sqlite3"
+        )
+        self.addCleanup(replayed.close)
+        replay_rows = [
+            dict(row)
+            for row in replayed.connection.execute(
+                "SELECT * FROM receipts ORDER BY id"
+            )
+        ]
+
+        self.assertEqual(source_rows, replay_rows)
+        self.assertTrue(replayed.verify_ledger()["valid"])
+
+    def test_staged_legacy_pin_allows_later_schema_1_2_history_only(self) -> None:
+        staged = Kernel(self.database, self.registry)
+        evidence = copy.deepcopy(
+            self.objects["assert_postgresql_proposal"]["operations"][0][
+                "initial_evidence"
+            ][0]
+        )
+        evidence["evidence_link_id"] = "evidence_staged_schema_1_2_001"
+        proposal = copy.deepcopy(self.objects["assert_postgresql_proposal"])
+        proposal["proposal_id"] = "proposal_staged_schema_1_2_001"
+        proposal["idempotency_key"] = "staged-schema-1-2-001"
+        proposal["base_state_root"] = staged.state_root()
+        proposal["operations"] = [
+            {
+                "op_id": "operation_staged_schema_1_2_001",
+                "op": "ATTACH_EVIDENCE",
+                "evidence_link": evidence,
+            }
+        ]
+        self.assertEqual("COMMITTED", staged.commit(proposal).outcome)
+        ledger = staged.connection.execute(
+            "SELECT * FROM ledger WHERE seq = 2"
+        ).fetchone()
+        stored_proposal = json.loads(ledger["proposal"])
+        stored_proposal["versions"]["schema"] = "1.2.0"
+        proposal_hash = sha256_json(stored_proposal)
+        events = json.loads(ledger["events"])
+        entry_hash = sha256_json(
+            Kernel._ledger_envelope(
+                seq=2,
+                prev_hash=ledger["prev_hash"],
+                proposal_hash=proposal_hash,
+                pre_state_root=ledger["pre_state_root"],
+                post_state_root=ledger["state_root"],
+                versions=stored_proposal["versions"],
+                events=events,
+                committed_at=ledger["committed_at"],
+            )
+        )
+        ledger_document = json.loads(ledger["document"])
+        ledger_document.update(
+            {
+                "entry_hash": entry_hash,
+                "proposal_hash": proposal_hash,
+                "versions": stored_proposal["versions"],
+            }
+        )
+        receipt = staged.connection.execute(
+            "SELECT * FROM receipts WHERE ledger_seq = 2"
+        ).fetchone()
+        receipt_document = json.loads(receipt["document"])
+        receipt_document.pop("proposer")
+        receipt_document["proposal_hash"] = proposal_hash
+        receipt_document["head_after"] = entry_hash
+        with staged._authorized_writes():
+            staged.connection.execute("DROP TRIGGER ledger_no_update")
+            staged.connection.execute("DROP TRIGGER receipts_no_update")
+            staged.connection.execute(
+                "UPDATE ledger SET proposal = ?, proposal_hash = ?, "
+                "entry_hash = ?, document = ? WHERE seq = 2",
+                (
+                    canonical_json(stored_proposal),
+                    proposal_hash,
+                    entry_hash,
+                    canonical_json(ledger_document),
+                ),
+            )
+            staged.connection.execute(
+                "UPDATE receipts SET proposal_hash = ?, proposer = NULL, "
+                "document = ?, schema_version = '1.2.0' WHERE ledger_seq = 2",
+                (proposal_hash, canonical_json(receipt_document)),
+            )
+            staged.connection.execute(
+                "DELETE FROM kernel_metadata WHERE name = ?",
+                (Kernel._LEGACY_RECEIPT_PIN_NAME,),
+            )
+            staged.connection._PublicConnection__connection.executescript(
+                """
+                CREATE TRIGGER ledger_no_update BEFORE UPDATE ON ledger
+                BEGIN SELECT RAISE(ABORT, 'LEDGER_APPEND_ONLY'); END;
+                CREATE TRIGGER receipts_no_update BEFORE UPDATE ON receipts
+                BEGIN SELECT RAISE(ABORT, 'RECEIPT_APPEND_ONLY'); END;
+                """
+            )
+        staged.close()
+
+        reopened = Kernel(self.database, self.registry)
+        self.addCleanup(reopened.close)
+        source_rows = [
+            dict(row)
+            for row in reopened.connection.execute(
+                "SELECT * FROM receipts ORDER BY id"
+            )
+        ]
+
+        self.assertTrue(reopened.verify_ledger()["valid"])
+        self.assertEqual(
+            ["1.0.0", "1.2.0"],
+            sorted(
+                {
+                    json.loads(row["proposal"])["versions"]["schema"]
+                    for row in reopened.connection.execute(
+                        "SELECT proposal FROM ledger ORDER BY seq"
+                    )
+                }
+            ),
+        )
+        replayed = reopened.replay(
+            Path(self.temp.name) / "mixed-staged-legacy-replay.sqlite3"
+        )
+        self.addCleanup(replayed.close)
+        self.assertEqual(
+            source_rows,
+            [
+                dict(row)
+                for row in replayed.connection.execute(
+                    "SELECT * FROM receipts ORDER BY id"
+                )
+            ],
+        )
+
+        current_receipt = reopened.connection.execute(
+            "SELECT id FROM receipts WHERE ledger_seq = 2"
+        ).fetchone()
+        with reopened._authorized_writes():
+            reopened.connection.execute("DROP TRIGGER receipts_no_update")
+            reopened.connection.execute(
+                "UPDATE receipts SET document = NULL, proposer = NULL, "
+                "schema_version = NULL WHERE id = ?",
+                (current_receipt["id"],),
+            )
+        downgraded = reopened.verify_ledger()
+        self.assertFalse(downgraded["valid"])
+        self.assertIn(
+            f"RECEIPT_DOCUMENT_MISMATCH:{current_receipt['id']}",
+            downgraded["errors"],
+        )
+
+    def test_rejected_only_legacy_prefix_precedes_first_schema_1_2_entry(
+        self,
+    ) -> None:
+        empty_legacy_root = sha256_json(
+            {table: [] for table in ("sources", "claims", "evidence", "conflicts")}
+        )
+        connection = sqlite3.connect(self.database, isolation_level=None)
+        try:
+            connection.execute("PRAGMA foreign_keys = OFF")
+            connection.execute("DELETE FROM receipts WHERE ledger_seq IS NOT NULL")
+            connection.execute("DELETE FROM ledger")
+            connection.execute("DELETE FROM evidence")
+            connection.execute("DELETE FROM claims")
+            connection.execute("DELETE FROM sources")
+            connection.execute(
+                "UPDATE receipts SET state_root = ?", (empty_legacy_root,)
+            )
+        finally:
+            connection.close()
+
+        staged = Kernel(self.database, self.registry)
+        staged.register_source(
+            copy.deepcopy(self.objects["source_revision_postgresql"]),
+            (ROOT / "contracts" / "atlas-runbook.fixture.md").read_bytes(),
+        )
+        self._rewrite_accepted_as_schema_1_2(staged, ledger_seq=1)
+        with staged._authorized_writes():
+            staged.connection.execute(
+                "DELETE FROM kernel_metadata WHERE name = ?",
+                (Kernel._LEGACY_RECEIPT_PIN_NAME,),
+            )
+        staged.close()
+
+        reopened = Kernel(self.database, self.registry)
+        self.addCleanup(reopened.close)
+        source_rows = [
+            dict(row)
+            for row in reopened.connection.execute(
+                "SELECT * FROM receipts ORDER BY id"
+            )
+        ]
+
+        self.assertTrue(reopened.verify_ledger()["valid"])
+        self.assertEqual(
+            ["VALIDATION_ERROR", "TRANSACTION_CONFLICT", "COMMITTED"],
+            [row["outcome"] for row in source_rows],
+        )
+        self.assertEqual(
+            [None, None, "1.2.0"],
+            [row["schema_version"] for row in source_rows],
+        )
+        replayed = reopened.replay(
+            Path(self.temp.name) / "rejected-prefix-replay.sqlite3"
+        )
+        self.addCleanup(replayed.close)
+        self.assertEqual(
+            source_rows,
+            [
+                dict(row)
+                for row in replayed.connection.execute(
+                    "SELECT * FROM receipts ORDER BY id"
+                )
+            ],
+        )
+        self.assertTrue(replayed.verify_ledger()["valid"])
+
+    def test_direct_rejected_only_legacy_database_replays_exactly(self) -> None:
+        empty_legacy_root = sha256_json(
+            {table: [] for table in ("sources", "claims", "evidence", "conflicts")}
+        )
+        connection = sqlite3.connect(self.database, isolation_level=None)
+        try:
+            connection.execute("PRAGMA foreign_keys = OFF")
+            connection.execute("DELETE FROM receipts WHERE ledger_seq IS NOT NULL")
+            connection.execute("DELETE FROM ledger")
+            connection.execute("DELETE FROM evidence")
+            connection.execute("DELETE FROM claims")
+            connection.execute("DELETE FROM sources")
+            connection.execute(
+                "UPDATE receipts SET state_root = ?", (empty_legacy_root,)
+            )
+        finally:
+            connection.close()
+
+        reopened = Kernel(self.database, self.registry)
+        self.addCleanup(reopened.close)
+        source_rows = [
+            dict(row)
+            for row in reopened.connection.execute(
+                "SELECT * FROM receipts ORDER BY id"
+            )
+        ]
+
+        self.assertEqual(0, reopened.connection.execute("SELECT COUNT(*) FROM ledger").fetchone()[0])
+        self.assertEqual(
+            ["VALIDATION_ERROR", "TRANSACTION_CONFLICT"],
+            [row["outcome"] for row in source_rows],
+        )
+        self.assertTrue(reopened.verify_ledger()["valid"])
+        replayed = reopened.replay(
+            Path(self.temp.name) / "direct-rejected-only-replay.sqlite3"
+        )
+        self.addCleanup(replayed.close)
+        self.assertEqual(
+            source_rows,
+            [
+                dict(row)
+                for row in replayed.connection.execute(
+                    "SELECT * FROM receipts ORDER BY id"
+                )
+            ],
+        )
+        self.assertTrue(replayed.verify_ledger()["valid"])
+
     def test_schema_1_1_full_events_remain_readable_without_exact_documents(
         self,
     ) -> None:
@@ -340,9 +675,104 @@ class LegacyMigrationConformanceTest(unittest.TestCase):
                     "[]",
                 ),
             )
+            connection.execute(
+                "INSERT INTO receipts VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "legacy-validation-rejected-001",
+                    "sha256:" + "7" * 64,
+                    "proposal_legacy_validation_rejected_001",
+                    "VALIDATION_ERROR",
+                    '["SOURCE_REVISION_NOT_FOUND"]',
+                    None,
+                    state_root,
+                    "[]",
+                ),
+            )
+            connection.execute(
+                "INSERT INTO receipts VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "legacy-conflict-rejected-001",
+                    "sha256:" + "8" * 64,
+                    "proposal_legacy_conflict_rejected_001",
+                    "TRANSACTION_CONFLICT",
+                    '["BASE_STATE_ROOT_MISMATCH"]',
+                    None,
+                    state_root,
+                    "[]",
+                ),
+            )
             return entry
         finally:
             connection.close()
+
+    def _rewrite_accepted_as_schema_1_2(
+        self, kernel: Kernel, *, ledger_seq: int
+    ) -> None:
+        ledger = kernel.connection.execute(
+            "SELECT * FROM ledger WHERE seq = ?", (ledger_seq,)
+        ).fetchone()
+        proposal = json.loads(ledger["proposal"])
+        proposal["versions"]["schema"] = "1.2.0"
+        proposal_hash = sha256_json(proposal)
+        events = json.loads(ledger["events"])
+        entry_hash = sha256_json(
+            Kernel._ledger_envelope(
+                seq=ledger_seq,
+                prev_hash=ledger["prev_hash"],
+                proposal_hash=proposal_hash,
+                pre_state_root=ledger["pre_state_root"],
+                post_state_root=ledger["state_root"],
+                versions=proposal["versions"],
+                events=events,
+                committed_at=ledger["committed_at"],
+            )
+        )
+        ledger_document = json.loads(ledger["document"])
+        ledger_document.update(
+            {
+                "entry_hash": entry_hash,
+                "proposal_hash": proposal_hash,
+                "versions": proposal["versions"],
+            }
+        )
+        receipt = kernel.connection.execute(
+            "SELECT * FROM receipts WHERE ledger_seq = ?", (ledger_seq,)
+        ).fetchone()
+        receipt_document = json.loads(receipt["document"])
+        receipt_document.pop("proposer")
+        receipt_document["proposal_hash"] = proposal_hash
+        receipt_document["head_after"] = entry_hash
+        with kernel._authorized_writes():
+            kernel.connection.execute("DROP TRIGGER ledger_no_update")
+            kernel.connection.execute("DROP TRIGGER receipts_no_update")
+            kernel.connection.execute(
+                "UPDATE ledger SET proposal = ?, proposal_hash = ?, "
+                "entry_hash = ?, document = ? WHERE seq = ?",
+                (
+                    canonical_json(proposal),
+                    proposal_hash,
+                    entry_hash,
+                    canonical_json(ledger_document),
+                    ledger_seq,
+                ),
+            )
+            kernel.connection.execute(
+                "UPDATE receipts SET proposal_hash = ?, proposer = NULL, "
+                "document = ?, schema_version = '1.2.0' WHERE ledger_seq = ?",
+                (
+                    proposal_hash,
+                    canonical_json(receipt_document),
+                    ledger_seq,
+                ),
+            )
+            kernel.connection._PublicConnection__connection.executescript(
+                """
+                CREATE TRIGGER ledger_no_update BEFORE UPDATE ON ledger
+                BEGIN SELECT RAISE(ABORT, 'LEDGER_APPEND_ONLY'); END;
+                CREATE TRIGGER receipts_no_update BEFORE UPDATE ON receipts
+                BEGIN SELECT RAISE(ABORT, 'RECEIPT_APPEND_ONLY'); END;
+                """
+            )
 
     @staticmethod
     def _baseline_state_root(connection: sqlite3.Connection) -> str:

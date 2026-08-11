@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shared-mind.local/schema/decision-receipt/1.2.0",
+  "title": "Frozen Shared Mind DecisionReceipt schema 1.2.0",
+  "$ref": "#/$defs/DecisionReceipt",
+  "$defs": {
+    "Hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "SemanticId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{1,31}:[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "RecordId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{1,31}_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+    },
+    "DecisionReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "object_type",
+        "receipt_id",
+        "proposal_id",
+        "proposal_hash",
+        "idempotency_key",
+        "outcome",
+        "reason_codes",
+        "head_before",
+        "head_after",
+        "ledger_entry_id",
+        "conflict_ids",
+        "decided_at"
+      ],
+      "properties": {
+        "object_type": {"const": "DECISION_RECEIPT"},
+        "receipt_id": {"$ref": "#/$defs/RecordId"},
+        "proposal_id": {
+          "oneOf": [
+            {"$ref": "#/$defs/RecordId"},
+            {"type": "null"}
+          ]
+        },
+        "proposal_hash": {"$ref": "#/$defs/Hash"},
+        "idempotency_key": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+            },
+            {"type": "null"}
+          ]
+        },
+        "outcome": {
+          "enum": [
+            "COMMITTED",
+            "FACT_CONFLICT",
+            "TRANSACTION_CONFLICT",
+            "VALIDATION_ERROR"
+          ]
+        },
+        "reason_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+          }
+        },
+        "head_before": {
+          "oneOf": [
+            {"$ref": "#/$defs/Hash"},
+            {"type": "null"}
+          ]
+        },
+        "head_after": {
+          "oneOf": [
+            {"$ref": "#/$defs/Hash"},
+            {"type": "null"}
+          ]
+        },
+        "ledger_entry_id": {
+          "oneOf": [
+            {"$ref": "#/$defs/RecordId"},
+            {"type": "null"}
+          ]
+        },
+        "conflict_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/RecordId"}
+        },
+        "decided_at": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {"enum": ["COMMITTED", "FACT_CONFLICT"]}
+            }
+          },
+          "then": {
+            "properties": {
+              "proposal_id": {"$ref": "#/$defs/RecordId"},
+              "idempotency_key": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {"enum": ["COMMITTED", "FACT_CONFLICT"]}
+            }
+          },
+          "then": {
+            "properties": {
+              "ledger_entry_id": {"$ref": "#/$defs/RecordId"}
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "enum": ["TRANSACTION_CONFLICT", "VALIDATION_ERROR"]
+              }
+            }
+          },
+          "then": {
+            "properties": {"ledger_entry_id": {"type": "null"}}
+          }
+        },
+        {
+          "if": {"properties": {"outcome": {"const": "FACT_CONFLICT"}}},
+          "then": {"properties": {"conflict_ids": {"minItems": 1}}}
+        }
+      ]
+    }
+  }
+}

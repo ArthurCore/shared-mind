@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit
 
 
 REASON_CODES = (
@@ -22,6 +24,7 @@ REASON_CODES = (
     "MISSING_TRUST_BINDING",
     "OPERATION_SCOPE_DENIED",
     "REGISTRY_VERSION_MISMATCH",
+    "REMOTE_REQUEST_VERSION_MISMATCH",
     "REMOTE_VERSION_PIN_MISMATCH",
     "SENSITIVITY_DENIED",
     "SOURCE_SCOPE_DENIED",
@@ -30,6 +33,7 @@ REASON_CODES = (
 )
 
 _TRUST_FIELDS = ("binding_id", "issuer", "subject", "actor_id")
+_REQUEST_VERSION = "remote-policy-request@1"
 
 
 @dataclass(frozen=True)
@@ -39,6 +43,9 @@ class CompiledRemotePolicy:
     policy_hash: str
     _document: Mapping[str, Any] = field(repr=False, compare=False)
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "_document", _deep_freeze(self._document))
+
 
 @dataclass(frozen=True)
 class RemotePolicyDecision:
@@ -46,10 +53,15 @@ class RemotePolicyDecision:
 
     _document: Mapping[str, Any] = field(repr=False)
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "_document", _deep_freeze(self._document))
+
     def as_dict(self) -> dict[str, Any]:
         """Return an independent copy of the canonical audit document."""
 
-        return _json_copy(self._document)
+        document = _thaw_json(self._document)
+        _verify_decision_integrity(document)
+        return _json_copy(document)
 
 
 def compile_policy(document: Mapping[str, Any]) -> CompiledRemotePolicy:
@@ -57,7 +69,7 @@ def compile_policy(document: Mapping[str, Any]) -> CompiledRemotePolicy:
 
     if not isinstance(document, Mapping):
         raise TypeError("remote policy document must be a mapping")
-    canonical_document = _json_copy(document)
+    canonical_document = _strict_json_copy(document)
     _validate_policy(canonical_document)
     return CompiledRemotePolicy(
         policy_hash=_canonical_hash(canonical_document),
@@ -78,7 +90,13 @@ def evaluate_request(
     if not isinstance(request, Mapping):
         raise TypeError("remote policy request must be a mapping")
 
-    document = policy._document
+    document = _thaw_json(policy._document)
+    try:
+        integrity_matches = _canonical_hash(document) == policy.policy_hash
+    except (TypeError, ValueError):
+        integrity_matches = False
+    if not integrity_matches:
+        raise ValueError("compiled remote policy integrity check failed")
     endpoint_pin = _required_mapping(document, "endpoint_pin")
     trusted_binding = _trusted_binding(document, authenticated_binding)
     authenticated_actor_id = _string_or_none(
@@ -150,6 +168,8 @@ def _denial_reason(
     source_ref: str | None,
     source_label: Mapping[str, Any],
 ) -> str | None:
+    if request.get("request_version") != _REQUEST_VERSION:
+        return "REMOTE_REQUEST_VERSION_MISMATCH"
     if authenticated_binding is None:
         return "MISSING_TRUST_BINDING"
     if trusted_binding is None:
@@ -189,6 +209,11 @@ def _trusted_binding(
     authenticated_binding: Mapping[str, Any] | None,
 ) -> Mapping[str, Any] | None:
     if not isinstance(authenticated_binding, Mapping):
+        return None
+    if not all(
+        _is_non_empty_string(authenticated_binding.get(field_name))
+        for field_name in _TRUST_FIELDS
+    ):
         return None
     for candidate in _mapping_values(document.get("trust_bindings")):
         if all(
@@ -237,7 +262,15 @@ def _source_is_allowed(scope: Mapping[str, Any], source_ref: str | None) -> bool
 
 
 def _source_ref_is_safe(source_ref: str) -> bool:
-    normalized = unquote(source_ref)
+    normalized = source_ref
+    for _ in range(8):
+        decoded = unquote(normalized)
+        if decoded == normalized:
+            break
+        normalized = decoded
+    else:
+        # Excessive encoding is ambiguous and must not consume unbounded work.
+        return False
     if "\\" in normalized:
         return False
     path_part = normalized.split("://", 1)[1] if "://" in normalized else normalized
@@ -277,8 +310,9 @@ def _validate_policy(document: Mapping[str, Any]) -> None:
         raise ValueError("unsupported remote policy version")
     if document.get("default_effect") != "DENY":
         raise ValueError("remote policies must deny by default")
-    if not isinstance(document.get("registry_version"), str):
-        raise ValueError("remote policy registry_version is required")
+    _require_non_empty_string(document, "policy_id", "remote policy")
+    _require_non_empty_string(document, "registry_version", "remote policy")
+
     endpoint_pin = _required_mapping(document, "endpoint_pin")
     for field_name in (
         "endpoint_id",
@@ -286,23 +320,190 @@ def _validate_policy(document: Mapping[str, Any]) -> None:
         "protocol_version",
         "adapter_version",
     ):
-        if not isinstance(endpoint_pin.get(field_name), str):
-            raise ValueError(f"remote policy endpoint_pin.{field_name} is required")
-    if not _mapping_values(document.get("trust_bindings")):
-        raise ValueError("remote policy requires at least one trust binding")
-    if not _mapping_values(document.get("source_labels")):
-        raise ValueError("remote policy requires at least one source label")
-    if not _mapping_values(document.get("capability_scopes")):
-        raise ValueError("remote policy requires at least one capability scope")
+        _require_non_empty_string(
+            endpoint_pin, field_name, "remote policy endpoint_pin"
+        )
+
+    trust_bindings = _required_object_list(
+        document, "trust_bindings", "remote policy"
+    )
+    binding_ids: list[str] = []
+    trusted_actor_ids: set[str] = set()
+    for index, binding in enumerate(trust_bindings):
+        context = f"remote policy trust_bindings[{index}]"
+        for field_name in _TRUST_FIELDS:
+            value = _require_non_empty_string(binding, field_name, context)
+            if field_name == "binding_id":
+                binding_ids.append(value)
+            elif field_name == "actor_id":
+                trusted_actor_ids.add(value)
+    _reject_duplicates(binding_ids, "remote policy trust_bindings binding_id")
+
+    source_labels = _required_object_list(document, "source_labels", "remote policy")
+    source_roots: list[str] = []
+    sensitivities: set[str] = set()
+    for index, label in enumerate(source_labels):
+        context = f"remote policy source_labels[{index}]"
+        source_root = _require_non_empty_string(label, "source_root", context)
+        _validate_source_root(source_root, f"{context}.source_root")
+        source_roots.append(source_root)
+        sensitivities.add(_require_non_empty_string(label, "sensitivity", context))
+        _required_string_list(
+            label, "data_classes", context, allow_empty=True
+        )
+    _reject_duplicates(source_roots, "remote policy source_labels source_root")
+    known_source_roots = set(source_roots)
+
+    capability_scopes = _required_object_list(
+        document, "capability_scopes", "remote policy"
+    )
+    capability_names: list[str] = []
+    for index, scope in enumerate(capability_scopes):
+        context = f"remote policy capability_scopes[{index}]"
+        capability_names.append(
+            _require_non_empty_string(scope, "capability", context)
+        )
+        _required_string_list(scope, "operation_types", context)
+        actor_ids = _required_string_list(scope, "actor_ids", context)
+        if not set(actor_ids).issubset(trusted_actor_ids):
+            raise ValueError(f"{context}.actor_ids contains an untrusted actor")
+
+        scoped_roots = _required_string_list(scope, "source_roots", context)
+        for root_index, source_root in enumerate(scoped_roots):
+            _validate_source_root(
+                source_root, f"{context}.source_roots[{root_index}]"
+            )
+            if source_root not in known_source_roots:
+                raise ValueError(
+                    f"{context}.source_roots[{root_index}] has no source label"
+                )
+
+        allowed_sensitivities = _required_string_list(
+            scope, "allowed_sensitivities", context
+        )
+        if not set(allowed_sensitivities).issubset(sensitivities):
+            raise ValueError(
+                f"{context}.allowed_sensitivities contains an unknown sensitivity"
+            )
+
+        disclosure = _required_mapping(scope, "disclosure", context=context)
+        allow_fields = _required_string_list(
+            disclosure, "allow_fields", f"{context}.disclosure"
+        )
+        if any("." in field_name for field_name in allow_fields):
+            raise ValueError(
+                f"{context}.disclosure.allow_fields must name top-level fields"
+            )
+        redact_paths = _required_string_list(
+            disclosure,
+            "redact_paths",
+            f"{context}.disclosure",
+            allow_empty=True,
+        )
+        _validate_redaction_paths(
+            redact_paths,
+            allowed_roots=set(allow_fields),
+            context=f"{context}.disclosure.redact_paths",
+        )
+    _reject_duplicates(
+        capability_names, "remote policy capability_scopes capability"
+    )
 
 
 def _required_mapping(
-    document: Mapping[str, Any], field_name: str
+    document: Mapping[str, Any],
+    field_name: str,
+    *,
+    context: str = "remote policy",
 ) -> Mapping[str, Any]:
     value = document.get(field_name)
     if not isinstance(value, Mapping):
-        raise ValueError(f"remote policy {field_name} must be an object")
+        raise ValueError(f"{context}.{field_name} must be an object")
     return value
+
+
+def _required_object_list(
+    document: Mapping[str, Any], field_name: str, context: str
+) -> list[Mapping[str, Any]]:
+    value = document.get(field_name)
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"{context}.{field_name} must be a non-empty list")
+    for index, item in enumerate(value):
+        if not isinstance(item, Mapping):
+            raise ValueError(f"{context}.{field_name}[{index}] must be an object")
+    return value
+
+
+def _require_non_empty_string(
+    document: Mapping[str, Any], field_name: str, context: str
+) -> str:
+    value = document.get(field_name)
+    if not _is_non_empty_string(value):
+        raise ValueError(f"{context}.{field_name} must be a non-empty string")
+    return value
+
+
+def _required_string_list(
+    document: Mapping[str, Any],
+    field_name: str,
+    context: str,
+    *,
+    allow_empty: bool = False,
+) -> list[str]:
+    value = document.get(field_name)
+    if not isinstance(value, list) or (not value and not allow_empty):
+        qualifier = "a list" if allow_empty else "a non-empty list"
+        raise ValueError(f"{context}.{field_name} must be {qualifier}")
+    for index, item in enumerate(value):
+        if not _is_non_empty_string(item):
+            raise ValueError(
+                f"{context}.{field_name}[{index}] must be a non-empty string"
+            )
+    _reject_duplicates(value, f"{context}.{field_name}")
+    return value
+
+
+def _reject_duplicates(values: list[str], context: str) -> None:
+    seen: set[str] = set()
+    for value in values:
+        if value in seen:
+            raise ValueError(f"{context} contains duplicate values")
+        seen.add(value)
+
+
+def _validate_source_root(source_root: str, context: str) -> None:
+    parsed = urlsplit(source_root)
+    if (
+        not parsed.scheme
+        or not parsed.netloc
+        or not parsed.path.startswith("/")
+        or not parsed.path.endswith("/")
+        or parsed.query
+        or parsed.fragment
+        or not _source_ref_is_safe(source_root)
+    ):
+        raise ValueError(
+            f"{context} must be an absolute, slash-terminated safe source root"
+        )
+
+
+def _validate_redaction_paths(
+    paths: list[str], *, allowed_roots: set[str], context: str
+) -> None:
+    for index, path in enumerate(paths):
+        segments = path.split(".")
+        if len(segments) < 2 or any(not segment for segment in segments):
+            raise ValueError(f"{context}[{index}] must be a nested dotted path")
+        if segments[0] not in allowed_roots:
+            raise ValueError(f"{context}[{index}] is not rooted in an allowed field")
+    for index, path in enumerate(paths):
+        for other in paths[index + 1 :]:
+            if path.startswith(f"{other}.") or other.startswith(f"{path}."):
+                raise ValueError(f"{context} contains overlapping paths")
+
+
+def _is_non_empty_string(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
 
 
 def _mapping_or_empty(value: Any) -> Mapping[str, Any]:
@@ -328,6 +529,7 @@ def _string_or_none(value: Any) -> str | None:
 def _canonical_json(value: Any) -> str:
     return json.dumps(
         value,
+        allow_nan=False,
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
@@ -337,6 +539,56 @@ def _canonical_json(value: Any) -> str:
 def _canonical_hash(value: Mapping[str, Any]) -> str:
     digest = hashlib.sha256(_canonical_json(value).encode("utf-8")).hexdigest()
     return f"sha256:{digest}"
+
+
+def _verify_decision_integrity(document: Mapping[str, Any]) -> None:
+    decision_id = document.get("decision_id")
+    payload = dict(document)
+    payload.pop("decision_id", None)
+    try:
+        digest = hashlib.sha256(
+            _canonical_json(payload).encode("utf-8")
+        ).hexdigest()
+    except (TypeError, ValueError):
+        raise ValueError("remote policy decision integrity check failed") from None
+    expected = f"remote_policy_decision_{digest[:32]}"
+    if decision_id != expected:
+        raise ValueError("remote policy decision integrity check failed")
+
+
+def _deep_freeze(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return MappingProxyType(
+            {key: _deep_freeze(item) for key, item in value.items()}
+        )
+    if isinstance(value, (list, tuple)):
+        return tuple(_deep_freeze(item) for item in value)
+    return value
+
+
+def _thaw_json(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {key: _thaw_json(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_thaw_json(item) for item in value]
+    return value
+
+
+def _strict_json_copy(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        copied: dict[str, Any] = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise ValueError("remote policy JSON object keys must be strings")
+            copied[key] = _strict_json_copy(item)
+        return copied
+    if isinstance(value, list):
+        return [_strict_json_copy(item) for item in value]
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float) and math.isfinite(value):
+        return value
+    raise ValueError("remote policy document must contain canonical JSON values")
 
 
 def _json_copy(value: Any) -> Any:

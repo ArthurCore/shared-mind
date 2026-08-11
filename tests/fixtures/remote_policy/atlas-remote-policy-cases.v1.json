@@ -142,6 +142,12 @@
       "expected_reason_codes": ["REMOTE_VERSION_PIN_MISMATCH"]
     },
     {
+      "name": "remote_request_version_drift",
+      "binding": "trusted",
+      "request_overrides": {"request_version": "remote-policy-request@999"},
+      "expected_reason_codes": ["REMOTE_REQUEST_VERSION_MISMATCH"]
+    },
+    {
       "name": "predicate_registry_drift",
       "binding": "trusted",
       "request_overrides": {"registry_version": "predicate-registry@2"},
@@ -155,6 +161,7 @@
     "MISSING_TRUST_BINDING",
     "OPERATION_SCOPE_DENIED",
     "REGISTRY_VERSION_MISMATCH",
+    "REMOTE_REQUEST_VERSION_MISMATCH",
     "REMOTE_VERSION_PIN_MISMATCH",
     "SENSITIVITY_DENIED",
     "SOURCE_SCOPE_DENIED",

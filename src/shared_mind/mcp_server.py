@@ -81,7 +81,12 @@ _TOOL_DEFINITIONS = (
             }
         ),
         "outputSchema": _OPERATION_OUTPUT_SCHEMA,
-        "annotations": {"readOnlyHint": True, "destructiveHint": False},
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
     },
     {
         "name": "query",
@@ -101,7 +106,12 @@ _TOOL_DEFINITIONS = (
             }
         ),
         "outputSchema": _OPERATION_OUTPUT_SCHEMA,
-        "annotations": {"readOnlyHint": True, "destructiveHint": False},
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
     },
     {
         "name": "proposal_validate",
@@ -110,7 +120,12 @@ _TOOL_DEFINITIONS = (
             {"proposal": {"type": "object"}}, required=("proposal",)
         ),
         "outputSchema": _OPERATION_OUTPUT_SCHEMA,
-        "annotations": {"readOnlyHint": True, "destructiveHint": False},
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
     },
     {
         "name": "proposal_commit",
@@ -119,7 +134,12 @@ _TOOL_DEFINITIONS = (
             {"proposal": {"type": "object"}}, required=("proposal",)
         ),
         "outputSchema": _OPERATION_OUTPUT_SCHEMA,
-        "annotations": {"readOnlyHint": False, "destructiveHint": True},
+        "annotations": {
+            "readOnlyHint": False,
+            "destructiveHint": True,
+            "idempotentHint": False,
+            "openWorldHint": False,
+        },
     },
     {
         "name": "source_add",
@@ -132,7 +152,12 @@ _TOOL_DEFINITIONS = (
             required=("path",),
         ),
         "outputSchema": _OPERATION_OUTPUT_SCHEMA,
-        "annotations": {"readOnlyHint": False, "destructiveHint": False},
+        "annotations": {
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": False,
+        },
     },
     {
         "name": "conflict_list",
@@ -146,14 +171,24 @@ _TOOL_DEFINITIONS = (
             }
         ),
         "outputSchema": _OPERATION_OUTPUT_SCHEMA,
-        "annotations": {"readOnlyHint": True, "destructiveHint": False},
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
     },
     {
         "name": "ledger_verify",
         "description": "Verify the canonical ledger chain and materialized state root.",
         "inputSchema": _object_schema(),
         "outputSchema": _OPERATION_OUTPUT_SCHEMA,
-        "annotations": {"readOnlyHint": True, "destructiveHint": False},
+        "annotations": {
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
     },
 )
 
@@ -467,14 +502,14 @@ def create_server(workspace: Workspace) -> Any:
             return ToolAnnotations(
                 read_only_hint=hints["readOnlyHint"],
                 destructive_hint=hints["destructiveHint"],
-                idempotent_hint=True,
-                open_world_hint=False,
+                idempotent_hint=hints["idempotentHint"],
+                open_world_hint=hints["openWorldHint"],
             )
         return ToolAnnotations(
             readOnlyHint=hints["readOnlyHint"],
             destructiveHint=hints["destructiveHint"],
-            idempotentHint=True,
-            openWorldHint=False,
+            idempotentHint=hints["idempotentHint"],
+            openWorldHint=hints["openWorldHint"],
         )
 
     @server.tool(

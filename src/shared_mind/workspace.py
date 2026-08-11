@@ -4,6 +4,7 @@ import base64
 import json
 import os
 import re
+import stat
 import sysconfig
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -23,9 +24,15 @@ REGISTRY_FILENAME = "predicate-registry.json"
 WORKSPACE_VERSION = 1
 MAX_JSON_BYTES = 1024 * 1024
 MAX_JSON_DEPTH = 64
+MAX_SOURCE_BYTES = 1024 * 1024
 
 _SEMANTIC_ID = re.compile(r"^[a-z][a-z0-9_-]{1,31}:[a-z0-9][a-z0-9._-]{0,127}$")
 _SAFE_SLUG = re.compile(r"[^a-z0-9._-]+")
+_SUPPORTS_SECURE_DIR_FD = (
+    os.open in os.supports_dir_fd
+    and hasattr(os, "O_DIRECTORY")
+    and hasattr(os, "O_NOFOLLOW")
+)
 
 
 class WorkspaceError(Exception):
@@ -247,10 +254,7 @@ class Workspace:
     ) -> tuple[dict[str, Any], Receipt]:
         path = self.resolve_source_input(source_path)
         media_type = self._media_type(path)
-        try:
-            content = path.read_bytes()
-        except OSError as exc:
-            raise WorkspaceError("SOURCE_READ_FAILED", f"Cannot read source: {exc}") from exc
+        content = self._read_source_bytes(path)
         try:
             content.decode("utf-8")
         except UnicodeDecodeError as exc:
@@ -270,7 +274,6 @@ class Workspace:
         revision_id = f"revision_{identity_hash[:32]}"
         blob_name = content_hash.split(":", 1)[1]
         blob_path = self.blob_root / blob_name
-        self._preserve_blob(blob_path, content, content_hash)
 
         kernel = self.open_kernel()
         try:
@@ -303,6 +306,15 @@ class Workspace:
                 }
 
             proposal = self._source_proposal(source_revision, identity_hash)
+            proposal_size = len(canonical_json(proposal).encode("utf-8"))
+            if proposal_size > Kernel.MAX_PROPOSAL_BYTES:
+                raise WorkspaceError(
+                    "SOURCE_TOO_LARGE",
+                    "Source cannot fit in one bounded canonical proposal: "
+                    f"requires {proposal_size} bytes, limit is "
+                    f"{Kernel.MAX_PROPOSAL_BYTES} bytes.",
+                )
+            self._preserve_blob(blob_path, content, content_hash)
             receipt = kernel.commit(proposal)
             return (
                 {
@@ -318,6 +330,9 @@ class Workspace:
             kernel.close()
 
     def validate_proposal(self, proposal: Any) -> list[ValidationIssue]:
+        resource_issue = self._proposal_resource_issue(proposal)
+        if resource_issue is not None:
+            return [resource_issue]
         contract = load_default_schema()
         proposal_contract = {
             "$schema": contract["$schema"],
@@ -492,21 +507,306 @@ class Workspace:
 
     def _preserve_blob(self, path: Path, content: bytes, expected_hash: str) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
+        if _SUPPORTS_SECURE_DIR_FD:
+            try:
+                workspace_root = self.root.resolve(strict=True)
+                blob_root = self.blob_root.resolve(strict=True)
+            except OSError as exc:
+                raise WorkspaceError(
+                    "BLOB_WRITE_FAILED", f"Cannot resolve blob root: {exc}"
+                ) from exc
+            if not self._is_within(blob_root, workspace_root):
+                raise WorkspaceError(
+                    "BLOB_INTEGRITY_ERROR", "Blob root escapes the workspace."
+                )
+            directory_flags = (
+                os.O_RDONLY
+                | os.O_DIRECTORY
+                | os.O_NOFOLLOW
+                | getattr(os, "O_CLOEXEC", 0)
+            )
+            try:
+                directory_fd = os.open(self.blob_root, directory_flags)
+            except OSError as exc:
+                raise WorkspaceError(
+                    "BLOB_WRITE_FAILED", f"Cannot open blob root: {exc}"
+                ) from exc
+            try:
+                self._preserve_blob_at(
+                    directory_fd, path.name, content, expected_hash
+                )
+            finally:
+                os.close(directory_fd)
+            return
+        self._preserve_blob_fallback(path, content, expected_hash)
+
+    @staticmethod
+    def _preserve_blob_at(
+        directory_fd: int,
+        name: str,
+        content: bytes,
+        expected_hash: str,
+    ) -> None:
+        common_flags = (
+            os.O_NOFOLLOW
+            | getattr(os, "O_BINARY", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+        )
         try:
-            with path.open("xb") as handle:
+            descriptor = os.open(
+                name,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | common_flags,
+                0o600,
+                dir_fd=directory_fd,
+            )
+        except FileExistsError:
+            try:
+                descriptor = os.open(
+                    name,
+                    os.O_RDONLY | common_flags,
+                    dir_fd=directory_fd,
+                )
+                with os.fdopen(descriptor, "rb") as handle:
+                    if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                        raise WorkspaceError(
+                            "BLOB_INTEGRITY_ERROR",
+                            "Existing blob is not a regular file.",
+                        )
+                    existing = handle.read(MAX_SOURCE_BYTES + 1)
+            except WorkspaceError:
+                raise
+            except OSError as exc:
+                raise WorkspaceError(
+                    "BLOB_READ_FAILED", f"Cannot verify source blob: {exc}"
+                ) from exc
+            if (
+                len(existing) > MAX_SOURCE_BYTES
+                or sha256_bytes(existing) != expected_hash
+            ):
+                raise WorkspaceError(
+                    "BLOB_INTEGRITY_ERROR",
+                    "Content-addressed blob does not match its filename.",
+                )
+            return
+        except OSError as exc:
+            raise WorkspaceError(
+                "BLOB_WRITE_FAILED", f"Cannot create source blob: {exc}"
+            ) from exc
+        try:
+            with os.fdopen(descriptor, "wb") as handle:
                 handle.write(content)
                 handle.flush()
                 os.fsync(handle.fileno())
+        except OSError as exc:
+            raise WorkspaceError(
+                "BLOB_WRITE_FAILED", f"Cannot write source blob: {exc}"
+            ) from exc
+
+    @staticmethod
+    def _preserve_blob_fallback(
+        path: Path, content: bytes, expected_hash: str
+    ) -> None:
+        common_flags = (
+            getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_BINARY", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+        )
+        try:
+            descriptor = os.open(
+                path,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | common_flags,
+                0o600,
+            )
         except FileExistsError:
+            if path.is_symlink():
+                raise WorkspaceError(
+                    "BLOB_INTEGRITY_ERROR",
+                    "Existing blob path must not be a symbolic link.",
+                )
             try:
-                existing = path.read_bytes()
+                descriptor = os.open(path, os.O_RDONLY | common_flags)
+                with os.fdopen(descriptor, "rb") as handle:
+                    if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                        raise WorkspaceError(
+                            "BLOB_INTEGRITY_ERROR",
+                            "Existing blob is not a regular file.",
+                        )
+                    existing = handle.read(MAX_SOURCE_BYTES + 1)
+            except WorkspaceError:
+                raise
             except OSError as exc:
-                raise WorkspaceError("BLOB_READ_FAILED", f"Cannot verify source blob: {exc}") from exc
-            if sha256_bytes(existing) != expected_hash:
+                raise WorkspaceError(
+                    "BLOB_READ_FAILED", f"Cannot verify source blob: {exc}"
+                ) from exc
+            if (
+                len(existing) > MAX_SOURCE_BYTES
+                or sha256_bytes(existing) != expected_hash
+            ):
                 raise WorkspaceError(
                     "BLOB_INTEGRITY_ERROR",
                     f"Content-addressed blob does not match its filename: {path}",
                 )
+            return
+        except OSError as exc:
+            raise WorkspaceError(
+                "BLOB_WRITE_FAILED", f"Cannot create source blob: {exc}"
+            ) from exc
+        try:
+            with os.fdopen(descriptor, "wb") as handle:
+                handle.write(content)
+                handle.flush()
+                os.fsync(handle.fileno())
+        except OSError as exc:
+            raise WorkspaceError(
+                "BLOB_WRITE_FAILED", f"Cannot write source blob: {exc}"
+            ) from exc
+
+    def _read_source_bytes(self, path: Path) -> bytes:
+        try:
+            descriptor = self._open_source_descriptor(path)
+            with os.fdopen(descriptor, "rb") as handle:
+                if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                    raise WorkspaceError(
+                        "SOURCE_READ_FAILED", "Source must be a regular file."
+                    )
+                content = handle.read(MAX_SOURCE_BYTES + 1)
+        except WorkspaceError:
+            raise
+        except OSError as exc:
+            raise WorkspaceError(
+                "SOURCE_READ_FAILED", f"Cannot read source: {exc}"
+            ) from exc
+        if len(content) > MAX_SOURCE_BYTES:
+            raise WorkspaceError(
+                "SOURCE_TOO_LARGE",
+                f"Source exceeds the {MAX_SOURCE_BYTES}-byte limit.",
+            )
+        return content
+
+    def _open_source_descriptor(self, path: Path) -> int:
+        try:
+            workspace_root = self.root.resolve(strict=True)
+            source_root = self.source_root.resolve(strict=True)
+        except OSError as exc:
+            raise WorkspaceError(
+                "SOURCE_READ_FAILED", f"Cannot resolve source root: {exc}"
+            ) from exc
+        if not self._is_within(source_root, workspace_root):
+            raise WorkspaceError(
+                "PATH_OUTSIDE_SOURCE_ROOT",
+                f"Source root escapes the workspace: {source_root}",
+            )
+        if _SUPPORTS_SECURE_DIR_FD:
+            return self._open_source_descriptor_at(source_root, path)
+        return self._open_source_descriptor_fallback(source_root, path)
+
+    @staticmethod
+    def _open_source_descriptor_at(source_root: Path, path: Path) -> int:
+        try:
+            relative = path.relative_to(source_root)
+        except ValueError as exc:
+            raise WorkspaceError(
+                "PATH_OUTSIDE_SOURCE_ROOT",
+                f"Source path escapes the source root: {path}",
+            ) from exc
+        parts = relative.parts
+        if not parts or any(part in {"", ".", ".."} for part in parts):
+            raise WorkspaceError(
+                "PATH_OUTSIDE_SOURCE_ROOT", f"Invalid source path: {path}"
+            )
+        directory_flags = (
+            os.O_RDONLY
+            | os.O_DIRECTORY
+            | os.O_NOFOLLOW
+            | getattr(os, "O_CLOEXEC", 0)
+        )
+        file_flags = (
+            os.O_RDONLY
+            | os.O_NOFOLLOW
+            | getattr(os, "O_BINARY", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+        )
+        directory_fd = os.open(source_root, directory_flags)
+        try:
+            for component in parts[:-1]:
+                next_fd = os.open(
+                    component, directory_flags, dir_fd=directory_fd
+                )
+                os.close(directory_fd)
+                directory_fd = next_fd
+            return os.open(parts[-1], file_flags, dir_fd=directory_fd)
+        finally:
+            os.close(directory_fd)
+
+    @classmethod
+    def _open_source_descriptor_fallback(
+        cls, source_root: Path, path: Path
+    ) -> int:
+        try:
+            before = path.resolve(strict=True)
+        except OSError as exc:
+            raise WorkspaceError(
+                "SOURCE_READ_FAILED", f"Cannot resolve source path: {exc}"
+            ) from exc
+        if not cls._is_within(before, source_root):
+            raise WorkspaceError(
+                "PATH_OUTSIDE_SOURCE_ROOT",
+                f"Source path must be inside {source_root}: {before}",
+            )
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_BINARY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+        )
+        descriptor = os.open(before, flags)
+        try:
+            after = path.resolve(strict=True)
+            opened = os.fstat(descriptor)
+            current = os.stat(after)
+            if (
+                after != before
+                or not cls._is_within(after, source_root)
+                or (opened.st_dev, opened.st_ino)
+                != (current.st_dev, current.st_ino)
+            ):
+                raise WorkspaceError(
+                    "SOURCE_READ_FAILED",
+                    "Source path identity changed while it was opened.",
+                )
+            return descriptor
+        except Exception:
+            os.close(descriptor)
+            raise
+
+    @staticmethod
+    def _proposal_resource_issue(proposal: Any) -> ValidationIssue | None:
+        if _json_depth_exceeds(proposal, Kernel.MAX_PROPOSAL_DEPTH):
+            return ValidationIssue(
+                "PROPOSAL_TOO_DEEP",
+                "$",
+                "Proposal exceeds the maximum container depth of "
+                f"{Kernel.MAX_PROPOSAL_DEPTH}.",
+            )
+        try:
+            proposal_size = len(canonical_json(proposal).encode("utf-8"))
+        except RecursionError:
+            return ValidationIssue(
+                "PROPOSAL_TOO_DEEP",
+                "$",
+                "Proposal exceeds the maximum container depth of "
+                f"{Kernel.MAX_PROPOSAL_DEPTH}.",
+            )
+        except (TypeError, ValueError):
+            return None
+        if proposal_size > Kernel.MAX_PROPOSAL_BYTES:
+            return ValidationIssue(
+                "PROPOSAL_TOO_LARGE",
+                "$",
+                "Proposal exceeds the canonical JSON limit of "
+                f"{Kernel.MAX_PROPOSAL_BYTES} bytes.",
+            )
+        return None
 
     def _relative(self, path: Path) -> str:
         return path.resolve().relative_to(self.root).as_posix()

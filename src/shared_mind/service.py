@@ -7,11 +7,14 @@ JSON framing, and transport concerns belong to the CLI or another adapter.
 from __future__ import annotations
 
 import dataclasses
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .canonical import sha256_json
+from .kernel import Kernel
 from .workspace import Workspace
 
 if TYPE_CHECKING:
@@ -53,6 +56,21 @@ class WorkspaceService:
 
     def __init__(self, workspace: Workspace) -> None:
         self.workspace = workspace
+
+    def current_version_bundle(self) -> dict[str, str]:
+        """Return canonical write pins without exposing workspace storage details."""
+
+        registry = json.loads(
+            self.workspace.registry_path.read_text(encoding="utf-8")
+        )
+        return {
+            "schema": Kernel.SUPPORTED_VERSIONS["schema"],
+            "predicate_registry": registry["version"],
+            "predicate_registry_hash": sha256_json(registry),
+            "conflict_rules": Kernel.SUPPORTED_VERSIONS["conflict_rules"],
+            "guard_dsl": registry["guard_dsl_version"],
+            "projection": Kernel.SUPPORTED_VERSIONS["projection"],
+        }
 
     def validate_proposal(self, proposal: Any) -> OperationResult:
         issues = self.workspace.validate_proposal(proposal)

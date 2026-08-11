@@ -129,6 +129,32 @@ print(shared_mind.__name__, McpApplication.__name__)
             set(by_name["query"]["inputSchema"]["properties"]),
         )
 
+    def test_tool_annotations_match_core_and_both_sdk_generations(self) -> None:
+        write_tools = {"proposal_commit", "source_add"}
+        expected = {
+            name: {
+                "readOnlyHint": name not in write_tools,
+                "destructiveHint": name == "proposal_commit",
+                "idempotentHint": name not in write_tools,
+                "openWorldHint": False,
+            }
+            for name in TOOL_NAMES
+        }
+        core = {
+            tool["name"]: tool["annotations"]
+            for tool in self.application().list_tools()
+        }
+
+        self.assertEqual(expected, core)
+        for sdk_version in (1, 2):
+            with self.subTest(sdk_version=sdk_version):
+                server = self.fake_sdk_server(sdk_version)
+                actual = {
+                    name: metadata["annotations"].canonical()
+                    for name, (metadata, _) in server.tools.items()
+                }
+                self.assertEqual(expected, actual)
+
     def test_validate_and_query_calls_match_workspace_service_envelopes(self) -> None:
         application = self.application()
         service = WorkspaceService(self.workspace)
@@ -370,6 +396,22 @@ print(shared_mind.__name__, McpApplication.__name__)
     def application(self):
         return self.module().McpApplication(self.workspace)
 
+    def fake_sdk_server(self, sdk_version: int):
+        types_module = types.ModuleType("mcp.types")
+        types_module.ToolAnnotations = RecordingToolAnnotations
+        server_module = types.ModuleType("mcp.server")
+        fastmcp_module = types.ModuleType("mcp.server.fastmcp")
+        fastmcp_module.FastMCP = RecordingFastMCP
+        modules = {
+            "mcp.types": types_module,
+            "mcp.server": server_module,
+            "mcp.server.fastmcp": fastmcp_module,
+        }
+        if sdk_version == 2:
+            server_module.MCPServer = RecordingFastMCP
+        with patch.dict(sys.modules, modules):
+            return self.module().create_server(self.workspace)
+
     @staticmethod
     def module():
         from shared_mind import mcp_server
@@ -433,6 +475,20 @@ class RecordingFastMCP:
 
     def run(self, transport: str = "stdio", mount_path: str | None = None) -> None:
         self.run_calls.append((transport, mount_path))
+
+
+class RecordingToolAnnotations:
+    def __init__(self, **values: object) -> None:
+        self.values = values
+
+    def canonical(self) -> dict[str, object]:
+        aliases = {
+            "read_only_hint": "readOnlyHint",
+            "destructive_hint": "destructiveHint",
+            "idempotent_hint": "idempotentHint",
+            "open_world_hint": "openWorldHint",
+        }
+        return {aliases.get(name, name): value for name, value in self.values.items()}
 
 
 if __name__ == "__main__":

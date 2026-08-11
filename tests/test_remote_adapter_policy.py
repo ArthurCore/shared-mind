@@ -85,6 +85,7 @@ class RemotePolicyFixtureContractTest(unittest.TestCase):
                 "predicate_registry_drift",
                 "remote_adapter_version_drift",
                 "remote_endpoint_drift",
+                "remote_request_version_drift",
                 "restricted_pii_source",
                 "secret_and_pii_field_request",
                 "unknown_capability_deny_by_default",
@@ -305,6 +306,7 @@ class RemotePolicyPublicApiContractTest(unittest.TestCase):
         expected = {
             "remote_endpoint_drift": "ENDPOINT_PIN_MISMATCH",
             "remote_adapter_version_drift": "REMOTE_VERSION_PIN_MISMATCH",
+            "remote_request_version_drift": "REMOTE_REQUEST_VERSION_MISMATCH",
             "predicate_registry_drift": "REGISTRY_VERSION_MISMATCH",
         }
         for name, reason in expected.items():

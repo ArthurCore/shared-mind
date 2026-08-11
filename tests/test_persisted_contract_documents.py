@@ -129,7 +129,7 @@ class PersistedContractDocumentTest(unittest.TestCase):
                 self.assertEqual(
                     [],
                     self._messages(self.receipt_validator, document),
-                    "persisted receipt document must satisfy DecisionReceipt@1.1",
+                    "persisted receipt document must satisfy DecisionReceipt@1.3",
                 )
                 self.assertEqual(canonical_json(document), row["document"])
                 parity = {
@@ -172,6 +172,7 @@ class PersistedContractDocumentTest(unittest.TestCase):
             "proposal_id": None,
             "proposal_hash": "sha256:" + "1" * 64,
             "idempotency_key": None,
+            "proposer": None,
             "outcome": "VALIDATION_ERROR",
             "reason_codes": ["MALFORMED_PROPOSAL"],
             "head_before": None,
@@ -184,7 +185,7 @@ class PersistedContractDocumentTest(unittest.TestCase):
         self.assertEqual(
             [],
             self._messages(self.receipt_validator, candidate),
-            "DecisionReceipt@1.1 must allow explicit null identifiers when the "
+            "DecisionReceipt@1.3 must allow explicit null identifiers when the "
             "submitted value is not a JSON Proposal",
         )
 
