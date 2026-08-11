@@ -63,7 +63,7 @@ class DeterministicProjectionTest(unittest.TestCase):
         mysql_claim_id = self.objects["assert_mysql_same_interval_proposal"][
             "operations"
         ][0]["claim"]["claim_id"]
-        self.assertEqual("markdown-projection@1", projection["projection_version"])
+        self.assertEqual("markdown-projection@2", projection["projection_version"])
         self.assertEqual(3, projection["ledger"]["head_sequence"])
         self.assertEqual(self.kernel.state_root(), projection["state_root"])
         self.assertEqual(

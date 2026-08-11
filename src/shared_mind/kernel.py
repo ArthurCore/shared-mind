@@ -55,10 +55,11 @@ class Kernel:
     """SQLite implementation of the first Atlas vertical slice."""
 
     SUPPORTED_VERSIONS = {
-        "schema": "1.0.0",
+        "schema": "1.1.0",
         "conflict_rules": "conflict-rules@1",
-        "projection": "markdown-projection@1",
+        "projection": "markdown-projection@2",
     }
+    READABLE_SCHEMA_VERSIONS = frozenset({"1.0.0", "1.1.0"})
 
     def __init__(
         self,
@@ -82,7 +83,11 @@ class Kernel:
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA foreign_keys = ON")
         self.connection.execute("PRAGMA journal_mode = WAL")
-        self._create_schema()
+        try:
+            self._create_schema()
+        except Exception:
+            self.connection.close()
+            raise
         self._write_authorization_depth = 0
         self.connection.set_authorizer(self._authorize_sql)
 
@@ -147,11 +152,35 @@ class Kernel:
               state_root TEXT NOT NULL,
               conflict_ids TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS kernel_metadata (
+              name TEXT PRIMARY KEY,
+              value TEXT NOT NULL
+            );
             """
         )
         self._migrate_schema()
+        self._pin_predicate_registry()
         create_continuity_schema(self.connection)
         self._create_immutability_triggers()
+
+    def _pin_predicate_registry(self) -> None:
+        pin = canonical_json(
+            {
+                "version": self.registry["version"],
+                "content_hash": sha256_json(self.registry),
+            }
+        )
+        existing = self.connection.execute(
+            "SELECT value FROM kernel_metadata WHERE name = 'predicate_registry'"
+        ).fetchone()
+        if existing is None:
+            self.connection.execute(
+                "INSERT INTO kernel_metadata(name, value) VALUES (?, ?)",
+                ("predicate_registry", pin),
+            )
+            return
+        if existing["value"] != pin:
+            raise ValidationFailure("PREDICATE_REGISTRY_CONTENT_MISMATCH")
 
     def _migrate_schema(self) -> None:
         conflict_columns = {
@@ -288,6 +317,7 @@ class Kernel:
             "versions": {
                 "schema": self.SUPPORTED_VERSIONS["schema"],
                 "predicate_registry": self.registry["version"],
+                "predicate_registry_hash": sha256_json(self.registry),
                 "conflict_rules": self.SUPPORTED_VERSIONS["conflict_rules"],
                 "guard_dsl": self.registry["guard_dsl_version"],
                 "projection": self.SUPPORTED_VERSIONS["projection"],
@@ -393,7 +423,7 @@ class Kernel:
             conflict_ids = tuple(sorted(set(new_conflicts)))
             if conflict_ids:
                 outcome = "FACT_CONFLICT"
-            post_root = self.state_root()
+            post_root = self._state_root_for_schema(proposal["versions"]["schema"])
             previous = self.connection.execute("SELECT entry_hash FROM ledger ORDER BY seq DESC LIMIT 1").fetchone()
             committed_at = proposal["proposed_at"]
             envelope = self._ledger_envelope(
@@ -475,6 +505,8 @@ class Kernel:
             raise ValidationFailure("UNSUPPORTED_SCHEMA_VERSION")
         if versions["predicate_registry"] != self.registry["version"]:
             raise ValidationFailure("UNSUPPORTED_PREDICATE_REGISTRY")
+        if versions.get("predicate_registry_hash") != sha256_json(self.registry):
+            raise ValidationFailure("PREDICATE_REGISTRY_CONTENT_MISMATCH")
         if versions["conflict_rules"] != self.SUPPORTED_VERSIONS["conflict_rules"]:
             raise ValidationFailure("UNSUPPORTED_CONFLICT_RULES_VERSION")
         if versions["guard_dsl"] != self.registry["guard_dsl_version"]:
@@ -610,6 +642,7 @@ class Kernel:
             }
             for record_type, (table, id_column) in targets.items()
         }
+        namespace["CONFLICT"].update(self._predicted_conflict_ids(operations))
         for operation in operations:
             kind = operation["op"]
             if kind == "REGISTER_SOURCE_REVISION":
@@ -675,6 +708,81 @@ class Kernel:
                 )
             elif kind == "CREATE_WORK_ITEM":
                 record_references(operation["work_item"]["related_objects"])
+
+    def _predicted_conflict_ids(
+        self, operations: list[dict[str, Any]]
+    ) -> set[str]:
+        """Predict conflict IDs created earlier in the same atomic proposal."""
+
+        active = {
+            str(row["claim_id"]): json.loads(row["proposition"])
+            for row in self.connection.execute(
+                "SELECT claim_id, proposition FROM claims "
+                "WHERE status = 'ACTIVE' ORDER BY claim_id"
+            )
+        }
+        episodes: dict[tuple[str, str], tuple[str, set[str]]] = {}
+        for row in self.connection.execute(
+            "SELECT conflict_id, family_key, kind, members, status, episode "
+            "FROM conflicts ORDER BY family_key, kind, "
+            "CASE status WHEN 'OPEN' THEN 0 ELSE 1 END, episode DESC, conflict_id"
+        ):
+            key = (str(row["family_key"]), str(row["kind"]))
+            episodes.setdefault(
+                key,
+                (str(row["conflict_id"]), set(json.loads(row["members"]))),
+            )
+
+        predicted: set[str] = set()
+        for operation in operations:
+            operation_kind = operation["op"]
+            ignored: set[str] = set()
+            incoming: dict[str, Any] | None = None
+            if operation_kind == "ASSERT_CLAIM":
+                incoming = operation["claim"]
+            elif operation_kind == "SUPERSEDE_CLAIM":
+                incoming = operation["replacement_claim"]
+                ignored.add(operation["target_claim_id"])
+            elif operation_kind == "RETRACT_CLAIM":
+                active.pop(operation["target_claim_id"], None)
+
+            if incoming is None:
+                continue
+            proposition = incoming["proposition"]
+            predicate = self.predicates.get(proposition["predicate"])
+            if predicate is None:
+                continue
+            family = self._family_key(proposition, predicate)
+            rules = {rule["kind"] for rule in predicate.get("conflict_rules", [])}
+            members_by_kind: dict[str, set[str]] = {}
+            for claim_id, other in active.items():
+                if claim_id in ignored:
+                    continue
+                if self._family_key(other, predicate) != family:
+                    continue
+                conflict_kind = self._conflict_kind(
+                    proposition, other, predicate, rules
+                )
+                if conflict_kind is not None:
+                    members_by_kind.setdefault(
+                        conflict_kind, {incoming["claim_id"]}
+                    ).add(claim_id)
+
+            for conflict_kind, members in sorted(members_by_kind.items()):
+                key = (family, conflict_kind)
+                if key in episodes:
+                    conflict_id, prior_members = episodes[key]
+                    members |= prior_members
+                else:
+                    digest = sha256_json(sorted(members))
+                    conflict_id = "conflict_" + digest.split(":", 1)[1][:24]
+                episodes[key] = (conflict_id, set(members))
+                predicted.add(conflict_id)
+
+            active[incoming["claim_id"]] = proposition
+            for claim_id in ignored:
+                active.pop(claim_id, None)
+        return predicted
 
     def _apply_operation(
         self,
@@ -952,25 +1060,7 @@ class Kernel:
             other = json.loads(row["proposition"])
             if self._family_key(other, predicate) != family:
                 continue
-            if (
-                "TEMPORAL_OVERLAP" in conflict_rules
-                and not self._overlaps(p["valid_time"], other["valid_time"])
-            ):
-                continue
-            kind = None
-            if (
-                "OPPOSITE_POLARITY" in conflict_rules
-                and p["object"] == other["object"]
-                and p["polarity"] != other["polarity"]
-            ):
-                kind = "POLARITY_CONFLICT"
-            elif (
-                "EXCLUSIVE_OBJECT" in conflict_rules
-                and predicate["cardinality"] == "ONE"
-                and p["polarity"] == other["polarity"] == "POSITIVE"
-                and p["object"] != other["object"]
-            ):
-                kind = "EXCLUSIVE_VALUE_CONFLICT"
+            kind = self._conflict_kind(p, other, predicate, conflict_rules)
             if not kind:
                 continue
             members_by_kind.setdefault(kind, {incoming["claim_id"]}).add(row["claim_id"])
@@ -1035,6 +1125,34 @@ class Kernel:
             )
             opened.append(conflict_id)
         return opened
+
+    @classmethod
+    def _conflict_kind(
+        cls,
+        incoming: dict[str, Any],
+        other: dict[str, Any],
+        predicate: dict[str, Any],
+        conflict_rules: set[str],
+    ) -> str | None:
+        if (
+            "TEMPORAL_OVERLAP" in conflict_rules
+            and not cls._overlaps(incoming["valid_time"], other["valid_time"])
+        ):
+            return None
+        if (
+            "OPPOSITE_POLARITY" in conflict_rules
+            and incoming["object"] == other["object"]
+            and incoming["polarity"] != other["polarity"]
+        ):
+            return "POLARITY_CONFLICT"
+        if (
+            "EXCLUSIVE_OBJECT" in conflict_rules
+            and predicate["cardinality"] == "ONE"
+            and incoming["polarity"] == other["polarity"] == "POSITIVE"
+            and incoming["object"] != other["object"]
+        ):
+            return "EXCLUSIVE_VALUE_CONFLICT"
+        return None
 
     @staticmethod
     def _conflict_document(row: sqlite3.Row) -> dict[str, Any]:
@@ -1173,6 +1291,43 @@ class Kernel:
             "committed_at": committed_at,
         }
 
+    @staticmethod
+    def _legacy_ledger_envelope(
+        *,
+        prev_hash: str | None,
+        proposal_hash: str,
+        events: list[dict[str, Any]],
+        state_root: str,
+    ) -> dict[str, Any]:
+        return {
+            "prev_hash": prev_hash,
+            "proposal_hash": proposal_hash,
+            "events": events,
+            "state_root": state_root,
+        }
+
+    @staticmethod
+    def _legacy_events_well_formed(events: Any) -> bool:
+        required_keys = {
+            "CLAIM_ASSERTED": {"type", "claim_id"},
+            "EVIDENCE_ATTACHED": {"type", "evidence_link_id", "claim_id"},
+            "CLAIM_SUPERSEDED": {
+                "type",
+                "claim_id",
+                "replacement_claim_id",
+            },
+            "CONFLICT_OPENED": {"type", "conflict_id", "kind", "members"},
+        }
+        if not isinstance(events, list) or not events:
+            return False
+        for event in events:
+            if not isinstance(event, dict):
+                return False
+            expected = required_keys.get(event.get("type"))
+            if expected is None or set(event) != expected:
+                return False
+        return True
+
     def verify_ledger(self) -> dict[str, Any]:
         rows = self.connection.execute("SELECT * FROM ledger ORDER BY seq").fetchall()
         errors = self._verify_ledger_rows(rows)
@@ -1215,19 +1370,41 @@ class Kernel:
                     errors.append(f"PROPOSAL_HASH_MISMATCH:{seq}")
                 if next(self.contract_validator.iter_errors(proposal), None) is not None:
                     errors.append(f"PROPOSAL_SCHEMA_INVALID:{seq}")
-                if (
-                    not isinstance(events, list)
-                    or not events
-                    or any(
-                        next(self.ledger_event_validator.iter_errors(event), None)
-                        is not None
-                        for event in events
+                schema_version = proposal["versions"]["schema"]
+                if schema_version == "1.0.0":
+                    if not self._legacy_events_well_formed(events):
+                        errors.append(f"LEDGER_EVENT_SCHEMA_INVALID:{seq}")
+                    envelope = self._legacy_ledger_envelope(
+                        prev_hash=row["prev_hash"],
+                        proposal_hash=row["proposal_hash"],
+                        events=events,
+                        state_root=row["state_root"],
                     )
-                ):
-                    errors.append(f"LEDGER_EVENT_SCHEMA_INVALID:{seq}")
-                if not row["pre_state_root"] or not row["committed_at"]:
-                    errors.append(f"LEGACY_LEDGER_ENTRY_NOT_REPLAYABLE:{seq}")
-                else:
+                    if sha256_json(envelope) != row["entry_hash"]:
+                        errors.append(f"ENTRY_HASH_MISMATCH:{seq}")
+                elif schema_version == self.SUPPORTED_VERSIONS["schema"]:
+                    if proposal["versions"].get(
+                        "predicate_registry_hash"
+                    ) != sha256_json(self.registry):
+                        errors.append(
+                            f"PREDICATE_REGISTRY_CONTENT_MISMATCH:{seq}"
+                        )
+                    if (
+                        not isinstance(events, list)
+                        or not events
+                        or any(
+                            next(
+                                self.ledger_event_validator.iter_errors(event), None
+                            )
+                            is not None
+                            for event in events
+                        )
+                    ):
+                        errors.append(f"LEDGER_EVENT_SCHEMA_INVALID:{seq}")
+                    if not row["pre_state_root"] or not row["committed_at"]:
+                        errors.append(f"INCOMPLETE_LEDGER_ENTRY:{seq}")
+                        expected_prev = row["entry_hash"]
+                        continue
                     envelope = self._ledger_envelope(
                         seq=seq,
                         prev_hash=row["prev_hash"],
@@ -1240,6 +1417,8 @@ class Kernel:
                     )
                     if sha256_json(envelope) != row["entry_hash"]:
                         errors.append(f"ENTRY_HASH_MISMATCH:{seq}")
+                else:
+                    errors.append(f"UNSUPPORTED_LEDGER_SCHEMA:{seq}")
             except (KeyError, TypeError, ValueError, json.JSONDecodeError):
                 errors.append(f"MALFORMED_LEDGER_ENTRY:{seq}")
             expected_prev = row["entry_hash"]
@@ -1262,8 +1441,7 @@ class Kernel:
             target.close()
             raise
 
-    @staticmethod
-    def _replay_rows(target: Kernel, rows: list[sqlite3.Row]) -> None:
+    def _replay_rows(self, target: Kernel, rows: list[sqlite3.Row]) -> None:
         if any(
             target.connection.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone()
             for table in (
@@ -1278,25 +1456,37 @@ class Kernel:
             )
         ):
             raise ValidationFailure("REPLAY_TARGET_NOT_EMPTY")
+        self._seed_legacy_sources(target, rows)
         expected_prev: str | None = None
+        previous_schema: str | None = None
         for row in rows:
             target.connection.execute("BEGIN IMMEDIATE")
-            if target.state_root() != row["pre_state_root"]:
-                raise ValidationFailure(f"REPLAY_PRE_STATE_ROOT_MISMATCH:{row['seq']}")
             proposal = json.loads(row["proposal"])
-            target._validate_continuity_references(proposal["operations"])
+            schema_version = proposal["versions"]["schema"]
+            pre_schema = previous_schema or schema_version
+            computed_pre_root = target._state_root_for_schema(pre_schema)
+            if row["pre_state_root"] and computed_pre_root != row["pre_state_root"]:
+                raise ValidationFailure(
+                    f"REPLAY_PRE_STATE_ROOT_MISMATCH:{row['seq']}"
+                )
             events = json.loads(row["events"])
             try:
-                for event in events:
-                    target._apply_replay_event(event)
+                if schema_version == "1.0.0":
+                    target._apply_legacy_proposal(proposal, events, int(row["seq"]))
+                else:
+                    target._validate_continuity_references(proposal["operations"])
+                    for event in events:
+                        target._apply_replay_event(event)
             except ValidationFailure as exc:
                 raise ValidationFailure(f"{exc.code}:{row['seq']}") from exc
             except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
                 raise ValidationFailure(f"REPLAY_EVENT_INVALID:{row['seq']}") from exc
-            if target.state_root() != row["state_root"]:
+            if target._state_root_for_schema(schema_version) != row["state_root"]:
                 raise ValidationFailure(f"REPLAY_POST_STATE_ROOT_MISMATCH:{row['seq']}")
             if row["prev_hash"] != expected_prev:
                 raise ValidationFailure(f"PREVIOUS_HASH_MISMATCH:{row['seq']}")
+            stored_pre_root = row["pre_state_root"] or computed_pre_root
+            stored_committed_at = row["committed_at"] or proposal["proposed_at"]
             target.connection.execute(
                 """INSERT INTO ledger(
                      seq, prev_hash, entry_hash, proposal_hash, proposal, events,
@@ -1309,17 +1499,22 @@ class Kernel:
                     row["proposal_hash"],
                     row["proposal"],
                     row["events"],
-                    row["pre_state_root"],
+                    stored_pre_root,
                     row["state_root"],
-                    row["committed_at"],
+                    stored_committed_at,
                 ),
             )
             conflict_ids = tuple(
                 sorted(
                     {
-                        event["conflict"]["conflict_id"]
+                        (
+                            event["conflict"]["conflict_id"]
+                            if "conflict" in event
+                            else event["conflict_id"]
+                        )
                         for event in events
                         if event.get("event_type") == "CONFLICT_OPENED"
+                        or event.get("type") == "CONFLICT_OPENED"
                     }
                 )
             )
@@ -1335,6 +1530,111 @@ class Kernel:
             )
             target.connection.execute("COMMIT")
             expected_prev = row["entry_hash"]
+            previous_schema = schema_version
+
+    def _seed_legacy_sources(
+        self, target: Kernel, rows: list[sqlite3.Row]
+    ) -> None:
+        revision_ids: set[str] = set()
+
+        def collect(value: Any) -> None:
+            if isinstance(value, dict):
+                revision_id = value.get("source_revision_id")
+                if isinstance(revision_id, str):
+                    revision_ids.add(revision_id)
+                for nested in value.values():
+                    collect(nested)
+            elif isinstance(value, list):
+                for nested in value:
+                    collect(nested)
+
+        for row in rows:
+            proposal = json.loads(row["proposal"])
+            if proposal["versions"]["schema"] == "1.0.0":
+                collect(proposal["operations"])
+
+        for revision_id in sorted(revision_ids):
+            source = self.connection.execute(
+                "SELECT * FROM sources WHERE revision_id = ?", (revision_id,)
+            ).fetchone()
+            if source is None:
+                raise ValidationFailure("LEGACY_SOURCE_REVISION_NOT_FOUND")
+            content = bytes(source["content"])
+            document = json.loads(source["document"])
+            if (
+                document.get("revision_id") != revision_id
+                or document.get("content_hash") != source["content_hash"]
+                or sha256_bytes(content) != source["content_hash"]
+            ):
+                raise ValidationFailure("LEGACY_SOURCE_REVISION_CORRUPT")
+            target.connection.execute(
+                "INSERT INTO sources VALUES (?, ?, ?, ?)",
+                (
+                    revision_id,
+                    source["content_hash"],
+                    source["document"],
+                    content,
+                ),
+            )
+
+    def _apply_legacy_proposal(
+        self,
+        proposal: dict[str, Any],
+        recorded_events: list[dict[str, Any]],
+        sequence: int,
+    ) -> None:
+        generated_events: list[dict[str, Any]] = []
+        generated_conflicts: list[str] = []
+        self._current_proposer = proposal["proposer"]
+        self._current_opened_seq = sequence
+        for operation in proposal["operations"]:
+            if operation["op"] not in {
+                "ASSERT_CLAIM",
+                "ATTACH_EVIDENCE",
+                "SUPERSEDE_CLAIM",
+            }:
+                raise ValidationFailure("UNSUPPORTED_LEGACY_OPERATION")
+            self._apply_operation(operation, generated_events, generated_conflicts)
+
+        legacy_events: list[dict[str, Any]] = []
+        for event in generated_events:
+            event_type = event["event_type"]
+            if event_type == "CLAIM_ASSERTED":
+                legacy_events.append(
+                    {"type": event_type, "claim_id": event["claim"]["claim_id"]}
+                )
+            elif event_type == "EVIDENCE_ATTACHED":
+                legacy_events.append(
+                    {
+                        "type": event_type,
+                        "evidence_link_id": event["evidence_link"][
+                            "evidence_link_id"
+                        ],
+                        "claim_id": event["evidence_link"]["claim_id"],
+                    }
+                )
+            elif event_type == "CLAIM_SUPERSEDED":
+                legacy_events.append(
+                    {
+                        "type": event_type,
+                        "claim_id": event["target_claim_id"],
+                        "replacement_claim_id": event["replacement_claim_id"],
+                    }
+                )
+            elif event_type == "CONFLICT_OPENED":
+                conflict = event["conflict"]
+                legacy_events.append(
+                    {
+                        "type": event_type,
+                        "conflict_id": conflict["conflict_id"],
+                        "kind": conflict["kind"],
+                        "members": conflict["member_claim_ids"],
+                    }
+                )
+            else:
+                raise ValidationFailure("UNSUPPORTED_LEGACY_EVENT")
+        if canonical_json(legacy_events) != canonical_json(recorded_events):
+            raise ValidationFailure("LEGACY_EVENT_SEMANTIC_MISMATCH")
 
     def _apply_replay_event(self, event: dict[str, Any]) -> None:
         try:
@@ -1456,13 +1756,39 @@ class Kernel:
                 values,
             )
 
-    def state_root(self) -> str:
+    def _state_root_for_schema(self, schema_version: str) -> str:
         state: dict[str, list[Any]] = {}
-        for table in ("sources", "claims", "evidence", "conflicts"):
-            rows = self.connection.execute(f"SELECT * FROM {table} ORDER BY 1").fetchall()
+        table_queries = {
+            "sources": "SELECT * FROM sources ORDER BY revision_id",
+            "claims": "SELECT * FROM claims ORDER BY claim_id",
+            "evidence": "SELECT * FROM evidence ORDER BY evidence_link_id",
+            "conflicts": (
+                "SELECT conflict_id, family_key, kind, member_digest, members, "
+                "status, episode FROM conflicts ORDER BY conflict_id"
+                if schema_version == "1.0.0"
+                else "SELECT * FROM conflicts ORDER BY conflict_id"
+            ),
+        }
+        for table, query in table_queries.items():
+            rows = self.connection.execute(query).fetchall()
             state[table] = [dict(row) | ({"content": sha256_bytes(bytes(row["content"]))} if table == "sources" else {}) for row in rows]
-        state.update(continuity_state_rows(self.connection))
+        if schema_version != "1.0.0":
+            state.update(continuity_state_rows(self.connection))
         return sha256_json(state)
+
+    def state_root(self) -> str:
+        head = self.connection.execute(
+            "SELECT proposal FROM ledger ORDER BY seq DESC LIMIT 1"
+        ).fetchone()
+        schema_version = self.SUPPORTED_VERSIONS["schema"]
+        if head is not None:
+            try:
+                candidate = json.loads(head["proposal"])["versions"]["schema"]
+                if candidate in self.READABLE_SCHEMA_VERSIONS:
+                    schema_version = candidate
+            except (KeyError, TypeError, json.JSONDecodeError):
+                pass
+        return self._state_root_for_schema(schema_version)
 
     def read_epistemic_context(self, subject_id: str, predicate_key: str, environment: str) -> dict[str, Any]:
         claims = []

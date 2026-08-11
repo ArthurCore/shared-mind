@@ -113,10 +113,17 @@ class IntegritySemanticsConformanceTest(unittest.TestCase):
         ]
         kernel = self._kernel("registry-rules.sqlite3", registry=registry)
         self.addCleanup(kernel.close)
-        self.assertEqual("COMMITTED", kernel.commit(self._source_proposal()).outcome)
-        first = kernel.commit(self.objects["assert_postgresql_proposal"])
+        source_proposal = self._source_proposal()
+        postgres_proposal = copy.deepcopy(self.objects["assert_postgresql_proposal"])
+        mysql_proposal = copy.deepcopy(
+            self.objects["assert_mysql_same_interval_proposal"]
+        )
+        for proposal in (source_proposal, postgres_proposal, mysql_proposal):
+            proposal["versions"]["predicate_registry_hash"] = sha256_json(registry)
+        self.assertEqual("COMMITTED", kernel.commit(source_proposal).outcome)
+        first = kernel.commit(postgres_proposal)
 
-        second = kernel.commit(self.objects["assert_mysql_same_interval_proposal"])
+        second = kernel.commit(mysql_proposal)
 
         self.assertEqual("COMMITTED", first.outcome)
         self.assertEqual("COMMITTED", second.outcome)

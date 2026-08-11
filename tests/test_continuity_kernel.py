@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 
 from shared_mind import Kernel
+from shared_mind.canonical import sha256_json
 from shared_mind.continuity import state_rows
 
 
@@ -188,6 +189,54 @@ class ContinuityKernelIntegrationTest(unittest.TestCase):
         self.assertEqual(1, self.kernel.connection.execute(
             "SELECT COUNT(*) FROM decision_records"
         ).fetchone()[0])
+
+    def test_same_proposal_generated_conflict_reference_resolves(self) -> None:
+        source_proposal = self.proposal("assert_postgresql_proposal")
+        source_proposal["proposal_id"] = "proposal_conflict_reference_source_001"
+        source_proposal["idempotency_key"] = "conflict-reference-source-001"
+        source = copy.deepcopy(self.objects["source_revision_postgresql"])
+        source["blob_ref"] = (
+            f"data:{source['media_type']};base64,"
+            + base64.b64encode(self.content).decode("ascii")
+        )
+        source_proposal["operations"] = [
+            {
+                "op_id": "operation_conflict_reference_source_001",
+                "op": "REGISTER_SOURCE_REVISION",
+                "source_revision": source,
+            }
+        ]
+        self.assertEqual("COMMITTED", self.kernel.commit(source_proposal).outcome)
+        self.assertEqual(
+            "COMMITTED",
+            self.kernel.commit(self.proposal("assert_postgresql_proposal")).outcome,
+        )
+        proposal = self.proposal("assert_mysql_same_interval_proposal")
+        work_operation = self.proposal("create_work_item_proposal")["operations"][0]
+        member_ids = sorted(
+            [
+                "claim_atlas_postgresql_001",
+                proposal["operations"][0]["claim"]["claim_id"],
+            ]
+        )
+        conflict_id = "conflict_" + sha256_json(member_ids).split(":", 1)[1][:24]
+        work_operation["work_item"]["related_objects"] = [
+            {"record_type": "CONFLICT", "record_id": conflict_id}
+        ]
+        proposal["proposal_id"] = "proposal_generated_conflict_reference_001"
+        proposal["idempotency_key"] = "generated-conflict-reference-001"
+        proposal["operations"].append(work_operation)
+
+        receipt = self.kernel.commit(proposal)
+
+        self.assertEqual("FACT_CONFLICT", receipt.outcome, receipt.reason_codes)
+        self.assertEqual((conflict_id,), receipt.conflict_ids)
+        self.assertEqual(
+            1,
+            self.kernel.connection.execute(
+                "SELECT COUNT(*) FROM work_items"
+            ).fetchone()[0],
+        )
 
     def _seed_canonical_references(self) -> None:
         source_proposal = self.proposal("assert_postgresql_proposal")

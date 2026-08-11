@@ -906,10 +906,20 @@
       "properties": {
         "schema": {"$ref": "#/$defs/SemVer"},
         "predicate_registry": {"$ref": "#/$defs/SemVer"},
+        "predicate_registry_hash": {"$ref": "#/$defs/Hash"},
         "conflict_rules": {"type": "string", "pattern": "^[a-z][a-z0-9-]*@[1-9][0-9]*$"},
         "guard_dsl": {"type": "string", "pattern": "^[a-z][a-z0-9-]*@[1-9][0-9]*$"},
         "projection": {"type": "string", "pattern": "^[a-z][a-z0-9-]*@[1-9][0-9]*$"}
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["schema"],
+            "properties": {"schema": {"const": "1.1.0"}}
+          },
+          "then": {"required": ["predicate_registry_hash"]}
+        }
+      ]
     },
     "Proposal": {
       "type": "object",

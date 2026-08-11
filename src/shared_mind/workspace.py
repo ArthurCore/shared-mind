@@ -11,7 +11,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, Iterable
 
-from .canonical import canonical_json, sha256_bytes
+from .canonical import canonical_json, sha256_bytes, sha256_json
 from .kernel import Kernel, Receipt
 from .validation import build_contract_validator, load_default_schema
 
@@ -345,6 +345,10 @@ class Workspace:
                 registry["version"],
                 "UNSUPPORTED_PREDICATE_REGISTRY",
             ),
+            "predicate_registry_hash": (
+                sha256_json(registry),
+                "PREDICATE_REGISTRY_CONTENT_MISMATCH",
+            ),
             "conflict_rules": (
                 Kernel.SUPPORTED_VERSIONS["conflict_rules"],
                 "UNSUPPORTED_CONFLICT_RULES_VERSION",
@@ -441,6 +445,7 @@ class Workspace:
             "versions": {
                 "schema": Kernel.SUPPORTED_VERSIONS["schema"],
                 "predicate_registry": registry["version"],
+                "predicate_registry_hash": sha256_json(registry),
                 "conflict_rules": Kernel.SUPPORTED_VERSIONS["conflict_rules"],
                 "guard_dsl": registry["guard_dsl_version"],
                 "projection": Kernel.SUPPORTED_VERSIONS["projection"],

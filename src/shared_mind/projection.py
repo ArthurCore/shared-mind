@@ -22,7 +22,7 @@ from typing import Any, Iterator, Mapping
 from .canonical import canonical_json, sha256_bytes, sha256_json
 
 
-PROJECTION_VERSION = "markdown-projection@1"
+PROJECTION_VERSION = "markdown-projection@2"
 CONTEXT_PACK_VERSION = "handoff-context@1"
 DEFAULT_CONTEXT_BUDGET_BYTES = 32_000
 TOKEN_BYTES_ESTIMATE = 4
@@ -698,9 +698,27 @@ def _history_refs(
 
 
 def _state_root(connection: sqlite3.Connection, tables: set[str]) -> str:
+    head = connection.execute(
+        "SELECT proposal FROM ledger ORDER BY seq DESC LIMIT 1"
+    ).fetchone()
+    head_proposal = _load_json(head[0], {}) if head is not None else {}
+    schema_version = (
+        head_proposal.get("versions", {}).get("schema")
+        if isinstance(head_proposal, Mapping)
+        else None
+    )
+    legacy = schema_version == "1.0.0"
     state: dict[str, list[Any]] = {}
     for table in ("sources", "claims", "evidence", "conflicts"):
-        rows = _fetch_rows(connection, table)
+        if table == "conflicts" and legacy:
+            cursor = connection.execute(
+                "SELECT conflict_id, family_key, kind, member_digest, members, "
+                "status, episode FROM conflicts ORDER BY conflict_id"
+            )
+            names = [item[0] for item in cursor.description]
+            rows = [dict(zip(names, tuple(row))) for row in cursor.fetchall()]
+        else:
+            rows = _fetch_rows(connection, table)
         normalized = []
         for row in rows:
             item = dict(row)
@@ -709,7 +727,7 @@ def _state_root(connection: sqlite3.Connection, tables: set[str]) -> str:
             normalized.append(item)
         state[table] = normalized
     continuity_tables = {"decision_records", "open_questions", "work_items"}
-    if continuity_tables.issubset(tables):
+    if not legacy and continuity_tables.issubset(tables):
         from .continuity import state_rows as continuity_state_rows
 
         state.update(continuity_state_rows(connection))

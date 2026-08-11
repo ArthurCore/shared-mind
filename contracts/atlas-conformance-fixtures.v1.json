@@ -28,11 +28,12 @@
         "proposed_at": "2026-08-01T00:01:00Z",
         "base_state_root": null,
         "versions": {
-          "schema": "1.0.0",
+          "schema": "1.1.0",
           "predicate_registry": "1.0.0",
+          "predicate_registry_hash": "sha256:61e27ee431c296eb5289bae28d6c4a6fe1426381b5e4eb4e07b1a88b62d43196",
           "conflict_rules": "conflict-rules@1",
           "guard_dsl": "guard-dsl@1",
-          "projection": "markdown-projection@1"
+          "projection": "markdown-projection@2"
         },
         "reads": [],
         "guards": [],
@@ -93,11 +94,12 @@
         "proposed_at": "2026-08-01T00:02:00Z",
         "base_state_root": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
         "versions": {
-          "schema": "1.0.0",
+          "schema": "1.1.0",
           "predicate_registry": "1.0.0",
+          "predicate_registry_hash": "sha256:61e27ee431c296eb5289bae28d6c4a6fe1426381b5e4eb4e07b1a88b62d43196",
           "conflict_rules": "conflict-rules@1",
           "guard_dsl": "guard-dsl@1",
-          "projection": "markdown-projection@1"
+          "projection": "markdown-projection@2"
         },
         "reads": [],
         "guards": [],
@@ -158,11 +160,12 @@
         "proposed_at": "2026-08-01T00:03:00Z",
         "base_state_root": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
         "versions": {
-          "schema": "1.0.0",
+          "schema": "1.1.0",
           "predicate_registry": "1.0.0",
+          "predicate_registry_hash": "sha256:61e27ee431c296eb5289bae28d6c4a6fe1426381b5e4eb4e07b1a88b62d43196",
           "conflict_rules": "conflict-rules@1",
           "guard_dsl": "guard-dsl@1",
-          "projection": "markdown-projection@1"
+          "projection": "markdown-projection@2"
         },
         "reads": [
           {
@@ -293,11 +296,12 @@
         "proposed_at": "2026-08-01T00:04:00Z",
         "base_state_root": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
         "versions": {
-          "schema": "1.0.0",
+          "schema": "1.1.0",
           "predicate_registry": "1.0.0",
+          "predicate_registry_hash": "sha256:61e27ee431c296eb5289bae28d6c4a6fe1426381b5e4eb4e07b1a88b62d43196",
           "conflict_rules": "conflict-rules@1",
           "guard_dsl": "guard-dsl@1",
-          "projection": "markdown-projection@1"
+          "projection": "markdown-projection@2"
         },
         "reads": [],
         "guards": [],
@@ -335,11 +339,12 @@
         "proposed_at": "2026-08-02T00:04:00Z",
         "base_state_root": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
         "versions": {
-          "schema": "1.0.0",
+          "schema": "1.1.0",
           "predicate_registry": "1.0.0",
+          "predicate_registry_hash": "sha256:61e27ee431c296eb5289bae28d6c4a6fe1426381b5e4eb4e07b1a88b62d43196",
           "conflict_rules": "conflict-rules@1",
           "guard_dsl": "guard-dsl@1",
-          "projection": "markdown-projection@1"
+          "projection": "markdown-projection@2"
         },
         "reads": [
           {"kind": "AGGREGATE", "aggregate_type": "DECISION_RECORD", "aggregate_id": "decision_atlas_database_strategy_001", "expected_version": 1}
@@ -385,11 +390,12 @@
         "proposed_at": "2026-08-01T00:05:00Z",
         "base_state_root": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "versions": {
-          "schema": "1.0.0",
+          "schema": "1.1.0",
           "predicate_registry": "1.0.0",
+          "predicate_registry_hash": "sha256:61e27ee431c296eb5289bae28d6c4a6fe1426381b5e4eb4e07b1a88b62d43196",
           "conflict_rules": "conflict-rules@1",
           "guard_dsl": "guard-dsl@1",
-          "projection": "markdown-projection@1"
+          "projection": "markdown-projection@2"
         },
         "reads": [],
         "guards": [],
@@ -428,11 +434,12 @@
         "proposed_at": "2026-08-03T00:05:00Z",
         "base_state_root": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "versions": {
-          "schema": "1.0.0",
+          "schema": "1.1.0",
           "predicate_registry": "1.0.0",
+          "predicate_registry_hash": "sha256:61e27ee431c296eb5289bae28d6c4a6fe1426381b5e4eb4e07b1a88b62d43196",
           "conflict_rules": "conflict-rules@1",
           "guard_dsl": "guard-dsl@1",
-          "projection": "markdown-projection@1"
+          "projection": "markdown-projection@2"
         },
         "reads": [
           {"kind": "AGGREGATE", "aggregate_type": "OPEN_QUESTION", "aggregate_id": "question_atlas_cutover_window_001", "expected_version": 1}
@@ -467,11 +474,12 @@
         "proposed_at": "2026-08-03T00:06:00Z",
         "base_state_root": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
         "versions": {
-          "schema": "1.0.0",
+          "schema": "1.1.0",
           "predicate_registry": "1.0.0",
+          "predicate_registry_hash": "sha256:61e27ee431c296eb5289bae28d6c4a6fe1426381b5e4eb4e07b1a88b62d43196",
           "conflict_rules": "conflict-rules@1",
           "guard_dsl": "guard-dsl@1",
-          "projection": "markdown-projection@1"
+          "projection": "markdown-projection@2"
         },
         "reads": [
           {"kind": "AGGREGATE", "aggregate_type": "OPEN_QUESTION", "aggregate_id": "question_atlas_cutover_window_001", "expected_version": 1}
@@ -505,11 +513,12 @@
         "proposed_at": "2026-08-01T00:06:00Z",
         "base_state_root": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
         "versions": {
-          "schema": "1.0.0",
+          "schema": "1.1.0",
           "predicate_registry": "1.0.0",
+          "predicate_registry_hash": "sha256:61e27ee431c296eb5289bae28d6c4a6fe1426381b5e4eb4e07b1a88b62d43196",
           "conflict_rules": "conflict-rules@1",
           "guard_dsl": "guard-dsl@1",
-          "projection": "markdown-projection@1"
+          "projection": "markdown-projection@2"
         },
         "reads": [],
         "guards": [],
@@ -548,11 +557,12 @@
         "proposed_at": "2026-08-04T00:06:00Z",
         "base_state_root": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
         "versions": {
-          "schema": "1.0.0",
+          "schema": "1.1.0",
           "predicate_registry": "1.0.0",
+          "predicate_registry_hash": "sha256:61e27ee431c296eb5289bae28d6c4a6fe1426381b5e4eb4e07b1a88b62d43196",
           "conflict_rules": "conflict-rules@1",
           "guard_dsl": "guard-dsl@1",
-          "projection": "markdown-projection@1"
+          "projection": "markdown-projection@2"
         },
         "reads": [
           {"kind": "AGGREGATE", "aggregate_type": "WORK_ITEM", "aggregate_id": "workitem_prepare_atlas_migration_001", "expected_version": 1}
