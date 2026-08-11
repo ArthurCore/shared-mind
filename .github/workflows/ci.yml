@@ -92,7 +92,9 @@ jobs:
           src/shared_mind/projection.py
           src/shared_mind/validation.py
       - name: Audit installed dependencies
-        run: pip-audit --strict
+        run: |
+          python -m pip freeze --exclude-editable > "$RUNNER_TEMP/audit-requirements.txt"
+          pip-audit --strict -r "$RUNNER_TEMP/audit-requirements.txt"
       - name: Scan source for medium and high severity findings
         # B608 flags table/column identifiers selected from internal constant maps;
         # all runtime values in those statements remain bound SQLite parameters.

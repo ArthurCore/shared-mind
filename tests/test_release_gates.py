@@ -208,6 +208,21 @@ class ReleaseGateStructureTest(unittest.TestCase):
         self.assertRegex(self.workflow_lower, r"\bpip-audit\b")
         self.assertRegex(self.workflow_lower, r"\bbandit\b[^\n]*(?:-r|src)")
 
+    def test_dependency_audit_skips_only_the_local_editable_distribution(self) -> None:
+        self.assertRegex(
+            self.workflow_lower,
+            r"pip\s+freeze\s+--exclude-editable[^\n]*audit-requirements",
+        )
+        self.assertRegex(
+            self.workflow_lower,
+            r"pip-audit\s+--strict\s+-r\s+[^\n]*audit-requirements",
+        )
+        self.assertIn(
+            "runner_temp",
+            self.workflow_lower,
+            "the generated third-party lock should live in the runner temp area",
+        )
+
     def test_wheel_is_built_checked_and_installed_into_fresh_environments(
         self,
     ) -> None:
