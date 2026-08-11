@@ -12,6 +12,7 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import unquote
 
 
 REASON_CODES = (
@@ -210,11 +211,12 @@ def _capability_scope(
 def _source_label(
     document: Mapping[str, Any], source_ref: str | None
 ) -> dict[str, Any]:
+    if source_ref is None or not _source_ref_is_safe(source_ref):
+        return {"source_root": None, "sensitivity": None, "data_classes": []}
     matches = [
         label
         for label in _mapping_values(document.get("source_labels"))
-        if source_ref is not None
-        and isinstance(label.get("source_root"), str)
+        if isinstance(label.get("source_root"), str)
         and source_ref.startswith(label["source_root"])
     ]
     if not matches:
@@ -228,10 +230,18 @@ def _source_label(
 
 
 def _source_is_allowed(scope: Mapping[str, Any], source_ref: str | None) -> bool:
-    return source_ref is not None and any(
+    return source_ref is not None and _source_ref_is_safe(source_ref) and any(
         source_ref.startswith(source_root)
         for source_root in _string_values(scope.get("source_roots"))
     )
+
+
+def _source_ref_is_safe(source_ref: str) -> bool:
+    normalized = unquote(source_ref)
+    if "\\" in normalized:
+        return False
+    path_part = normalized.split("://", 1)[1] if "://" in normalized else normalized
+    return all(segment not in (".", "..") for segment in path_part.split("/"))
 
 
 def _disclosure_is_allowed(

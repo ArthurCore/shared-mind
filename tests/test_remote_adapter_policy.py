@@ -265,6 +265,29 @@ class RemotePolicyPublicApiContractTest(unittest.TestCase):
     @unittest.skipUnless(
         REMOTE_POLICY_AVAILABLE, "planned remote policy module is absent"
     )
+    def test_source_scope_rejects_dot_segment_escape_before_labeling(self) -> None:
+        request = copy.deepcopy(self.fixture["base_request"])
+        request["source_ref"] = "source://atlas/internal/../customer/accounts.json"
+        module, compiled = self._compiled()
+
+        decision = module.evaluate_request(
+            compiled,
+            request,
+            authenticated_binding=copy.deepcopy(
+                self.fixture["authenticated_bindings"]["trusted"]
+            ),
+        ).as_dict()
+
+        self.assertEqual("DENY", decision["outcome"])
+        self.assertEqual(["SOURCE_SCOPE_DENIED"], decision["reason_codes"])
+        self.assertEqual(
+            {"source_root": None, "sensitivity": None, "data_classes": []},
+            decision["source_label"],
+        )
+
+    @unittest.skipUnless(
+        REMOTE_POLICY_AVAILABLE, "planned remote policy module is absent"
+    )
     def test_capabilities_operations_and_unknown_values_deny_by_default(self) -> None:
         for name, reason in (
             ("unknown_capability_deny_by_default", "UNKNOWN_CAPABILITY"),
