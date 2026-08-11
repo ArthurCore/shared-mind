@@ -120,6 +120,41 @@ class SecurityBoundaryTest(unittest.TestCase):
         self.assertEqual("PATH_OUTSIDE_WORKSPACE", result["code"])
         self.assertEqual((0, 0), self._canonical_counts())
 
+    def test_nfr_010_proposal_json_swap_to_symlink_escape_is_rejected(self) -> None:
+        proposal_path = self.workspace_root / "proposal-race.json"
+        self._write_json(proposal_path, {"invalid": "placeholder"})
+        outside = self.temp_root / "outside-valid-proposal.json"
+        self._write_json(outside, self.objects["assert_postgresql_proposal"])
+        resolved = proposal_path.resolve()
+        original_is_file = Path.is_file
+        swapped = False
+
+        def is_file_then_swap(candidate: Path) -> bool:
+            nonlocal swapped
+            exists = original_is_file(candidate)
+            if candidate == resolved and exists and not swapped:
+                swapped = True
+                candidate.unlink()
+                try:
+                    os.symlink(outside, candidate)
+                except (NotImplementedError, OSError):
+                    self.skipTest("symlinks are not available")
+            return exists
+
+        with mock.patch.object(Path, "is_file", is_file_then_swap):
+            exit_code, result, _ = self.invoke(
+                "--workspace",
+                str(self.workspace_root),
+                "proposal",
+                "validate",
+                str(proposal_path),
+            )
+
+        self.assertTrue(swapped)
+        self.assertEqual(EXIT_VALIDATION_ERROR, exit_code)
+        self.assertEqual("FILE_READ_FAILED", result["code"])
+        self.assertEqual((0, 0), self._canonical_counts())
+
     def test_nfr_010_source_traversal_and_symlink_escape_do_not_mutate(self) -> None:
         outside = self.temp_root / "private.md"
         outside.write_text("must not be ingested", encoding="utf-8")
@@ -162,6 +197,24 @@ class SecurityBoundaryTest(unittest.TestCase):
                     Workspace.open(self.workspace_root)
                 self.assertEqual("WORKSPACE_CONFIG_INVALID", caught.exception.code)
         self._write_json(config_path, original)
+
+    def test_nfr_010_workspace_control_file_symlink_is_rejected(self) -> None:
+        external_config = self.temp_root / "external-workspace.json"
+        external_config.write_text(
+            self.workspace.config_path.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        self.workspace.config_path.unlink()
+        try:
+            os.symlink(external_config, self.workspace.config_path)
+        except (NotImplementedError, OSError):
+            self.skipTest("symlinks are not available")
+
+        with self.assertRaises(WorkspaceError) as caught:
+            Workspace.open(self.workspace_root)
+
+        self.assertEqual("WORKSPACE_CONFIG_INVALID", caught.exception.code)
+        self.assertEqual((0, 0), self._canonical_counts())
 
     def test_nfr_010_malformed_json_fails_before_receipt_or_ledger_write(self) -> None:
         proposal_path = self.workspace_root / "malformed.json"
