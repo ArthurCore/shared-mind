@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from shared_mind import Kernel
+from shared_mind.canonical import sha256_json
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -111,6 +112,92 @@ class KernelHardeningTest(unittest.TestCase):
 
                 self.assertEqual("VALIDATION_ERROR", receipt.outcome)
                 self.assertEqual((expected_code,), receipt.reason_codes)
+        self.assertEqual(0, self._count("ledger"))
+
+    def test_fr_011_registry_semantics_are_enforced_at_runtime(self) -> None:
+        cases = (
+            (
+                "object_kind",
+                lambda proposition, evidence: proposition.update(
+                    {"object": {"kind": "enum", "value": "ACTIVE"}}
+                ),
+                "OBJECT_KIND_MISMATCH",
+            ),
+            (
+                "object_entity_type",
+                lambda proposition, evidence: proposition["object"].update(
+                    {"entity_type": "team"}
+                ),
+                "OBJECT_ENTITY_TYPE_MISMATCH",
+            ),
+            (
+                "scope_allowed_fields",
+                lambda proposition, evidence: (
+                    proposition.update(
+                        {
+                            "predicate": "deployment.region@1",
+                            "object": {
+                                "kind": "entity",
+                                "entity_type": "region",
+                                "entity_id": "region:ap-northeast-2",
+                            },
+                        }
+                    ),
+                    proposition["scope"].update({"region": "ap-northeast-2"}),
+                ),
+                "SCOPE_FIELD_NOT_ALLOWED",
+            ),
+            (
+                "temporal_required",
+                lambda proposition, evidence: proposition.update(
+                    {"valid_time": {"from": None, "to": None}}
+                ),
+                "VALID_TIME_REQUIRED",
+            ),
+            (
+                "temporal_range",
+                lambda proposition, evidence: proposition.update(
+                    {
+                        "valid_time": {
+                            "from": "2026-09-01T00:00:00Z",
+                            "to": "2026-08-01T00:00:00Z",
+                        }
+                    }
+                ),
+                "INVALID_VALID_TIME_RANGE",
+            ),
+            (
+                "evidence_interpretation",
+                lambda proposition, evidence: (
+                    proposition.update(
+                        {"predicate": "migration.target_database_engine@1"}
+                    ),
+                    evidence.update({"interpretation": "INFERRED"}),
+                ),
+                "EVIDENCE_INTERPRETATION_NOT_ALLOWED",
+            ),
+        )
+
+        for index, (name, mutate, expected_code) in enumerate(cases, start=1):
+            with self.subTest(rule=name):
+                proposal = copy.deepcopy(self.objects["assert_postgresql_proposal"])
+                proposal["proposal_id"] = f"proposal_registry_rule_{index:02d}"
+                proposal["idempotency_key"] = f"registry-rule-{index:02d}"
+                operation = proposal["operations"][0]
+                claim = operation["claim"]
+                evidence = operation["initial_evidence"][0]
+                claim_id = f"claim_registry_rule_{index:02d}"
+                claim["claim_id"] = claim_id
+                evidence["claim_id"] = claim_id
+                evidence["evidence_link_id"] = f"evidence_registry_rule_{index:02d}"
+                mutate(claim["proposition"], evidence)
+                claim["proposition_hash"] = sha256_json(claim["proposition"])
+
+                receipt = self.kernel.commit(proposal)
+
+                self.assertEqual("VALIDATION_ERROR", receipt.outcome)
+                self.assertEqual((expected_code,), receipt.reason_codes)
+
         self.assertEqual(0, self._count("ledger"))
 
     def test_fr_024_destructive_operation_requires_a_claim_version_read(self) -> None:

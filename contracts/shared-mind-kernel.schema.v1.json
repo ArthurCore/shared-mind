@@ -8,6 +8,9 @@
     {"$ref": "#/$defs/SourceRevision"},
     {"$ref": "#/$defs/Claim"},
     {"$ref": "#/$defs/EvidenceLink"},
+    {"$ref": "#/$defs/DecisionRecord"},
+    {"$ref": "#/$defs/OpenQuestion"},
+    {"$ref": "#/$defs/WorkItem"},
     {"$ref": "#/$defs/Proposal"},
     {"$ref": "#/$defs/Conflict"},
     {"$ref": "#/$defs/LedgerEntry"},
@@ -144,7 +147,20 @@
         "source_id": {"$ref": "#/$defs/SemanticId"},
         "revision_id": {"$ref": "#/$defs/RecordId"},
         "content_hash": {"$ref": "#/$defs/Hash"},
-        "blob_ref": {"type": "string", "format": "uri", "maxLength": 2048},
+        "blob_ref": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^data:[^,]*,.*$"
+            },
+            {
+              "type": "string",
+              "format": "uri",
+              "maxLength": 2048,
+              "not": {"pattern": "^data:"}
+            }
+          ]
+        },
         "source_locator": {"type": ["string", "null"], "format": "uri", "maxLength": 2048},
         "title": {"type": ["string", "null"], "maxLength": 512},
         "media_type": {"enum": ["text/markdown", "text/plain", "application/json"]},
@@ -198,6 +214,191 @@
         "linked_by": {"$ref": "#/$defs/ActorRef"},
         "linked_at": {"type": "string", "format": "date-time"}
       }
+    },
+    "RecordRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record_type", "record_id"],
+      "properties": {
+        "record_type": {
+          "enum": ["SOURCE_REVISION", "CLAIM", "CONFLICT", "DECISION_RECORD", "OPEN_QUESTION", "WORK_ITEM"]
+        },
+        "record_id": {"$ref": "#/$defs/RecordId"}
+      }
+    },
+    "DecisionRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["object_type", "decision_id", "title", "conclusion", "rationale", "alternatives", "related_source_revision_ids", "related_claim_ids", "status", "version", "replaced_by_decision_id", "recorded_by", "recorded_at"],
+      "properties": {
+        "object_type": {"const": "DECISION_RECORD"},
+        "decision_id": {"$ref": "#/$defs/RecordId"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 512},
+        "conclusion": {"type": "string", "minLength": 1, "maxLength": 8192},
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 8192},
+        "alternatives": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1, "maxLength": 2048}
+        },
+        "related_source_revision_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/RecordId"}
+        },
+        "related_claim_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/RecordId"}
+        },
+        "status": {"enum": ["ACTIVE", "SUPERSEDED", "REVERSED"]},
+        "version": {"type": "integer", "minimum": 1},
+        "replaced_by_decision_id": {
+          "oneOf": [{"$ref": "#/$defs/RecordId"}, {"type": "null"}]
+        },
+        "recorded_by": {"$ref": "#/$defs/ActorRef"},
+        "recorded_at": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "ACTIVE"}}},
+          "then": {"properties": {"replaced_by_decision_id": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"status": {"enum": ["SUPERSEDED", "REVERSED"]}}},
+          "then": {"properties": {"replaced_by_decision_id": {"$ref": "#/$defs/RecordId"}}}
+        }
+      ]
+    },
+    "NewDecisionRecord": {
+      "allOf": [
+        {"$ref": "#/$defs/DecisionRecord"},
+        {
+          "properties": {
+            "status": {"const": "ACTIVE"},
+            "version": {"const": 1},
+            "replaced_by_decision_id": {"type": "null"}
+          }
+        }
+      ]
+    },
+    "QuestionAnswer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["answer", "answer_reference", "answered_by", "answered_at"],
+      "properties": {
+        "answer": {"type": "string", "minLength": 1, "maxLength": 8192},
+        "answer_reference": {"$ref": "#/$defs/RecordRef"},
+        "answered_by": {"$ref": "#/$defs/ActorRef"},
+        "answered_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "QuestionDrop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rationale", "dropped_by", "dropped_at"],
+      "properties": {
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "dropped_by": {"$ref": "#/$defs/ActorRef"},
+        "dropped_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "OpenQuestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["object_type", "question_id", "question", "context", "related_objects", "status", "version", "answer", "drop", "opened_by", "opened_at"],
+      "properties": {
+        "object_type": {"const": "OPEN_QUESTION"},
+        "question_id": {"$ref": "#/$defs/RecordId"},
+        "question": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "context": {"type": "string", "minLength": 1, "maxLength": 8192},
+        "related_objects": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/RecordRef"}
+        },
+        "status": {"enum": ["OPEN", "ANSWERED", "DROPPED"]},
+        "version": {"type": "integer", "minimum": 1},
+        "answer": {
+          "oneOf": [{"$ref": "#/$defs/QuestionAnswer"}, {"type": "null"}]
+        },
+        "drop": {
+          "oneOf": [{"$ref": "#/$defs/QuestionDrop"}, {"type": "null"}]
+        },
+        "opened_by": {"$ref": "#/$defs/ActorRef"},
+        "opened_at": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "OPEN"}}},
+          "then": {"properties": {"answer": {"type": "null"}, "drop": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"status": {"const": "ANSWERED"}}},
+          "then": {"properties": {"answer": {"$ref": "#/$defs/QuestionAnswer"}, "drop": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"status": {"const": "DROPPED"}}},
+          "then": {"properties": {"answer": {"type": "null"}, "drop": {"$ref": "#/$defs/QuestionDrop"}}}
+        }
+      ]
+    },
+    "NewOpenQuestion": {
+      "allOf": [
+        {"$ref": "#/$defs/OpenQuestion"},
+        {
+          "properties": {
+            "status": {"const": "OPEN"},
+            "version": {"const": 1},
+            "answer": {"type": "null"},
+            "drop": {"type": "null"}
+          }
+        }
+      ]
+    },
+    "WorkItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["object_type", "work_item_id", "description", "priority", "blocker", "related_objects", "status", "version", "created_by", "created_at", "updated_at"],
+      "properties": {
+        "object_type": {"const": "WORK_ITEM"},
+        "work_item_id": {"$ref": "#/$defs/RecordId"},
+        "description": {"type": "string", "minLength": 1, "maxLength": 8192},
+        "priority": {"enum": ["P0", "P1", "P2", "P3"]},
+        "blocker": {"type": ["string", "null"], "minLength": 1, "maxLength": 4096},
+        "related_objects": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/RecordRef"}
+        },
+        "status": {"enum": ["TODO", "DOING", "BLOCKED", "DONE", "DROPPED"]},
+        "version": {"type": "integer", "minimum": 1},
+        "created_by": {"$ref": "#/$defs/ActorRef"},
+        "created_at": {"type": "string", "format": "date-time"},
+        "updated_at": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "BLOCKED"}}},
+          "then": {"properties": {"blocker": {"type": "string"}}}
+        },
+        {
+          "if": {"properties": {"status": {"enum": ["TODO", "DOING", "DONE", "DROPPED"]}}},
+          "then": {"properties": {"blocker": {"type": "null"}}}
+        }
+      ]
+    },
+    "NewWorkItem": {
+      "allOf": [
+        {"$ref": "#/$defs/WorkItem"},
+        {
+          "properties": {
+            "status": {"const": "TODO"},
+            "version": {"const": 1},
+            "blocker": {"type": "null"}
+          }
+        }
+      ]
     },
     "PredicateObjectDefinition": {
       "oneOf": [
@@ -339,7 +540,7 @@
       "required": ["kind", "aggregate_type", "aggregate_id", "expected_version"],
       "properties": {
         "kind": {"const": "AGGREGATE"},
-        "aggregate_type": {"enum": ["CLAIM", "CONFLICT", "SOURCE_REVISION"]},
+        "aggregate_type": {"enum": ["CLAIM", "CONFLICT", "SOURCE_REVISION", "DECISION_RECORD", "OPEN_QUESTION", "WORK_ITEM"]},
         "aggregate_id": {"$ref": "#/$defs/RecordId"},
         "expected_version": {"type": "integer", "minimum": 0}
       }
@@ -429,6 +630,66 @@
           "properties": {
             "op": {"const": "NO_ACTIVE_CLAIM"},
             "family_key": {"$ref": "#/$defs/Hash"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "decision_id", "expected_status"],
+          "properties": {
+            "op": {"const": "DECISION_STATUS_EQ"},
+            "decision_id": {"$ref": "#/$defs/RecordId"},
+            "expected_status": {"enum": ["ACTIVE", "SUPERSEDED", "REVERSED"]}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "decision_id", "expected_version"],
+          "properties": {
+            "op": {"const": "DECISION_VERSION_EQ"},
+            "decision_id": {"$ref": "#/$defs/RecordId"},
+            "expected_version": {"type": "integer", "minimum": 1}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "question_id", "expected_status"],
+          "properties": {
+            "op": {"const": "QUESTION_STATUS_EQ"},
+            "question_id": {"$ref": "#/$defs/RecordId"},
+            "expected_status": {"enum": ["OPEN", "ANSWERED", "DROPPED"]}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "question_id", "expected_version"],
+          "properties": {
+            "op": {"const": "QUESTION_VERSION_EQ"},
+            "question_id": {"$ref": "#/$defs/RecordId"},
+            "expected_version": {"type": "integer", "minimum": 1}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "work_item_id", "expected_status"],
+          "properties": {
+            "op": {"const": "WORK_ITEM_STATUS_EQ"},
+            "work_item_id": {"$ref": "#/$defs/RecordId"},
+            "expected_status": {"enum": ["TODO", "DOING", "BLOCKED", "DONE", "DROPPED"]}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "work_item_id", "expected_version"],
+          "properties": {
+            "op": {"const": "WORK_ITEM_VERSION_EQ"},
+            "work_item_id": {"$ref": "#/$defs/RecordId"},
+            "expected_version": {"type": "integer", "minimum": 1}
           }
         }
       ]
@@ -531,6 +792,96 @@
         "resolution": {"$ref": "#/$defs/Resolution"}
       }
     },
+    "RecordDecisionOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op_id", "op", "decision"],
+      "properties": {
+        "op_id": {"$ref": "#/$defs/RecordId"},
+        "op": {"const": "RECORD_DECISION"},
+        "decision": {"$ref": "#/$defs/NewDecisionRecord"}
+      }
+    },
+    "SupersedeDecisionOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op_id", "op", "target_decision_id", "target_disposition", "replacement_decision", "rationale"],
+      "properties": {
+        "op_id": {"$ref": "#/$defs/RecordId"},
+        "op": {"const": "SUPERSEDE_DECISION"},
+        "target_decision_id": {"$ref": "#/$defs/RecordId"},
+        "target_disposition": {"enum": ["SUPERSEDED", "REVERSED"]},
+        "replacement_decision": {"$ref": "#/$defs/NewDecisionRecord"},
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 4096}
+      }
+    },
+    "OpenQuestionOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op_id", "op", "question"],
+      "properties": {
+        "op_id": {"$ref": "#/$defs/RecordId"},
+        "op": {"const": "OPEN_QUESTION"},
+        "question": {"$ref": "#/$defs/NewOpenQuestion"}
+      }
+    },
+    "AnswerQuestionOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op_id", "op", "target_question_id", "answer"],
+      "properties": {
+        "op_id": {"$ref": "#/$defs/RecordId"},
+        "op": {"const": "ANSWER_QUESTION"},
+        "target_question_id": {"$ref": "#/$defs/RecordId"},
+        "answer": {"$ref": "#/$defs/QuestionAnswer"}
+      }
+    },
+    "DropQuestionOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op_id", "op", "target_question_id", "drop"],
+      "properties": {
+        "op_id": {"$ref": "#/$defs/RecordId"},
+        "op": {"const": "DROP_QUESTION"},
+        "target_question_id": {"$ref": "#/$defs/RecordId"},
+        "drop": {"$ref": "#/$defs/QuestionDrop"}
+      }
+    },
+    "CreateWorkItemOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op_id", "op", "work_item"],
+      "properties": {
+        "op_id": {"$ref": "#/$defs/RecordId"},
+        "op": {"const": "CREATE_WORK_ITEM"},
+        "work_item": {"$ref": "#/$defs/NewWorkItem"}
+      }
+    },
+    "UpdateWorkItemStatusOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op_id", "op", "target_work_item_id", "new_status", "blocker", "rationale", "updated_by", "updated_at"],
+      "properties": {
+        "op_id": {"$ref": "#/$defs/RecordId"},
+        "op": {"const": "UPDATE_WORK_ITEM_STATUS"},
+        "target_work_item_id": {"$ref": "#/$defs/RecordId"},
+        "new_status": {"enum": ["TODO", "DOING", "BLOCKED", "DONE", "DROPPED"]},
+        "blocker": {"type": ["string", "null"], "minLength": 1, "maxLength": 4096},
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "updated_by": {"$ref": "#/$defs/ActorRef"},
+        "updated_at": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"new_status": {"const": "BLOCKED"}}},
+          "then": {"properties": {"blocker": {"type": "string"}}}
+        },
+        {
+          "if": {"properties": {"new_status": {"enum": ["TODO", "DOING", "DONE", "DROPPED"]}}},
+          "then": {"properties": {"blocker": {"type": "null"}}}
+        }
+      ]
+    },
     "Operation": {
       "oneOf": [
         {"$ref": "#/$defs/RegisterSourceRevisionOp"},
@@ -538,7 +889,14 @@
         {"$ref": "#/$defs/AttachEvidenceOp"},
         {"$ref": "#/$defs/SupersedeClaimOp"},
         {"$ref": "#/$defs/RetractClaimOp"},
-        {"$ref": "#/$defs/ResolveConflictOp"}
+        {"$ref": "#/$defs/ResolveConflictOp"},
+        {"$ref": "#/$defs/RecordDecisionOp"},
+        {"$ref": "#/$defs/SupersedeDecisionOp"},
+        {"$ref": "#/$defs/OpenQuestionOp"},
+        {"$ref": "#/$defs/AnswerQuestionOp"},
+        {"$ref": "#/$defs/DropQuestionOp"},
+        {"$ref": "#/$defs/CreateWorkItemOp"},
+        {"$ref": "#/$defs/UpdateWorkItemStatusOp"}
       ]
     },
     "VersionBundle": {
@@ -672,6 +1030,98 @@
             "conflict_id": {"$ref": "#/$defs/RecordId"},
             "resolution": {"$ref": "#/$defs/Resolution"}
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["event_type", "decision"],
+          "properties": {
+            "event_type": {"const": "DECISION_RECORDED"},
+            "decision": {"$ref": "#/$defs/NewDecisionRecord"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["event_type", "target_decision_id", "target_disposition", "replacement_decision", "rationale", "previous_version", "new_version"],
+          "properties": {
+            "event_type": {"const": "DECISION_SUPERSEDED"},
+            "target_decision_id": {"$ref": "#/$defs/RecordId"},
+            "target_disposition": {"enum": ["SUPERSEDED", "REVERSED"]},
+            "replacement_decision": {"$ref": "#/$defs/NewDecisionRecord"},
+            "rationale": {"type": "string", "minLength": 1, "maxLength": 4096},
+            "previous_version": {"type": "integer", "minimum": 1},
+            "new_version": {"type": "integer", "minimum": 2}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["event_type", "question"],
+          "properties": {
+            "event_type": {"const": "QUESTION_OPENED"},
+            "question": {"$ref": "#/$defs/NewOpenQuestion"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["event_type", "target_question_id", "answer", "previous_version", "new_version"],
+          "properties": {
+            "event_type": {"const": "QUESTION_ANSWERED"},
+            "target_question_id": {"$ref": "#/$defs/RecordId"},
+            "answer": {"$ref": "#/$defs/QuestionAnswer"},
+            "previous_version": {"type": "integer", "minimum": 1},
+            "new_version": {"type": "integer", "minimum": 2}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["event_type", "target_question_id", "drop", "previous_version", "new_version"],
+          "properties": {
+            "event_type": {"const": "QUESTION_DROPPED"},
+            "target_question_id": {"$ref": "#/$defs/RecordId"},
+            "drop": {"$ref": "#/$defs/QuestionDrop"},
+            "previous_version": {"type": "integer", "minimum": 1},
+            "new_version": {"type": "integer", "minimum": 2}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["event_type", "work_item"],
+          "properties": {
+            "event_type": {"const": "WORK_ITEM_CREATED"},
+            "work_item": {"$ref": "#/$defs/NewWorkItem"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["event_type", "target_work_item_id", "previous_status", "new_status", "blocker", "rationale", "updated_by", "updated_at", "previous_version", "new_version"],
+          "properties": {
+            "event_type": {"const": "WORK_ITEM_STATUS_UPDATED"},
+            "target_work_item_id": {"$ref": "#/$defs/RecordId"},
+            "previous_status": {"enum": ["TODO", "DOING", "BLOCKED", "DONE", "DROPPED"]},
+            "new_status": {"enum": ["TODO", "DOING", "BLOCKED", "DONE", "DROPPED"]},
+            "blocker": {"type": ["string", "null"], "minLength": 1, "maxLength": 4096},
+            "rationale": {"type": "string", "minLength": 1, "maxLength": 4096},
+            "updated_by": {"$ref": "#/$defs/ActorRef"},
+            "updated_at": {"type": "string", "format": "date-time"},
+            "previous_version": {"type": "integer", "minimum": 1},
+            "new_version": {"type": "integer", "minimum": 2}
+          },
+          "allOf": [
+            {
+              "if": {"properties": {"new_status": {"const": "BLOCKED"}}},
+              "then": {"properties": {"blocker": {"type": "string"}}}
+            },
+            {
+              "if": {"properties": {"new_status": {"enum": ["TODO", "DOING", "DONE", "DROPPED"]}}},
+              "then": {"properties": {"blocker": {"type": "null"}}}
+            }
+          ]
         }
       ]
     },

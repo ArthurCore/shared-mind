@@ -10,7 +10,7 @@ accepting arbitrary predicates.
   semantic conflict rules.
 - `shared-mind-kernel.schema.v1.json` — JSON Schema Draft 2020-12 definitions
   for the registry, source revisions, claims, evidence, proposals, conflicts,
-  ledger entries, and decision receipts.
+  continuity records, ledger entries, and decision receipts.
 - `atlas-conformance-fixtures.v1.json` — typed objects, negative schema cases,
   and semantic scenarios with expected outcomes.
 - `atlas-runbook.fixture.md` — immutable source bytes referenced by the
@@ -39,7 +39,10 @@ eligible to commit.
    write transaction used for the append.
 8. Simulate all operations, then apply deterministic conflict rules from the
    pinned registry version.
-9. Commit the proposal, events, materialized-state changes, idempotency mapping,
+9. Resolve every continuity-record reference and enforce the lifecycle and
+   optimistic-concurrency rules below. New records start at version 1; every
+   accepted lifecycle mutation increments exactly once.
+10. Commit the proposal, events, materialized-state changes, idempotency mapping,
    and receipt atomically. Any failure aborts all mutations.
 
 ## Canonical proposition
@@ -91,6 +94,45 @@ database predicate. Therefore “planned migration to MySQL” does not contradi
 | `SUPERSEDE_CLAIM` | target Claim is `ACTIVE` at the observed lifecycle version |
 | `RETRACT_CLAIM` | target Claim is `ACTIVE` at the observed lifecycle version; actor is authorized |
 | `RESOLVE_CONFLICT` | conflict is `OPEN`; member digest and resolution epoch match |
+| `RECORD_DECISION` | new DecisionRecord ID; initial `ACTIVE` status and version 1 |
+| `SUPERSEDE_DECISION` | target DecisionRecord is `ACTIVE` at the observed version; replacement is a new `ACTIVE` version-1 record |
+| `OPEN_QUESTION` | new OpenQuestion ID; initial `OPEN` status and version 1 |
+| `ANSWER_QUESTION` | target OpenQuestion is `OPEN` at the observed version; answer reference resolves |
+| `DROP_QUESTION` | target OpenQuestion is `OPEN` at the observed version |
+| `CREATE_WORK_ITEM` | new WorkItem ID; initial `TODO` status and version 1 |
+| `UPDATE_WORK_ITEM_STATUS` | target WorkItem status and version match; transition is allowed; `BLOCKED` has a blocker and every other status has none |
+
+## Continuity records
+
+Continuity records are canonical, ledger-backed state rather than generated
+handoff snapshots. `DecisionRecord` preserves a conclusion, rationale,
+alternatives, and related source/Claim IDs. `OpenQuestion` preserves its
+context and either an answer with a canonical record reference or a drop
+rationale. `WorkItem` preserves priority, current status, and an explicit
+blocker only while blocked. Cross-record links use a typed `RecordRef` instead
+of an untyped string.
+
+| Record | Lifecycle |
+|---|---|
+| `DecisionRecord` | `ACTIVE` -> `SUPERSEDED` or `REVERSED` |
+| `OpenQuestion` | `OPEN` -> `ANSWERED` or `DROPPED` |
+| `WorkItem` | `TODO`, `DOING`, `BLOCKED`, `DONE`, `DROPPED`; allowed transition edges are checked semantically |
+
+The schema makes each lifecycle state internally complete. An active decision
+cannot already name its replacement; an answered question must carry its
+answer and reference; a dropped question must carry its drop record; and a
+blocked work item must carry a non-empty blocker. Creation operations further
+constrain their embedded records to the initial lifecycle state and version 1.
+
+Every continuity mutation requires one matching aggregate read plus matching
+status and version guards. These fixture guards document conformance inputs;
+the kernel MUST derive the same preconditions from the operation and MUST NOT
+trust their presence alone. The ledger event union includes a replayable event
+for all seven continuity operations. Mutation events carry previous and new
+versions so version progression can be verified during replay.
+
+This is an additive v1 contract extension: existing Atlas source, claim,
+conflict, proposal, ledger, and receipt fixtures remain valid without changes.
 
 ## Validation
 
@@ -101,9 +143,10 @@ python3 validate_contract.py
 ```
 
 The validator always performs dependency-free registry consistency, canonical
-proposition hash, source-content hash, and evidence-range/hash checks. If Python
+proposition hash, source-content hash, evidence-range/hash checks, continuity
+operation coverage, and continuity mutation read/guard checks. If Python
 `jsonschema` is installed, it additionally checks Draft 2020-12 schema validity
 and validates the registry, every typed fixture object, and every negative
-schema case. The
-expected commit outcomes in the fixtures are conformance expectations for the
-future kernel, not results produced by the shape validator.
+schema case. The expected commit outcomes and deliberately modified semantic
+cases in the fixtures are conformance expectations for the runtime kernel, not
+results produced by the shape validator.

@@ -126,6 +126,26 @@ class SharedMindCliTest(unittest.TestCase):
         blob = self.workspace_root / first["data"]["blob_path"]
         self.assertEqual(source.read_bytes(), blob.read_bytes())
 
+    def test_fr_002_source_add_accepts_content_beyond_legacy_uri_limit(self) -> None:
+        self.initialize()
+        source = self.workspace_root / "sources" / "large-notes.md"
+        source.write_text("# Large notes\n\n" + ("shared context\n" * 400), encoding="utf-8")
+
+        exit_code, result, _ = self.invoke(
+            "--workspace",
+            str(self.workspace_root),
+            "source",
+            "add",
+            str(source),
+            "--source-id",
+            "document:large-notes",
+        )
+
+        self.assertGreater(source.stat().st_size, 2048)
+        self.assertEqual(EXIT_OK, exit_code, result)
+        self.assertEqual("SOURCE_REGISTERED", result["code"])
+        self.assertEqual(1, self._database_count("ledger"))
+
     def test_fr_002_source_add_rejects_non_utf8_and_unknown_media_type(self) -> None:
         self.initialize()
         binary = self.workspace_root / "sources" / "bytes.txt"

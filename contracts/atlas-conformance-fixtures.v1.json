@@ -222,6 +222,358 @@
           }
         ]
       }
+    },
+    {
+      "name": "decision_record_database_strategy",
+      "object": {
+        "object_type": "DECISION_RECORD",
+        "decision_id": "decision_atlas_database_strategy_001",
+        "title": "Keep PostgreSQL as the production database",
+        "conclusion": "Continue operating Atlas on PostgreSQL until the migration readiness gates pass.",
+        "rationale": "The verified runbook describes PostgreSQL as the current production database and no cutover evidence is available.",
+        "alternatives": [
+          "Cut over to MySQL immediately",
+          "Run PostgreSQL and MySQL as active peers"
+        ],
+        "related_source_revision_ids": ["revision_atlas_runbook_20260801"],
+        "related_claim_ids": ["claim_atlas_postgresql_001"],
+        "status": "ACTIVE",
+        "version": 1,
+        "replaced_by_decision_id": null,
+        "recorded_by": {"actor_id": "human:atlas-owner", "actor_type": "HUMAN"},
+        "recorded_at": "2026-08-01T00:04:00Z"
+      }
+    },
+    {
+      "name": "open_question_cutover_window",
+      "object": {
+        "object_type": "OPEN_QUESTION",
+        "question_id": "question_atlas_cutover_window_001",
+        "question": "Which maintenance window is approved for the database cutover?",
+        "context": "The database strategy is recorded, but an approved migration window is not present in the source material.",
+        "related_objects": [
+          {"record_type": "DECISION_RECORD", "record_id": "decision_atlas_database_strategy_001"},
+          {"record_type": "SOURCE_REVISION", "record_id": "revision_atlas_runbook_20260801"}
+        ],
+        "status": "OPEN",
+        "version": 1,
+        "answer": null,
+        "drop": null,
+        "opened_by": {"actor_id": "agent:planner-a", "actor_type": "AGENT"},
+        "opened_at": "2026-08-01T00:05:00Z"
+      }
+    },
+    {
+      "name": "work_item_prepare_migration",
+      "object": {
+        "object_type": "WORK_ITEM",
+        "work_item_id": "workitem_prepare_atlas_migration_001",
+        "description": "Prepare and validate the Atlas database migration runbook.",
+        "priority": "P0",
+        "blocker": null,
+        "related_objects": [
+          {"record_type": "DECISION_RECORD", "record_id": "decision_atlas_database_strategy_001"},
+          {"record_type": "OPEN_QUESTION", "record_id": "question_atlas_cutover_window_001"}
+        ],
+        "status": "TODO",
+        "version": 1,
+        "created_by": {"actor_id": "agent:planner-a", "actor_type": "AGENT"},
+        "created_at": "2026-08-01T00:06:00Z",
+        "updated_at": "2026-08-01T00:06:00Z"
+      }
+    },
+    {
+      "name": "record_decision_proposal",
+      "expected_semantic_outcome": "COMMITTED",
+      "object": {
+        "object_type": "PROPOSAL",
+        "proposal_id": "proposal_record_decision_0001",
+        "idempotency_key": "decision-record-0001",
+        "proposer": {"actor_id": "human:atlas-owner", "actor_type": "HUMAN"},
+        "proposed_at": "2026-08-01T00:04:00Z",
+        "base_state_root": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+        "versions": {
+          "schema": "1.0.0",
+          "predicate_registry": "1.0.0",
+          "conflict_rules": "conflict-rules@1",
+          "guard_dsl": "guard-dsl@1",
+          "projection": "markdown-projection@1"
+        },
+        "reads": [],
+        "guards": [],
+        "operations": [
+          {
+            "op_id": "operation_record_decision_001",
+            "op": "RECORD_DECISION",
+            "decision": {
+              "object_type": "DECISION_RECORD",
+              "decision_id": "decision_atlas_database_strategy_001",
+              "title": "Keep PostgreSQL as the production database",
+              "conclusion": "Continue operating Atlas on PostgreSQL until the migration readiness gates pass.",
+              "rationale": "The verified runbook describes PostgreSQL as the current production database and no cutover evidence is available.",
+              "alternatives": ["Cut over to MySQL immediately", "Run PostgreSQL and MySQL as active peers"],
+              "related_source_revision_ids": ["revision_atlas_runbook_20260801"],
+              "related_claim_ids": ["claim_atlas_postgresql_001"],
+              "status": "ACTIVE",
+              "version": 1,
+              "replaced_by_decision_id": null,
+              "recorded_by": {"actor_id": "human:atlas-owner", "actor_type": "HUMAN"},
+              "recorded_at": "2026-08-01T00:04:00Z"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "supersede_decision_proposal",
+      "expected_semantic_outcome": "COMMITTED",
+      "object": {
+        "object_type": "PROPOSAL",
+        "proposal_id": "proposal_supersede_decision_01",
+        "idempotency_key": "atlas-supersede-decision-001",
+        "proposer": {"actor_id": "human:atlas-owner", "actor_type": "HUMAN"},
+        "proposed_at": "2026-08-02T00:04:00Z",
+        "base_state_root": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+        "versions": {
+          "schema": "1.0.0",
+          "predicate_registry": "1.0.0",
+          "conflict_rules": "conflict-rules@1",
+          "guard_dsl": "guard-dsl@1",
+          "projection": "markdown-projection@1"
+        },
+        "reads": [
+          {"kind": "AGGREGATE", "aggregate_type": "DECISION_RECORD", "aggregate_id": "decision_atlas_database_strategy_001", "expected_version": 1}
+        ],
+        "guards": [
+          {"op": "DECISION_STATUS_EQ", "decision_id": "decision_atlas_database_strategy_001", "expected_status": "ACTIVE"},
+          {"op": "DECISION_VERSION_EQ", "decision_id": "decision_atlas_database_strategy_001", "expected_version": 1}
+        ],
+        "operations": [
+          {
+            "op_id": "operation_supersede_decision_01",
+            "op": "SUPERSEDE_DECISION",
+            "target_decision_id": "decision_atlas_database_strategy_001",
+            "target_disposition": "SUPERSEDED",
+            "replacement_decision": {
+              "object_type": "DECISION_RECORD",
+              "decision_id": "decision_atlas_database_strategy_002",
+              "title": "Migrate production to MySQL after readiness approval",
+              "conclusion": "Use MySQL after the approved migration window and readiness gates are recorded.",
+              "rationale": "A later architecture review selected MySQL for the post-cutover production topology.",
+              "alternatives": ["Continue indefinitely on PostgreSQL"],
+              "related_source_revision_ids": ["revision_atlas_runbook_20260801"],
+              "related_claim_ids": ["claim_atlas_mysql_0000001"],
+              "status": "ACTIVE",
+              "version": 1,
+              "replaced_by_decision_id": null,
+              "recorded_by": {"actor_id": "human:atlas-owner", "actor_type": "HUMAN"},
+              "recorded_at": "2026-08-02T00:04:00Z"
+            },
+            "rationale": "Replace the prior operating decision while preserving it as superseded history."
+          }
+        ]
+      }
+    },
+    {
+      "name": "open_question_proposal",
+      "expected_semantic_outcome": "COMMITTED",
+      "object": {
+        "object_type": "PROPOSAL",
+        "proposal_id": "proposal_open_question_00001",
+        "idempotency_key": "atlas-open-question-001",
+        "proposer": {"actor_id": "agent:planner-a", "actor_type": "AGENT"},
+        "proposed_at": "2026-08-01T00:05:00Z",
+        "base_state_root": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "versions": {
+          "schema": "1.0.0",
+          "predicate_registry": "1.0.0",
+          "conflict_rules": "conflict-rules@1",
+          "guard_dsl": "guard-dsl@1",
+          "projection": "markdown-projection@1"
+        },
+        "reads": [],
+        "guards": [],
+        "operations": [
+          {
+            "op_id": "operation_open_question_0001",
+            "op": "OPEN_QUESTION",
+            "question": {
+              "object_type": "OPEN_QUESTION",
+              "question_id": "question_atlas_cutover_window_001",
+              "question": "Which maintenance window is approved for the database cutover?",
+              "context": "The database strategy is recorded, but an approved migration window is not present in the source material.",
+              "related_objects": [
+                {"record_type": "DECISION_RECORD", "record_id": "decision_atlas_database_strategy_001"},
+                {"record_type": "SOURCE_REVISION", "record_id": "revision_atlas_runbook_20260801"}
+              ],
+              "status": "OPEN",
+              "version": 1,
+              "answer": null,
+              "drop": null,
+              "opened_by": {"actor_id": "agent:planner-a", "actor_type": "AGENT"},
+              "opened_at": "2026-08-01T00:05:00Z"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "answer_question_proposal",
+      "expected_semantic_outcome": "COMMITTED",
+      "object": {
+        "object_type": "PROPOSAL",
+        "proposal_id": "proposal_answer_question_0001",
+        "idempotency_key": "atlas-answer-question-001",
+        "proposer": {"actor_id": "human:atlas-owner", "actor_type": "HUMAN"},
+        "proposed_at": "2026-08-03T00:05:00Z",
+        "base_state_root": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "versions": {
+          "schema": "1.0.0",
+          "predicate_registry": "1.0.0",
+          "conflict_rules": "conflict-rules@1",
+          "guard_dsl": "guard-dsl@1",
+          "projection": "markdown-projection@1"
+        },
+        "reads": [
+          {"kind": "AGGREGATE", "aggregate_type": "OPEN_QUESTION", "aggregate_id": "question_atlas_cutover_window_001", "expected_version": 1}
+        ],
+        "guards": [
+          {"op": "QUESTION_STATUS_EQ", "question_id": "question_atlas_cutover_window_001", "expected_status": "OPEN"},
+          {"op": "QUESTION_VERSION_EQ", "question_id": "question_atlas_cutover_window_001", "expected_version": 1}
+        ],
+        "operations": [
+          {
+            "op_id": "operation_answer_question_001",
+            "op": "ANSWER_QUESTION",
+            "target_question_id": "question_atlas_cutover_window_001",
+            "answer": {
+              "answer": "Use the approved 2026-08-15 maintenance window.",
+              "answer_reference": {"record_type": "DECISION_RECORD", "record_id": "decision_atlas_database_strategy_002"},
+              "answered_by": {"actor_id": "human:atlas-owner", "actor_type": "HUMAN"},
+              "answered_at": "2026-08-03T00:05:00Z"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "drop_question_proposal",
+      "expected_semantic_outcome": "COMMITTED",
+      "object": {
+        "object_type": "PROPOSAL",
+        "proposal_id": "proposal_drop_question_00001",
+        "idempotency_key": "atlas-drop-question-001",
+        "proposer": {"actor_id": "human:atlas-owner", "actor_type": "HUMAN"},
+        "proposed_at": "2026-08-03T00:06:00Z",
+        "base_state_root": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "versions": {
+          "schema": "1.0.0",
+          "predicate_registry": "1.0.0",
+          "conflict_rules": "conflict-rules@1",
+          "guard_dsl": "guard-dsl@1",
+          "projection": "markdown-projection@1"
+        },
+        "reads": [
+          {"kind": "AGGREGATE", "aggregate_type": "OPEN_QUESTION", "aggregate_id": "question_atlas_cutover_window_001", "expected_version": 1}
+        ],
+        "guards": [
+          {"op": "QUESTION_STATUS_EQ", "question_id": "question_atlas_cutover_window_001", "expected_status": "OPEN"},
+          {"op": "QUESTION_VERSION_EQ", "question_id": "question_atlas_cutover_window_001", "expected_version": 1}
+        ],
+        "operations": [
+          {
+            "op_id": "operation_drop_question_0001",
+            "op": "DROP_QUESTION",
+            "target_question_id": "question_atlas_cutover_window_001",
+            "drop": {
+              "rationale": "The migration initiative was cancelled, so the cutover window is no longer needed.",
+              "dropped_by": {"actor_id": "human:atlas-owner", "actor_type": "HUMAN"},
+              "dropped_at": "2026-08-03T00:06:00Z"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "create_work_item_proposal",
+      "expected_semantic_outcome": "COMMITTED",
+      "object": {
+        "object_type": "PROPOSAL",
+        "proposal_id": "proposal_create_work_item_001",
+        "idempotency_key": "atlas-create-work-item-001",
+        "proposer": {"actor_id": "agent:planner-a", "actor_type": "AGENT"},
+        "proposed_at": "2026-08-01T00:06:00Z",
+        "base_state_root": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "versions": {
+          "schema": "1.0.0",
+          "predicate_registry": "1.0.0",
+          "conflict_rules": "conflict-rules@1",
+          "guard_dsl": "guard-dsl@1",
+          "projection": "markdown-projection@1"
+        },
+        "reads": [],
+        "guards": [],
+        "operations": [
+          {
+            "op_id": "operation_create_work_item_01",
+            "op": "CREATE_WORK_ITEM",
+            "work_item": {
+              "object_type": "WORK_ITEM",
+              "work_item_id": "workitem_prepare_atlas_migration_001",
+              "description": "Prepare and validate the Atlas database migration runbook.",
+              "priority": "P0",
+              "blocker": null,
+              "related_objects": [
+                {"record_type": "DECISION_RECORD", "record_id": "decision_atlas_database_strategy_001"},
+                {"record_type": "OPEN_QUESTION", "record_id": "question_atlas_cutover_window_001"}
+              ],
+              "status": "TODO",
+              "version": 1,
+              "created_by": {"actor_id": "agent:planner-a", "actor_type": "AGENT"},
+              "created_at": "2026-08-01T00:06:00Z",
+              "updated_at": "2026-08-01T00:06:00Z"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "update_work_item_status_proposal",
+      "expected_semantic_outcome": "COMMITTED",
+      "object": {
+        "object_type": "PROPOSAL",
+        "proposal_id": "proposal_update_work_item_001",
+        "idempotency_key": "atlas-update-work-item-001",
+        "proposer": {"actor_id": "agent:planner-a", "actor_type": "AGENT"},
+        "proposed_at": "2026-08-04T00:06:00Z",
+        "base_state_root": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "versions": {
+          "schema": "1.0.0",
+          "predicate_registry": "1.0.0",
+          "conflict_rules": "conflict-rules@1",
+          "guard_dsl": "guard-dsl@1",
+          "projection": "markdown-projection@1"
+        },
+        "reads": [
+          {"kind": "AGGREGATE", "aggregate_type": "WORK_ITEM", "aggregate_id": "workitem_prepare_atlas_migration_001", "expected_version": 1}
+        ],
+        "guards": [
+          {"op": "WORK_ITEM_STATUS_EQ", "work_item_id": "workitem_prepare_atlas_migration_001", "expected_status": "TODO"},
+          {"op": "WORK_ITEM_VERSION_EQ", "work_item_id": "workitem_prepare_atlas_migration_001", "expected_version": 1}
+        ],
+        "operations": [
+          {
+            "op_id": "operation_update_work_item_01",
+            "op": "UPDATE_WORK_ITEM_STATUS",
+            "target_work_item_id": "workitem_prepare_atlas_migration_001",
+            "new_status": "BLOCKED",
+            "blocker": "The approved maintenance window has not been recorded.",
+            "rationale": "Expose the unresolved scheduling dependency in the next handoff.",
+            "updated_by": {"actor_id": "agent:planner-a", "actor_type": "AGENT"},
+            "updated_at": "2026-08-04T00:06:00Z"
+          }
+        ]
+      }
     }
   ],
   "negative_schema_cases": [
@@ -237,6 +589,34 @@
       "base_object": "assert_postgresql_proposal",
       "remove_fields": [],
       "replace_fields": {"guards": [{"op": "BOGUS_GUARD"}]},
+      "expected_reason_code": "SCHEMA_VALIDATION_FAILED"
+    },
+    {
+      "name": "decision_record_missing_version",
+      "base_object": "decision_record_database_strategy",
+      "remove_fields": ["version"],
+      "replace_fields": {},
+      "expected_reason_code": "SCHEMA_VALIDATION_FAILED"
+    },
+    {
+      "name": "answered_question_missing_answer",
+      "base_object": "open_question_cutover_window",
+      "remove_fields": [],
+      "replace_fields": {"status": "ANSWERED"},
+      "expected_reason_code": "SCHEMA_VALIDATION_FAILED"
+    },
+    {
+      "name": "blocked_work_item_missing_blocker",
+      "base_object": "work_item_prepare_migration",
+      "remove_fields": [],
+      "replace_fields": {"status": "BLOCKED"},
+      "expected_reason_code": "SCHEMA_VALIDATION_FAILED"
+    },
+    {
+      "name": "continuity_update_with_unknown_guard",
+      "base_object": "update_work_item_status_proposal",
+      "remove_fields": [],
+      "replace_fields": {"guards": [{"op": "BOGUS_CONTINUITY_GUARD"}]},
       "expected_reason_code": "SCHEMA_VALIDATION_FAILED"
     }
   ],
@@ -256,6 +636,38 @@
       "replacement_claim_from": "assert_mysql_same_interval_proposal",
       "expected_semantic_outcome": "COMMITTED",
       "expected_open_conflict_count": 0
+    },
+    {
+      "name": "supersede_decision_requires_version_read",
+      "given": ["decision_record_database_strategy"],
+      "proposal": "supersede_decision_proposal",
+      "variation": "remove the target DECISION_RECORD aggregate read while retaining its ACTIVE status guard",
+      "expected_semantic_outcome": "VALIDATION_ERROR",
+      "expected_reason_code": "MISSING_REQUIRED_DECISION_READ"
+    },
+    {
+      "name": "answer_question_requires_version_read",
+      "given": ["open_question_cutover_window"],
+      "proposal": "answer_question_proposal",
+      "variation": "remove the target OPEN_QUESTION aggregate read while retaining its OPEN status guard",
+      "expected_semantic_outcome": "VALIDATION_ERROR",
+      "expected_reason_code": "MISSING_REQUIRED_QUESTION_READ"
+    },
+    {
+      "name": "drop_question_requires_version_read",
+      "given": ["open_question_cutover_window"],
+      "proposal": "drop_question_proposal",
+      "variation": "remove the target OPEN_QUESTION aggregate read while retaining its OPEN status guard",
+      "expected_semantic_outcome": "VALIDATION_ERROR",
+      "expected_reason_code": "MISSING_REQUIRED_QUESTION_READ"
+    },
+    {
+      "name": "update_work_item_requires_version_read",
+      "given": ["work_item_prepare_migration"],
+      "proposal": "update_work_item_status_proposal",
+      "variation": "remove the target WORK_ITEM aggregate read while retaining its TODO status guard",
+      "expected_semantic_outcome": "VALIDATION_ERROR",
+      "expected_reason_code": "MISSING_REQUIRED_WORK_ITEM_READ"
     }
   ]
 }
