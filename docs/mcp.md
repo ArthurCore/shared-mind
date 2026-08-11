@@ -23,6 +23,11 @@ The optional dependency is pinned to `mcp>=2,<3`. Keep that major-version pin
 when reproducing an environment because MCP transport APIs and generated schemas
 may change across major versions.
 
+The supported release and fresh-wheel surface is MCP SDK v2. The legacy v1
+fallback is compatibility code exercised against a simulated SDK import and
+registration surface; it is not an installable project extra or fresh-wheel v1
+certification.
+
 ## Codex project configuration
 
 The checked-in `.codex/config.toml` enables multi-agent support and declares a

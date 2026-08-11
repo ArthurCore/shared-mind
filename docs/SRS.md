@@ -459,15 +459,14 @@ python3 contracts/validate_contract.py
 #     + 6 semantic cases + 7 continuity operations
 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
-# Python 3.13.2: Ran 322 tests in 563.901s
+# Python 3.13.2: Ran 327 tests in 573.553s
 # OK (skipped=1), branch coverage 86%
 ```
 
-이 결과는 implementation commit `47b7f1c` 이후의 CI audit/FD-test correction을
-포함한 source/test HEAD `5edf764`에서 실행됐다. 이후 commit은 README/SRS 검증
-기록만 갱신한 문서 전용 변경이다. schema 1.3 hardening, receipt migration
-atomicity, remote policy, input/TOCTOU, MCP, adapter, 성능 query-plan 회귀를
-모두 포함한다.
+이 결과는 implementation commit `47b7f1c` 이후의 CI audit, JSON/path hardening,
+live-summary contract, FD-test correction을 포함한 source/test HEAD `18bd1f2`에서
+실행됐다. schema 1.3 hardening, receipt migration atomicity, remote policy,
+input/TOCTOU, MCP, adapter, 성능 query-plan 회귀를 모두 포함한다.
 
 ### 13.2 요구사항 추적표
 
@@ -564,8 +563,9 @@ dogfooding과 제품 연속성 정량 평가는 계속 수행한다.
 목표: 서로 다른 에이전트가 동일 인터페이스로 읽고 제안한다.
 
 로컬 완료: agent bootstrap, JSON CLI/DecisionReceipt contract, structured query,
-advisory rebase hints, local MCP adapter, SDK v1/v2 compatibility, concurrency/fault
-suite, Git projection review workflow. 두 독립 CLI process의 destructive race는
+advisory rebase hints, local MCP adapter, installed MCP SDK v2 integration,
+simulated SDK v1 import/registration fallback contract, concurrency/fault suite,
+Git projection review workflow. 두 독립 CLI process의 destructive race는
 한 winner와 한 auditable transaction conflict를, commutative race는 양쪽 보존을
 확인해 자동시험 시나리오의 silent overwrite를 0으로 유지한다.
 
@@ -591,7 +591,7 @@ deny-by-default remote policy evaluator.
 |---|---|---|---|
 | 완료 | DEV-001~008 | validator, errors, canonical operations, guards, conflict, replay | contract/kernel/conformance suite |
 | 완료 | DEV-009~016 | projector, workspace/CLI, ingest, continuity, context, concurrency | P0 end-to-end path |
-| 완료 | DEV-017 | agent bootstrap/MCP | bootstrap, local MCP, SDK v1/v2 compatibility |
+| 완료 | DEV-017 | agent bootstrap/MCP | bootstrap, local MCP, installed SDK v2 integration + simulated v1 fallback contract |
 | 완료 | DEV-018 | Git projection workflow | 문서 및 parser-checked commands |
 | 완료(local source-only) | DEV-019 | external adapters | captured bytes adapters와 atomic failure; vendor network connector 없음 |
 | 완료 | DEV-020 | structured query/rebase hints | read schema, CLI/service/MCP read surface |

@@ -97,7 +97,7 @@ python3 contracts/validate_contract.py
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-The final schema-1.3 tree passes **322 standard-library tests** in 563.901
+The final schema-1.3 tree passes **327 standard-library tests** in 573.553
 seconds under Python 3.13.2 (`skipped=1`) with 86% branch coverage. Contract
 validation is a separate mandatory gate.
 
@@ -105,6 +105,8 @@ CI is configured for Python 3.11-3.13, Linux/macOS/Windows determinism subsets,
 80% branch coverage, lint/type/dependency/security gates, and clean base/MCP
 wheel smokes. Locally, SQLite uses WAL with `synchronous=FULL`; process-kill and
 WAL recovery tests cover the durable commit boundary.
+These are configured and locally reproduced gates. The local commits have not
+yet produced a hosted GitHub Actions result because no push was authorized.
 
 The checked-in [DEV-021 benchmark evidence](benchmarks/results/dev-021-2026-08-11.md)
 records completed 100k-entry history-heavy and hot-active fixtures. The final
@@ -114,8 +116,10 @@ history-heavy p95 was 2.707 milliseconds. The approximately 17% hot-active
 margin is environment-sensitive and remains a regression watch point. On the
 frozen `47b7f1c` implementation, clean 100k verification completed in 476.764
 seconds and explicit replay in 255.182 seconds with exact receipt count, head,
-and state-root parity. Earlier contaminated timings remain in the raw artifact
-but are not used as performance claims.
+and state-root parity. These were persisted schema-1.2 fixtures verified and
+replayed by schema-1.3 code, not freshly generated schema-1.3 fixtures. Earlier
+contaminated timings remain in the raw artifact but are not used as performance
+claims.
 
 The CLI can also verify that ledger hashes and replayed state agree:
 
