@@ -1,0 +1,82 @@
+{
+  "policy_version": "remote-adapter-policy@1",
+  "policy_id": "remote_policy_atlas_001",
+  "default_effect": "DENY",
+  "registry_version": "predicate-registry@1",
+  "endpoint_pin": {
+    "endpoint_id": "remote_atlas_001",
+    "origin": "https://atlas.example.invalid/shared-mind",
+    "protocol_version": "shared-mind-remote@1",
+    "adapter_version": "atlas-adapter@3"
+  },
+  "trust_bindings": [
+    {
+      "binding_id": "trust_atlas_service_001",
+      "issuer": "issuer:shared-mind-test",
+      "subject": "workload:atlas-sync",
+      "actor_id": "service:atlas-sync"
+    }
+  ],
+  "source_labels": [
+    {
+      "source_root": "source://atlas/public/",
+      "sensitivity": "PUBLIC",
+      "data_classes": []
+    },
+    {
+      "source_root": "source://atlas/internal/",
+      "sensitivity": "INTERNAL",
+      "data_classes": ["OPERATIONAL"]
+    },
+    {
+      "source_root": "source://atlas/internal/customer/",
+      "sensitivity": "RESTRICTED",
+      "data_classes": ["PII"]
+    }
+  ],
+  "capability_scopes": [
+    {
+      "capability": "source.read",
+      "operation_types": ["READ_SOURCE"],
+      "actor_ids": ["service:atlas-sync"],
+      "source_roots": [
+        "source://atlas/public/",
+        "source://atlas/internal/"
+      ],
+      "allowed_sensitivities": ["PUBLIC", "INTERNAL"],
+      "disclosure": {
+        "allow_fields": [
+          "content",
+          "source_id",
+          "source_revision_id",
+          "title"
+        ],
+        "redact_paths": [
+          "content.credentials",
+          "content.owner_email"
+        ]
+      }
+    },
+    {
+      "capability": "proposal.submit",
+      "operation_types": [
+        "ATTACH_EVIDENCE",
+        "REGISTER_SOURCE_REVISION"
+      ],
+      "actor_ids": ["service:atlas-sync"],
+      "source_roots": [
+        "source://atlas/public/",
+        "source://atlas/internal/"
+      ],
+      "allowed_sensitivities": ["PUBLIC", "INTERNAL"],
+      "disclosure": {
+        "allow_fields": [
+          "operation_type",
+          "proposal_id",
+          "source_revision_id"
+        ],
+        "redact_paths": []
+      }
+    }
+  ]
+}

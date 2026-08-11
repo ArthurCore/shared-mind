@@ -1,0 +1,164 @@
+{
+  "fixture_version": "remote-adapter-policy-cases@1",
+  "policy_file": "atlas-remote-policy.v1.json",
+  "expected_policy_hash": "sha256:5001b233cd456bd847741824288f4aa310a92bcef838e096edede7a7fdc58e82",
+  "authenticated_bindings": {
+    "trusted": {
+      "binding_id": "trust_atlas_service_001",
+      "issuer": "issuer:shared-mind-test",
+      "subject": "workload:atlas-sync",
+      "actor_id": "service:atlas-sync",
+      "secret_material": "REMOTE_AUTH_SECRET_CANARY_DO_NOT_EMIT"
+    },
+    "untrusted": {
+      "binding_id": "trust_unlisted_intruder_001",
+      "issuer": "issuer:untrusted-test",
+      "subject": "workload:intruder",
+      "actor_id": "service:intruder",
+      "secret_material": "UNTRUSTED_SECRET_CANARY_DO_NOT_EMIT"
+    }
+  },
+  "base_request": {
+    "request_version": "remote-policy-request@1",
+    "request_id": "remote_request_atlas_001",
+    "claimed_actor_id": "service:atlas-sync",
+    "endpoint_id": "remote_atlas_001",
+    "protocol_version": "shared-mind-remote@1",
+    "adapter_version": "atlas-adapter@3",
+    "registry_version": "predicate-registry@1",
+    "capability": "source.read",
+    "operation_type": "READ_SOURCE",
+    "source_ref": "source://atlas/internal/runbooks/database.md",
+    "requested_fields": ["title", "content", "source_id"]
+  },
+  "audit_contract": {
+    "decision_version": "remote-policy-decision@1",
+    "decision_id_prefix": "remote_policy_decision_",
+    "decision_keys": [
+      "authenticated_actor_id",
+      "capability",
+      "decision_id",
+      "decision_version",
+      "disclosure",
+      "endpoint_pin",
+      "operation_type",
+      "outcome",
+      "policy_hash",
+      "reason_codes",
+      "registry_version",
+      "request_id",
+      "source_label",
+      "trust_binding_id"
+    ],
+    "endpoint_pin_keys": [
+      "adapter_version",
+      "endpoint_id",
+      "protocol_version"
+    ],
+    "source_label_keys": ["data_classes", "sensitivity", "source_root"],
+    "disclosure_keys": ["allowed_fields", "redacted_paths"]
+  },
+  "expected_allow": {
+    "outcome": "ALLOW",
+    "reason_codes": [],
+    "authenticated_actor_id": "service:atlas-sync",
+    "trust_binding_id": "trust_atlas_service_001",
+    "source_label": {
+      "source_root": "source://atlas/internal/",
+      "sensitivity": "INTERNAL",
+      "data_classes": ["OPERATIONAL"]
+    },
+    "disclosure": {
+      "allowed_fields": ["content", "source_id", "title"],
+      "redacted_paths": [
+        "content.credentials",
+        "content.owner_email"
+      ]
+    }
+  },
+  "hostile_cases": [
+    {
+      "name": "actor_mismatch",
+      "binding": "trusted",
+      "request_overrides": {"claimed_actor_id": "service:other"},
+      "expected_reason_codes": ["ACTOR_BINDING_MISMATCH"]
+    },
+    {
+      "name": "missing_trust_binding_self_assertion_is_insufficient",
+      "binding": null,
+      "request_overrides": {},
+      "expected_reason_codes": ["MISSING_TRUST_BINDING"]
+    },
+    {
+      "name": "untrusted_binding",
+      "binding": "untrusted",
+      "request_overrides": {"claimed_actor_id": "service:intruder"},
+      "expected_reason_codes": ["TRUST_BINDING_NOT_ALLOWED"]
+    },
+    {
+      "name": "secret_and_pii_field_request",
+      "binding": "trusted",
+      "request_overrides": {
+        "requested_fields": ["content", "owner_email", "api_token"]
+      },
+      "expected_reason_codes": ["DISCLOSURE_FIELD_DENIED"]
+    },
+    {
+      "name": "arbitrary_file_source_scope",
+      "binding": "trusted",
+      "request_overrides": {"source_ref": "file:///etc/passwd"},
+      "expected_reason_codes": ["SOURCE_SCOPE_DENIED"]
+    },
+    {
+      "name": "restricted_pii_source",
+      "binding": "trusted",
+      "request_overrides": {
+        "source_ref": "source://atlas/internal/customer/accounts.json"
+      },
+      "expected_reason_codes": ["SENSITIVITY_DENIED"]
+    },
+    {
+      "name": "unknown_capability_deny_by_default",
+      "binding": "trusted",
+      "request_overrides": {"capability": "source.admin"},
+      "expected_reason_codes": ["UNKNOWN_CAPABILITY"]
+    },
+    {
+      "name": "operation_outside_capability_scope",
+      "binding": "trusted",
+      "request_overrides": {"operation_type": "RETRACT_CLAIM"},
+      "expected_reason_codes": ["OPERATION_SCOPE_DENIED"]
+    },
+    {
+      "name": "remote_endpoint_drift",
+      "binding": "trusted",
+      "request_overrides": {"endpoint_id": "remote_unpinned_999"},
+      "expected_reason_codes": ["ENDPOINT_PIN_MISMATCH"]
+    },
+    {
+      "name": "remote_adapter_version_drift",
+      "binding": "trusted",
+      "request_overrides": {"adapter_version": "atlas-adapter@4"},
+      "expected_reason_codes": ["REMOTE_VERSION_PIN_MISMATCH"]
+    },
+    {
+      "name": "predicate_registry_drift",
+      "binding": "trusted",
+      "request_overrides": {"registry_version": "predicate-registry@2"},
+      "expected_reason_codes": ["REGISTRY_VERSION_MISMATCH"]
+    }
+  ],
+  "known_reason_codes": [
+    "ACTOR_BINDING_MISMATCH",
+    "DISCLOSURE_FIELD_DENIED",
+    "ENDPOINT_PIN_MISMATCH",
+    "MISSING_TRUST_BINDING",
+    "OPERATION_SCOPE_DENIED",
+    "REGISTRY_VERSION_MISMATCH",
+    "REMOTE_VERSION_PIN_MISMATCH",
+    "SENSITIVITY_DENIED",
+    "SOURCE_SCOPE_DENIED",
+    "TRUST_BINDING_NOT_ALLOWED",
+    "UNKNOWN_CAPABILITY"
+  ]
+}
