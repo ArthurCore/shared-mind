@@ -427,12 +427,23 @@ class McpApplication:
 def create_server(workspace: Workspace) -> Any:
     """Create an SDK-backed server while keeping the base package optional."""
 
-    from mcp.server.fastmcp import FastMCP
-    from mcp.server.fastmcp.exceptions import ToolError
     from mcp.types import ToolAnnotations
 
+    try:
+        # MCP Python SDK v2 renamed the high-level server and removed the old
+        # module instead of leaving a compatibility alias.
+        from mcp.server import MCPServer
+
+        server_type = MCPServer
+        sdk_v2 = True
+    except ImportError:  # pragma: no cover - exercised with the v1 SDK
+        from mcp.server.fastmcp import FastMCP
+
+        server_type = FastMCP
+        sdk_v2 = False
+
     application = McpApplication(workspace)
-    server = FastMCP(
+    server = server_type(
         "shared-mind",
         instructions=(
             "Local-only Shared Mind adapter. Read context and projections, then "
@@ -443,12 +454,22 @@ def create_server(workspace: Workspace) -> Any:
     def sdk_result(result: dict[str, Any]) -> dict[str, Any]:
         envelope = result["structuredContent"]
         if result["isError"]:
-            raise ToolError(canonical_json(envelope))
+            # Both SDK generations convert an ordinary exception raised by a
+            # high-level tool into a model-visible isError result. Avoid an
+            # SDK-private exception import, which moved in v2.
+            raise RuntimeError(canonical_json(envelope))
         return envelope
 
     def annotations(name: str) -> Any:
         definition = next(item for item in _TOOL_DEFINITIONS if item["name"] == name)
         hints = definition["annotations"]
+        if sdk_v2:
+            return ToolAnnotations(
+                read_only_hint=hints["readOnlyHint"],
+                destructive_hint=hints["destructiveHint"],
+                idempotent_hint=True,
+                open_world_hint=False,
+            )
         return ToolAnnotations(
             readOnlyHint=hints["readOnlyHint"],
             destructiveHint=hints["destructiveHint"],
