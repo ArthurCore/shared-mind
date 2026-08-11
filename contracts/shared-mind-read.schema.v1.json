@@ -1,0 +1,299 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shared-mind.local/schema/read/v1",
+  "title": "Shared Mind Read Contract v1",
+  "description": "Versioned wire documents for deterministic structured reads and advisory proposal rebasing.",
+  "oneOf": [
+    {"$ref": "#/$defs/StructuredQuery"},
+    {"$ref": "#/$defs/QueryResult"},
+    {"$ref": "#/$defs/RebaseHint"}
+  ],
+  "$defs": {
+    "Hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "RecordId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{1,31}_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+    },
+    "SemanticId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{1,31}:[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "PredicateKey": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.]*@[1-9][0-9]*$"
+    },
+    "QueryKind": {
+      "enum": [
+        "SOURCE_REVISION",
+        "CLAIM",
+        "EVIDENCE_LINK",
+        "CONFLICT",
+        "DECISION_RECORD",
+        "OPEN_QUESTION",
+        "WORK_ITEM"
+      ]
+    },
+    "StructuredQuery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_version",
+        "kinds",
+        "ids",
+        "title_contains",
+        "predicates",
+        "source_ids",
+        "source_revision_ids",
+        "statuses",
+        "limit",
+        "offset",
+        "include_record"
+      ],
+      "properties": {
+        "query_version": {"const": "structured-query@1"},
+        "kinds": {
+          "type": "array",
+          "maxItems": 7,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "SOURCE_REVISION",
+              "CLAIM",
+              "EVIDENCE_LINK",
+              "CONFLICT",
+              "DECISION_RECORD",
+              "OPEN_QUESTION",
+              "WORK_ITEM"
+            ]
+          }
+        },
+        "ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/RecordId"}
+        },
+        "title_contains": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "predicates": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/PredicateKey"}
+        },
+        "source_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/SemanticId"}
+        },
+        "source_revision_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/RecordId"}
+        },
+        "statuses": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "include_record": {"type": "boolean"}
+      }
+    },
+    "QueryHit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "object_type",
+        "object_id",
+        "projection_ref",
+        "matched_fields",
+        "summary",
+        "record"
+      ],
+      "properties": {
+        "object_type": {"$ref": "#/$defs/QueryKind"},
+        "object_id": {"$ref": "#/$defs/RecordId"},
+        "projection_ref": {
+          "type": "string",
+          "pattern": "^project\\.json#/",
+          "maxLength": 4096
+        },
+        "matched_fields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "id",
+              "title",
+              "predicate",
+              "source_id",
+              "source_revision_id",
+              "status"
+            ]
+          }
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "record": {"type": ["object", "null"]}
+      }
+    },
+    "QueryResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_version",
+        "projection_version",
+        "state_root",
+        "ledger_sequence",
+        "normalized_query",
+        "hits",
+        "total_matches",
+        "truncated"
+      ],
+      "properties": {
+        "query_version": {"const": "structured-query@1"},
+        "projection_version": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*@[1-9][0-9]*$"
+        },
+        "state_root": {"$ref": "#/$defs/Hash"},
+        "ledger_sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "normalized_query": {"$ref": "#/$defs/StructuredQuery"},
+        "hits": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {"$ref": "#/$defs/QueryHit"}
+        },
+        "total_matches": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "truncated": {"type": "boolean"}
+      }
+    },
+    "ObservedRecordState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "status"],
+      "properties": {
+        "version": {"type": "integer", "minimum": 1},
+        "status": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+        },
+        "member_digest": {"$ref": "#/$defs/Hash"}
+      }
+    },
+    "ObservedCollectionState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["digest", "member_count"],
+      "properties": {
+        "digest": {"$ref": "#/$defs/Hash"},
+        "member_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "FailedPrecondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "expected",
+        "actual",
+        "aggregate_type",
+        "aggregate_id",
+        "actual_state"
+      ],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 2048},
+        "expected": true,
+        "actual": true,
+        "aggregate_type": {
+          "enum": [
+            "CLAIM",
+            "CLAIM_COLLECTION",
+            "CONFLICT",
+            "DECISION_RECORD",
+            "OPEN_QUESTION",
+            "WORK_ITEM"
+          ]
+        },
+        "aggregate_id": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "actual_state": {
+          "oneOf": [
+            {"$ref": "#/$defs/ObservedRecordState"},
+            {"$ref": "#/$defs/ObservedCollectionState"}
+          ]
+        }
+      }
+    },
+    "ReplacementPrecondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "value"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 2048},
+        "value": true
+      }
+    },
+    "RebaseHint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hint_version",
+        "advisory",
+        "proposal_id",
+        "receipt_id",
+        "reason_code",
+        "observed_state_root",
+        "observed_ledger_head",
+        "failed_precondition",
+        "replacement_preconditions",
+        "safe_to_auto_apply",
+        "recommended_action"
+      ],
+      "properties": {
+        "hint_version": {"const": "rebase-hint@1"},
+        "advisory": {"const": true},
+        "proposal_id": {"$ref": "#/$defs/RecordId"},
+        "receipt_id": {"$ref": "#/$defs/RecordId"},
+        "reason_code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,127}$"
+        },
+        "observed_state_root": {"$ref": "#/$defs/Hash"},
+        "observed_ledger_head": {"$ref": "#/$defs/Hash"},
+        "failed_precondition": {"$ref": "#/$defs/FailedPrecondition"},
+        "replacement_preconditions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {"$ref": "#/$defs/ReplacementPrecondition"}
+        },
+        "safe_to_auto_apply": {"const": false},
+        "recommended_action": {"const": "REVIEW_AND_REBUILD"}
+      }
+    }
+  }
+}

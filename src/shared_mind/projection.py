@@ -32,6 +32,7 @@ CONTEXT_SELECTION_RULE = (
     "mandatory-purpose,open-conflicts,active-decisions,open-questions,"
     "actionable-work-items;greedy:current_claims;stable-projection-order"
 )
+MAX_CONTEXT_HISTORY_REFS = 16
 
 
 class ProjectionError(Exception):
@@ -86,7 +87,7 @@ def build_context_pack(
         raise ValueError("purpose must be a non-empty string when supplied")
     effective_budget = _effective_budget(budget_bytes, budget_tokens)
     with _read_connection(source) as connection:
-        projection = _build_projection(connection)
+        projection = _build_context_projection(connection)
 
     claim_by_id = {
         item["claim"]["claim_id"]: item for item in projection["claims"]
@@ -156,11 +157,12 @@ def build_context_pack(
         ),
     }
 
+    included = {name: 0 for name, _, _ in sections}
+    _refresh_truncation(pack, sections, included, effective_budget)
     minimum = _finalize_size(pack)
     if minimum > effective_budget:
         raise ContextBudgetError(minimum, effective_budget)
 
-    included = {name: 0 for name, _, _ in sections}
     for name, items, _ in sections:
         for item in items:
             pack[name].append(item)
@@ -190,7 +192,7 @@ def build_context_pack(
     return pack
 
 
-def _build_projection(connection: sqlite3.Connection) -> dict[str, Any]:
+def _validated_projection_tables(connection: sqlite3.Connection) -> set[str]:
     tables = _table_names(connection)
     required = {"sources", "claims", "evidence", "conflicts", "ledger"}
     missing = sorted(required - tables)
@@ -203,6 +205,11 @@ def _build_projection(connection: sqlite3.Connection) -> dict[str, Any]:
         raise ProjectionError(
             "incomplete continuity state: missing " + ", ".join(missing_continuity)
         )
+    return tables
+
+
+def _build_projection(connection: sqlite3.Connection) -> dict[str, Any]:
+    tables = _validated_projection_tables(connection)
 
     source_rows = _fetch_rows(connection, "sources")
     claim_rows = _fetch_rows(connection, "claims")
@@ -398,6 +405,246 @@ def _build_projection(connection: sqlite3.Connection) -> dict[str, Any]:
     }
 
 
+def _build_context_projection(connection: sqlite3.Connection) -> dict[str, Any]:
+    """Load context state without materializing every ledger document.
+
+    Full JSON and Markdown projections remain information-preserving ledger
+    views.  Context needs only the head plus history for records it can expose,
+    so selected history is extracted inside SQLite and bounded before packing.
+    """
+
+    tables = _validated_projection_tables(connection)
+    claim_rows = _fetch_rows(connection, "claims")
+    evidence_rows = _fetch_rows(connection, "evidence")
+    conflict_rows = _fetch_rows(connection, "conflicts")
+
+    evidence = []
+    for index, row in enumerate(evidence_rows):
+        link = _load_json(row.get("document"), {})
+        evidence.append(
+            {
+                "evidence_link": link,
+                "evidence_link_id": str(row["evidence_link_id"]),
+                "claim_id": str(row["claim_id"]),
+                "source_revision_id": str(row["source_revision_id"]),
+                "history_sequences": [],
+                "history_refs": [],
+                "projection_ref": f"project.json#/evidence/{index}",
+            }
+        )
+
+    conflict_members_by_claim: dict[str, list[str]] = {}
+    conflicts = []
+    for index, row in enumerate(conflict_rows):
+        conflict_id = str(row["conflict_id"])
+        members = sorted(str(item) for item in _load_json(row.get("members"), []))
+        for member in members:
+            conflict_members_by_claim.setdefault(member, []).append(conflict_id)
+        conflicts.append(
+            {
+                "conflict_id": conflict_id,
+                "family_key": row["family_key"],
+                "kind": row["kind"],
+                "member_digest": row["member_digest"],
+                "members": members,
+                "status": row["status"],
+                "episode": row["episode"],
+                "version": row.get("version"),
+                "resolution": _load_json(row.get("resolution"), None),
+                "opened_sequence": row.get("opened_seq"),
+                "history_sequences": [],
+                "history_refs": [],
+                "projection_ref": f"project.json#/conflicts/{index}",
+            }
+        )
+
+    evidence_ids_by_claim: dict[str, list[str]] = {}
+    for item in evidence:
+        evidence_ids_by_claim.setdefault(item["claim_id"], []).append(
+            item["evidence_link_id"]
+        )
+    claims = []
+    for index, row in enumerate(claim_rows):
+        claim_id = str(row["claim_id"])
+        claims.append(
+            {
+                "claim": _load_json(row.get("document"), {}),
+                "proposition": _load_json(row.get("proposition"), {}),
+                "proposition_hash": row["proposition_hash"],
+                "status": row["status"],
+                "version": row["version"],
+                "superseded_by": row.get("superseded_by"),
+                "evidence_link_ids": sorted(evidence_ids_by_claim.get(claim_id, [])),
+                "conflict_ids": sorted(conflict_members_by_claim.get(claim_id, [])),
+                "history_sequences": [],
+                "history_refs": [],
+                "projection_ref": f"project.json#/claims/{index}",
+            }
+        )
+
+    claim_ids = {item["claim"]["claim_id"] for item in claims}
+    open_conflicts = [item for item in conflicts if item["status"] == "OPEN"]
+    for conflict in open_conflicts:
+        missing_members = sorted(set(conflict["members"]) - claim_ids)
+        if missing_members:
+            raise ProjectionError(
+                f"open conflict {conflict['conflict_id']} has missing member claim(s): "
+                + ", ".join(missing_members)
+            )
+
+    empty_history: dict[str, set[int]] = {}
+    empty_refs: dict[int, str] = {}
+    continuity = {
+        "decisions": _optional_records(
+            connection,
+            tables,
+            ("decision_records", "decisions"),
+            empty_history,
+            empty_refs,
+        ),
+        "questions": _optional_records(
+            connection,
+            tables,
+            ("open_questions", "questions"),
+            empty_history,
+            empty_refs,
+        ),
+        "work_items": _optional_records(
+            connection,
+            tables,
+            ("work_items",),
+            empty_history,
+            empty_refs,
+        ),
+    }
+    for section, records in continuity.items():
+        for index, record in enumerate(records):
+            record["projection_ref"] = f"project.json#/continuity/{section}/{index}"
+    _validate_continuity_statuses(continuity)
+
+    conflicted_claim_ids = {
+        member for conflict in open_conflicts for member in conflict["members"]
+    }
+    selected_claim_ids = {
+        item["claim"]["claim_id"]
+        for item in claims
+        if item["status"] == "ACTIVE"
+    } | conflicted_claim_ids
+    selected_ids = selected_claim_ids | {
+        item["conflict_id"] for item in open_conflicts
+    }
+    active_continuity = (
+        (continuity["decisions"], {"ACTIVE"}),
+        (continuity["questions"], {"OPEN"}),
+        (continuity["work_items"], {"TODO", "DOING", "BLOCKED"}),
+    )
+    for records, active_statuses in active_continuity:
+        selected_ids.update(
+            _row_identifier(record["row"])
+            for record in records
+            if _find_status(record["row"]) in active_statuses
+        )
+
+    history_by_id = _selected_history_sequences(connection, selected_ids)
+    history_refs = {
+        sequence: f"project.json#/ledger/entries/{sequence - 1}"
+        for sequences in history_by_id.values()
+        for sequence in sequences
+    }
+    for claim in claims:
+        identifier = claim["claim"]["claim_id"]
+        if identifier in selected_ids:
+            _set_context_history(claim, identifier, history_by_id, history_refs)
+    for conflict in open_conflicts:
+        _set_context_history(
+            conflict, conflict["conflict_id"], history_by_id, history_refs
+        )
+    for records, active_statuses in active_continuity:
+        for record in records:
+            if _find_status(record["row"]) in active_statuses:
+                identifier = _row_identifier(record["row"])
+                _set_context_history(record, identifier, history_by_id, history_refs)
+
+    head = connection.execute(
+        "SELECT seq, entry_hash FROM ledger ORDER BY seq DESC LIMIT 1"
+    ).fetchone()
+    return {
+        "projection_version": PROJECTION_VERSION,
+        "state_root": _state_root(connection, tables),
+        "ledger": {
+            "head_sequence": int(head[0]) if head is not None else 0,
+            "head_entry_hash": head[1] if head is not None else None,
+            "entries": [],
+        },
+        "sources": [],
+        "claims": claims,
+        "evidence": evidence,
+        "conflicts": conflicts,
+        "continuity": continuity,
+    }
+
+
+def _selected_history_sequences(
+    connection: sqlite3.Connection, identifiers: set[str]
+) -> dict[str, set[int]]:
+    if not identifiers:
+        return {}
+    selected = canonical_json(sorted(identifiers))
+    statement = """
+        WITH selected(object_id) AS (
+          SELECT value FROM json_each(?)
+        ), referenced(object_id, seq) AS (
+          SELECT selected.object_id, ledger.seq
+          FROM ledger AS ledger
+          CROSS JOIN json_tree(ledger.proposal) AS node
+          JOIN selected ON selected.object_id = node.value
+          WHERE node.type = 'text'
+            AND (node.key = 'id' OR substr(node.key, -3) = '_id')
+          UNION
+          SELECT selected.object_id, ledger.seq
+          FROM ledger AS ledger
+          CROSS JOIN json_tree(ledger.events) AS node
+          JOIN selected ON selected.object_id = node.value
+          WHERE node.type = 'text'
+            AND (node.key = 'id' OR substr(node.key, -3) = '_id')
+        )
+        SELECT object_id, seq FROM referenced ORDER BY object_id, seq
+    """
+    try:
+        rows = connection.execute(statement, (selected,)).fetchall()
+    except sqlite3.OperationalError as exc:
+        raise ProjectionError(
+            "context history extraction requires SQLite JSON functions"
+        ) from exc
+    result: dict[str, set[int]] = {}
+    for row in rows:
+        result.setdefault(str(row[0]), set()).add(int(row[1]))
+    return result
+
+
+def _set_context_history(
+    record: dict[str, Any],
+    identifier: str,
+    history_by_id: Mapping[str, set[int]],
+    history_ref_by_sequence: Mapping[int, str],
+) -> None:
+    sequences = sorted(history_by_id.get(identifier, set()))
+    omitted = max(0, len(sequences) - MAX_CONTEXT_HISTORY_REFS)
+    if omitted:
+        sequences = sequences[-MAX_CONTEXT_HISTORY_REFS:]
+    record["history_sequences"] = sequences
+    record["history_refs"] = [history_ref_by_sequence[item] for item in sequences]
+    if omitted:
+        record.update(
+            {
+                "history_truncated": True,
+                "history_included_count": len(sequences),
+                "history_omitted_count": omitted,
+                "full_history_ref": record["projection_ref"],
+            }
+        )
+
+
 def _render_markdown(projection: Mapping[str, Any]) -> str:
     ledger = projection["ledger"]
     lines = [
@@ -460,7 +707,7 @@ def _context_claim(
     claim: Mapping[str, Any], evidence: list[dict[str, Any]]
 ) -> dict[str, Any]:
     claim_id = claim["claim"]["claim_id"]
-    return {
+    result = {
         "claim_id": claim_id,
         "status": claim["status"],
         "version": claim["version"],
@@ -471,6 +718,8 @@ def _context_claim(
         "history_sequences": claim["history_sequences"],
         "history_refs": claim["history_refs"],
     }
+    result.update(_context_history_metadata(claim))
+    return result
 
 
 def _context_evidence(evidence: Mapping[str, Any]) -> dict[str, Any]:
@@ -510,7 +759,7 @@ def _context_conflict(
             )
         else:
             members.append(_context_claim(claim, evidence_by_claim.get(claim_id, [])))
-    return {
+    result = {
         "conflict_id": conflict["conflict_id"],
         "kind": conflict["kind"],
         "status": conflict["status"],
@@ -520,6 +769,19 @@ def _context_conflict(
         "projection_ref": conflict["projection_ref"],
         "history_sequences": conflict["history_sequences"],
         "history_refs": conflict["history_refs"],
+    }
+    result.update(_context_history_metadata(conflict))
+    return result
+
+
+def _context_history_metadata(record: Mapping[str, Any]) -> dict[str, Any]:
+    if not record.get("history_truncated"):
+        return {}
+    return {
+        "history_truncated": True,
+        "history_included_count": record["history_included_count"],
+        "history_omitted_count": record["history_omitted_count"],
+        "full_history_ref": record["full_history_ref"],
     }
 
 
@@ -597,7 +859,7 @@ def _truncation_metadata(
     rendered_bytes: int,
 ) -> dict[str, Any]:
     return {
-        "truncated": any(omitted.values()),
+        "truncated": any(omitted.values()) or bool(references),
         "budget_bytes": effective_budget,
         "requested_budget_bytes": requested_bytes,
         "requested_budget_tokens": requested_tokens,
@@ -630,6 +892,7 @@ def _refresh_truncation(
         for name, _, reference in sections
         if omitted[name]
     ]
+    references.extend(_history_truncation_references(pack))
     prior = pack["truncation"]
     pack["truncation"] = _truncation_metadata(
         effective_budget,
@@ -641,6 +904,47 @@ def _refresh_truncation(
         rendered_bytes=0,
     )
     _set_stable_rendered_size(pack)
+
+
+def _history_truncation_references(pack: Mapping[str, Any]) -> list[dict[str, Any]]:
+    omitted_by_reference: dict[str, int] = {}
+
+    def visit(value: Any) -> None:
+        if isinstance(value, Mapping):
+            reference = value.get("full_history_ref")
+            omitted = value.get("history_omitted_count")
+            if (
+                value.get("history_truncated") is True
+                and isinstance(reference, str)
+                and isinstance(omitted, int)
+                and not isinstance(omitted, bool)
+                and omitted > 0
+            ):
+                omitted_by_reference[reference] = max(
+                    omitted, omitted_by_reference.get(reference, 0)
+                )
+            for item in value.values():
+                visit(item)
+        elif isinstance(value, list):
+            for item in value:
+                visit(item)
+
+    for section in (
+        "open_conflicts",
+        "decisions",
+        "open_questions",
+        "work_items",
+        "current_claims",
+    ):
+        visit(pack.get(section, []))
+    return [
+        {
+            "section": "history",
+            "omitted_count": omitted_by_reference[reference],
+            "projection_ref": reference,
+        }
+        for reference in sorted(omitted_by_reference)
+    ]
 
 
 def _set_stable_rendered_size(pack: dict[str, Any]) -> None:

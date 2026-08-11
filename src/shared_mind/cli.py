@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Sequence, TextIO
 
 from .canonical import canonical_json
+from .service import OperationResult, WorkspaceService
 from .workspace import Workspace, WorkspaceError
 
 
@@ -79,6 +80,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     project_parser = commands.add_parser("project")
     project_parser.add_argument("--format", choices=("markdown", "json"), default="markdown")
+
+    query_parser = commands.add_parser("query")
+    query_parser.add_argument("--kind", dest="kinds", action="append")
+    query_parser.add_argument("--id", dest="ids", action="append")
+    query_parser.add_argument("--title-contains")
+    query_parser.add_argument("--predicate", dest="predicates", action="append")
+    query_parser.add_argument("--source-id", dest="source_ids", action="append")
+    query_parser.add_argument(
+        "--source-revision-id", dest="source_revision_ids", action="append"
+    )
+    query_parser.add_argument("--status", dest="statuses", action="append")
+    query_parser.add_argument("--limit", type=int, default=100)
+    query_parser.add_argument("--offset", type=int, default=0)
+    query_parser.add_argument("--summary-only", action="store_true")
     return parser
 
 
@@ -114,6 +129,8 @@ def main(
             return _replay_command(workspace, output)
         if arguments.command == "project":
             return _project_command(workspace, arguments, output)
+        if arguments.command == "query":
+            return _query_command(workspace, arguments, output)
         raise CliUsageError(f"Unsupported command: {arguments.command}")
     except CliUsageError as exc:
         return _emit(output, False, "USAGE_ERROR", message=str(exc), exit_code=EXIT_USAGE)
@@ -158,24 +175,29 @@ def _proposal_command(
     workspace: Workspace, arguments: argparse.Namespace, output: TextIO
 ) -> int:
     proposal = workspace.load_json(arguments.path)
+    service = WorkspaceService(workspace)
     if arguments.proposal_command == "validate":
-        issues = workspace.validate_proposal(proposal)
-        if issues:
-            return _emit(
-                output,
-                False,
-                "PROPOSAL_INVALID",
-                errors=[issue.as_dict() for issue in issues],
-                message="Proposal validation failed.",
-                exit_code=EXIT_VALIDATION_ERROR,
-            )
-        return _emit(output, True, "PROPOSAL_VALID", data={"valid": True})
-    kernel = workspace.open_kernel()
-    try:
-        receipt = kernel.commit(proposal)
-    finally:
-        kernel.close()
-    return _emit_receipt(output, receipt)
+        return _emit_operation_result(output, service.validate_proposal(proposal))
+    return _emit_operation_result(output, service.commit_proposal(proposal))
+
+
+def _query_command(
+    workspace: Workspace, arguments: argparse.Namespace, output: TextIO
+) -> int:
+    spec = {
+        "kinds": tuple(arguments.kinds or ()),
+        "ids": tuple(arguments.ids or ()),
+        "title_contains": arguments.title_contains,
+        "predicates": tuple(arguments.predicates or ()),
+        "source_ids": tuple(arguments.source_ids or ()),
+        "source_revision_ids": tuple(arguments.source_revision_ids or ()),
+        "statuses": tuple(arguments.statuses or ()),
+        "limit": arguments.limit,
+        "offset": arguments.offset,
+        "include_record": not arguments.summary_only,
+    }
+    result = WorkspaceService(workspace).query(spec)
+    return _emit_operation_result(output, result)
 
 
 def _conflict_command(
@@ -361,6 +383,13 @@ def _emit_receipt(output: TextIO, receipt: Any) -> int:
         message=None if ok else "Proposal was not committed.",
         exit_code=exit_code,
     )
+
+
+def _emit_operation_result(output: TextIO, result: OperationResult) -> int:
+    document = result.as_dict()
+    output.write(canonical_json(document) + "\n")
+    output.flush()
+    return result.exit_code
 
 
 def _receipt_data(receipt: Any) -> dict[str, Any]:
