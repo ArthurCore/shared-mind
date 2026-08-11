@@ -21,6 +21,8 @@ CONFIG_FILENAME = "workspace.json"
 DATABASE_FILENAME = "shared-mind.sqlite3"
 REGISTRY_FILENAME = "predicate-registry.json"
 WORKSPACE_VERSION = 1
+MAX_JSON_BYTES = 1024 * 1024
+MAX_JSON_DEPTH = 64
 
 _SEMANTIC_ID = re.compile(r"^[a-z][a-z0-9_-]{1,31}:[a-z0-9][a-z0-9._-]{0,127}$")
 _SAFE_SLUG = re.compile(r"[^a-z0-9._-]+")
@@ -377,10 +379,28 @@ class Workspace:
         if not requested.is_absolute():
             requested = Path.cwd() / requested
         resolved = requested.resolve()
+        workspace_root = self.root.resolve()
+        if not self._is_within(resolved, workspace_root):
+            raise WorkspaceError(
+                "PATH_OUTSIDE_WORKSPACE",
+                f"JSON path must be inside {workspace_root}: {resolved}",
+            )
         if not resolved.is_file():
             raise WorkspaceError("FILE_NOT_FOUND", f"JSON file not found: {resolved}")
         try:
-            return json.loads(resolved.read_text(encoding="utf-8"))
+            with resolved.open("rb") as handle:
+                encoded = handle.read(MAX_JSON_BYTES + 1)
+        except OSError as exc:
+            raise WorkspaceError(
+                "FILE_READ_FAILED", f"Cannot read JSON file: {exc}"
+            ) from exc
+        if len(encoded) > MAX_JSON_BYTES:
+            raise WorkspaceError(
+                "JSON_TOO_LARGE",
+                f"JSON file exceeds the {MAX_JSON_BYTES}-byte limit.",
+            )
+        try:
+            document = json.loads(encoded.decode("utf-8"))
         except json.JSONDecodeError as exc:
             raise WorkspaceError(
                 "MALFORMED_JSON",
@@ -388,8 +408,17 @@ class Workspace:
             ) from exc
         except UnicodeDecodeError as exc:
             raise WorkspaceError("MALFORMED_JSON", f"JSON must be UTF-8: {exc}") from exc
-        except OSError as exc:
-            raise WorkspaceError("FILE_READ_FAILED", f"Cannot read JSON file: {exc}") from exc
+        except RecursionError as exc:
+            raise WorkspaceError(
+                "JSON_TOO_DEEP",
+                f"JSON exceeds the maximum nesting depth of {MAX_JSON_DEPTH}.",
+            ) from exc
+        if _json_depth_exceeds(document, MAX_JSON_DEPTH):
+            raise WorkspaceError(
+                "JSON_TOO_DEEP",
+                f"JSON exceeds the maximum nesting depth of {MAX_JSON_DEPTH}.",
+            )
+        return document
 
     def list_conflicts(self, status: str | None = None) -> list[dict[str, Any]]:
         kernel = self.open_kernel()
@@ -568,3 +597,22 @@ class Workspace:
             "REGISTRY_NOT_FOUND",
             "The default predicate registry is unavailable; provide a packaged registry.",
         )
+
+
+def _json_depth_exceeds(value: Any, maximum: int) -> bool:
+    """Return whether decoded JSON contains more than ``maximum`` containers."""
+
+    stack: list[tuple[Any, int]] = [(value, 0)]
+    while stack:
+        item, parent_depth = stack.pop()
+        if isinstance(item, dict):
+            depth = parent_depth + 1
+            if depth > maximum:
+                return True
+            stack.extend((child, depth) for child in item.values())
+        elif isinstance(item, list):
+            depth = parent_depth + 1
+            if depth > maximum:
+                return True
+            stack.extend((child, depth) for child in item)
+    return False
