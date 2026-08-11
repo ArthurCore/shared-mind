@@ -1,0 +1,227 @@
+{
+  "fixture_set": "atlas-kernel-contract@1",
+  "description": "Shape-valid fixtures with semantic outcomes expected from the future kernel.",
+  "typed_objects": [
+    {
+      "name": "source_revision_postgresql",
+      "object": {
+        "object_type": "SOURCE_REVISION",
+        "source_id": "document:atlas-runbook",
+        "revision_id": "revision_atlas_runbook_20260801",
+        "content_hash": "sha256:002bbcbf991706bc47c7741142b47f3a043f31b2b62f3ecb0572560523959918",
+        "blob_ref": "urn:shared-mind:blob:atlas-runbook:2026-08-01",
+        "source_locator": "https://example.invalid/atlas/runbook",
+        "title": "Atlas production runbook",
+        "media_type": "text/markdown",
+        "captured_at": "2026-08-01T00:00:00Z",
+        "registered_by": {"actor_id": "agent:ingestor-a", "actor_type": "AGENT"}
+      }
+    },
+    {
+      "name": "assert_postgresql_proposal",
+      "expected_semantic_outcome": "COMMITTED",
+      "object": {
+        "object_type": "PROPOSAL",
+        "proposal_id": "proposal_assert_postgresql_001",
+        "idempotency_key": "atlas-db-postgresql-001",
+        "proposer": {"actor_id": "agent:extractor-a", "actor_type": "AGENT"},
+        "proposed_at": "2026-08-01T00:01:00Z",
+        "base_state_root": null,
+        "versions": {
+          "schema": "1.0.0",
+          "predicate_registry": "1.0.0",
+          "conflict_rules": "conflict-rules@1",
+          "guard_dsl": "guard-dsl@1",
+          "projection": "markdown-projection@1"
+        },
+        "reads": [],
+        "guards": [],
+        "operations": [
+          {
+            "op_id": "operation_assert_postgresql_001",
+            "op": "ASSERT_CLAIM",
+            "claim": {
+              "object_type": "CLAIM",
+              "claim_id": "claim_atlas_postgresql_001",
+              "proposition_hash": "sha256:5d90cdd54e06bfc55017a8b31d2b7d6343815dcac93364d059d0a318f80b6092",
+              "proposition": {
+                "proposition_version": 1,
+                "subject": {"entity_id": "system:atlas", "entity_type": "system"},
+                "predicate": "deployment.database_engine@1",
+                "object": {"kind": "entity", "entity_id": "software:postgresql", "entity_type": "software"},
+                "polarity": "POSITIVE",
+                "scope": {"component": null, "environment": "production", "region": null, "tenant": null},
+                "valid_time": {"from": "2026-08-01T00:00:00Z", "to": null}
+              },
+              "asserted_by": {"actor_id": "agent:extractor-a", "actor_type": "AGENT"},
+              "asserted_at": "2026-08-01T00:01:00Z"
+            },
+            "initial_evidence": [
+              {
+                "object_type": "EVIDENCE_LINK",
+                "evidence_link_id": "evidence_atlas_postgresql_001",
+                "claim_id": "claim_atlas_postgresql_001",
+                "source_revision_id": "revision_atlas_runbook_20260801",
+                "selector": {
+                  "kind": "TEXT_BYTE_RANGE",
+                  "start_byte": 0,
+                  "end_byte": 49,
+                  "excerpt": "Atlas production uses PostgreSQL as its database.",
+                  "excerpt_hash": "sha256:0215a67aeffe6129871a9a129a62f33336dc61299e8862108d281161ea9186a0",
+                  "prefix_hash": null,
+                  "suffix_hash": null
+                },
+                "stance": "SUPPORTS",
+                "interpretation": "DIRECT",
+                "linked_by": {"actor_id": "agent:extractor-a", "actor_type": "AGENT"},
+                "linked_at": "2026-08-01T00:01:00Z"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "assert_mysql_same_interval_proposal",
+      "expected_semantic_outcome": "FACT_CONFLICT",
+      "expected_conflict_kind": "EXCLUSIVE_VALUE_CONFLICT",
+      "object": {
+        "object_type": "PROPOSAL",
+        "proposal_id": "proposal_assert_mysql_0000001",
+        "idempotency_key": "atlas-db-mysql-001",
+        "proposer": {"actor_id": "agent:extractor-b", "actor_type": "AGENT"},
+        "proposed_at": "2026-08-01T00:02:00Z",
+        "base_state_root": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "versions": {
+          "schema": "1.0.0",
+          "predicate_registry": "1.0.0",
+          "conflict_rules": "conflict-rules@1",
+          "guard_dsl": "guard-dsl@1",
+          "projection": "markdown-projection@1"
+        },
+        "reads": [],
+        "guards": [],
+        "operations": [
+          {
+            "op_id": "operation_assert_mysql_0000001",
+            "op": "ASSERT_CLAIM",
+            "claim": {
+              "object_type": "CLAIM",
+              "claim_id": "claim_atlas_mysql_0000001",
+              "proposition_hash": "sha256:e0163d0343cdb56d7d5262ab911b15ef7e68b9ccc6c18340527604645dff8040",
+              "proposition": {
+                "proposition_version": 1,
+                "subject": {"entity_id": "system:atlas", "entity_type": "system"},
+                "predicate": "deployment.database_engine@1",
+                "object": {"kind": "entity", "entity_id": "software:mysql", "entity_type": "software"},
+                "polarity": "POSITIVE",
+                "scope": {"component": null, "environment": "production", "region": null, "tenant": null},
+                "valid_time": {"from": "2026-08-01T00:00:00Z", "to": null}
+              },
+              "asserted_by": {"actor_id": "agent:extractor-b", "actor_type": "AGENT"},
+              "asserted_at": "2026-08-01T00:02:00Z"
+            },
+            "initial_evidence": [
+              {
+                "object_type": "EVIDENCE_LINK",
+                "evidence_link_id": "evidence_atlas_mysql_0000001",
+                "claim_id": "claim_atlas_mysql_0000001",
+                "source_revision_id": "revision_atlas_runbook_20260801",
+                "selector": {
+                  "kind": "TEXT_BYTE_RANGE",
+                  "start_byte": 50,
+                  "end_byte": 94,
+                  "excerpt": "A second section says production uses MySQL.",
+                  "excerpt_hash": "sha256:71b581e7acdc2fd525447ca9d9be11f16fdc1abe5048fe58c4bb43fb90582dc5",
+                  "prefix_hash": null,
+                  "suffix_hash": null
+                },
+                "stance": "SUPPORTS",
+                "interpretation": "DIRECT",
+                "linked_by": {"actor_id": "agent:extractor-b", "actor_type": "AGENT"},
+                "linked_at": "2026-08-01T00:02:00Z"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "stale_supersede_proposal",
+      "expected_semantic_outcome": "TRANSACTION_CONFLICT",
+      "expected_reason_code": "CLAIM_VERSION_MISMATCH",
+      "object": {
+        "object_type": "PROPOSAL",
+        "proposal_id": "proposal_stale_supersede_01",
+        "idempotency_key": "atlas-stale-supersede-001",
+        "proposer": {"actor_id": "agent:resolver-a", "actor_type": "AGENT"},
+        "proposed_at": "2026-08-01T00:03:00Z",
+        "base_state_root": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "versions": {
+          "schema": "1.0.0",
+          "predicate_registry": "1.0.0",
+          "conflict_rules": "conflict-rules@1",
+          "guard_dsl": "guard-dsl@1",
+          "projection": "markdown-projection@1"
+        },
+        "reads": [
+          {
+            "kind": "AGGREGATE",
+            "aggregate_type": "CLAIM",
+            "aggregate_id": "claim_atlas_postgresql_001",
+            "expected_version": 1
+          }
+        ],
+        "guards": [
+          {"op": "CLAIM_STATUS_EQ", "claim_id": "claim_atlas_postgresql_001", "expected_status": "ACTIVE"},
+          {"op": "CLAIM_VERSION_EQ", "claim_id": "claim_atlas_postgresql_001", "expected_version": 1}
+        ],
+        "operations": [
+          {
+            "op_id": "operation_supersede_pg_0001",
+            "op": "SUPERSEDE_CLAIM",
+            "target_claim_id": "claim_atlas_postgresql_001",
+            "replacement_claim": {
+              "object_type": "CLAIM",
+              "claim_id": "claim_atlas_postgresql_002",
+              "proposition_hash": "sha256:5d90cdd54e06bfc55017a8b31d2b7d6343815dcac93364d059d0a318f80b6092",
+              "proposition": {
+                "proposition_version": 1,
+                "subject": {"entity_id": "system:atlas", "entity_type": "system"},
+                "predicate": "deployment.database_engine@1",
+                "object": {"kind": "entity", "entity_id": "software:postgresql", "entity_type": "software"},
+                "polarity": "POSITIVE",
+                "scope": {"component": null, "environment": "production", "region": null, "tenant": null},
+                "valid_time": {"from": "2026-08-01T00:00:00Z", "to": null}
+              },
+              "asserted_by": {"actor_id": "agent:resolver-a", "actor_type": "AGENT"},
+              "asserted_at": "2026-08-01T00:03:00Z"
+            },
+            "initial_evidence": [
+              {
+                "object_type": "EVIDENCE_LINK",
+                "evidence_link_id": "evidence_atlas_postgresql_002",
+                "claim_id": "claim_atlas_postgresql_002",
+                "source_revision_id": "revision_atlas_runbook_20260801",
+                "selector": {
+                  "kind": "TEXT_BYTE_RANGE",
+                  "start_byte": 0,
+                  "end_byte": 49,
+                  "excerpt": "Atlas production uses PostgreSQL as its database.",
+                  "excerpt_hash": "sha256:0215a67aeffe6129871a9a129a62f33336dc61299e8862108d281161ea9186a0",
+                  "prefix_hash": null,
+                  "suffix_hash": null
+                },
+                "stance": "SUPPORTS",
+                "interpretation": "DIRECT",
+                "linked_by": {"actor_id": "agent:resolver-a", "actor_type": "AGENT"},
+                "linked_at": "2026-08-01T00:03:00Z"
+              }
+            ],
+            "rationale": "Normalize the original assertion without changing its semantic value."
+          }
+        ]
+      }
+    }
+  ]
+}
