@@ -154,8 +154,13 @@ class Kernel:
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA foreign_keys = ON")
         self.connection.execute("PRAGMA journal_mode = WAL")
+        self.connection.execute("PRAGMA synchronous = FULL")
+        self.connection.execute("PRAGMA wal_autocheckpoint = 1")
         try:
-            self._create_schema()
+            if self._has_current_schema():
+                self._assert_predicate_registry_pin()
+            else:
+                self._create_schema()
         except Exception:
             self.connection.close()
             raise
@@ -235,9 +240,167 @@ class Kernel:
             """
         )
         self._migrate_schema()
+        self._ensure_indexes()
         self._pin_predicate_registry()
         create_continuity_schema(self.connection)
         self._create_immutability_triggers()
+
+    def _has_current_schema(self) -> bool:
+        required_columns = {
+            "sources": {"revision_id", "content_hash", "document", "content"},
+            "claims": {
+                "claim_id",
+                "proposition_hash",
+                "proposition",
+                "document",
+                "status",
+                "version",
+                "superseded_by",
+            },
+            "evidence": {
+                "evidence_link_id",
+                "claim_id",
+                "source_revision_id",
+                "document",
+            },
+            "conflicts": {
+                "conflict_id",
+                "family_key",
+                "kind",
+                "member_digest",
+                "members",
+                "status",
+                "episode",
+                "version",
+                "resolution",
+                "opened_seq",
+            },
+            "ledger": {
+                "seq",
+                "prev_hash",
+                "entry_hash",
+                "proposal_hash",
+                "proposal",
+                "events",
+                "pre_state_root",
+                "state_root",
+                "committed_at",
+                "document",
+            },
+            "receipts": {
+                "id",
+                "idempotency_key",
+                "proposal_hash",
+                "proposal_id",
+                "outcome",
+                "reason_codes",
+                "ledger_seq",
+                "state_root",
+                "conflict_ids",
+                "proposer",
+                "document",
+                "schema_version",
+            },
+            "kernel_metadata": {"name", "value"},
+            "decision_records": {
+                "decision_id",
+                "status",
+                "version",
+                "replaced_by_decision_id",
+                "document",
+            },
+            "open_questions": {
+                "question_id",
+                "status",
+                "version",
+                "answer",
+                "drop_record",
+                "document",
+            },
+            "work_items": {
+                "work_item_id",
+                "status",
+                "version",
+                "blocker",
+                "updated_at",
+                "document",
+            },
+        }
+        required_triggers = {
+            "ledger_no_update",
+            "ledger_no_delete",
+            "receipts_no_update",
+            "receipts_no_delete",
+            "sources_no_update",
+            "sources_no_delete",
+            "sources_no_duplicate_insert",
+        }
+        tables = {
+            row["name"]
+            for row in self.connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        if not set(required_columns).issubset(tables):
+            return False
+        for table, columns in required_columns.items():
+            actual = {
+                row["name"]
+                for row in self.connection.execute(f"PRAGMA table_info({table})")
+            }
+            if not columns.issubset(actual):
+                return False
+        indexes = {
+            row["name"]
+            for row in self.connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'receipts'"
+            )
+        }
+        if "receipts_idempotency_key_id_idx" not in indexes:
+            return False
+        triggers = {
+            row["name"]
+            for row in self.connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'trigger'"
+            )
+        }
+        if not required_triggers.issubset(triggers):
+            return False
+        if (
+            self.connection.execute(
+                "SELECT 1 FROM kernel_metadata WHERE name = 'predicate_registry'"
+            ).fetchone()
+            is None
+        ):
+            return False
+        return (
+            self.connection.execute(
+                "SELECT 1 FROM receipts "
+                "WHERE document IS NOT NULL AND schema_version IS NULL LIMIT 1"
+            ).fetchone()
+            is None
+        )
+
+    def _assert_predicate_registry_pin(self) -> None:
+        pin = canonical_json(
+            {
+                "version": self.registry["version"],
+                "content_hash": sha256_json(self.registry),
+            }
+        )
+        existing = self.connection.execute(
+            "SELECT value FROM kernel_metadata WHERE name = 'predicate_registry'"
+        ).fetchone()
+        if existing is None or existing["value"] != pin:
+            raise ValidationFailure("PREDICATE_REGISTRY_CONTENT_MISMATCH")
+
+    def _ensure_indexes(self) -> None:
+        self.connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS receipts_idempotency_key_id_idx
+              ON receipts(idempotency_key, id)
+            """
+        )
 
     def _pin_predicate_registry(self) -> None:
         pin = canonical_json(
