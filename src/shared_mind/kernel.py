@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .canonical import canonical_json, sha256_bytes, sha256_json
+from .validation import build_contract_validator
 
 
 @dataclass(frozen=True)
@@ -34,10 +35,26 @@ class TransactionConflict(Exception):
 class Kernel:
     """SQLite implementation of the first Atlas vertical slice."""
 
-    def __init__(self, database: str | Path, registry: dict[str, Any]):
+    SUPPORTED_VERSIONS = {
+        "schema": "1.0.0",
+        "conflict_rules": "conflict-rules@1",
+        "projection": "markdown-projection@1",
+    }
+
+    def __init__(
+        self,
+        database: str | Path,
+        registry: dict[str, Any],
+        *,
+        schema: dict[str, Any] | None = None,
+    ) -> None:
         self.database = str(database)
         self.registry = registry
         self.predicates = {item["key"]: item for item in registry["predicates"]}
+        self.contract_validator = build_contract_validator(schema)
+        registry_errors = list(self.contract_validator.iter_errors(registry))
+        if registry_errors:
+            raise ValueError(f"Invalid predicate registry: {registry_errors[0].message}")
         self.connection = sqlite3.connect(self.database, isolation_level=None)
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA foreign_keys = ON")
@@ -103,6 +120,7 @@ class Kernel:
         )
 
     def register_source(self, source: dict[str, Any], content: bytes) -> None:
+        self._validate_contract_object(source)
         if sha256_bytes(content) != source["content_hash"]:
             raise ValidationFailure("SOURCE_CONTENT_HASH_MISMATCH")
         document = canonical_json(source)
@@ -119,12 +137,7 @@ class Kernel:
 
     def commit(self, proposal: dict[str, Any]) -> Receipt:
         proposal_hash = sha256_json(proposal)
-        key = proposal.get("idempotency_key", "")
-        prior = self.connection.execute("SELECT * FROM receipts WHERE idempotency_key = ?", (key,)).fetchone()
-        if prior:
-            if prior["proposal_hash"] != proposal_hash:
-                return Receipt(proposal.get("proposal_id", ""), "VALIDATION_ERROR", ("IDEMPOTENCY_KEY_REUSE",), None, self.state_root())
-            return self._row_to_receipt(prior)
+        key = proposal.get("idempotency_key", "") if isinstance(proposal, dict) else ""
 
         outcome = "COMMITTED"
         reasons: tuple[str, ...] = ()
@@ -132,7 +145,23 @@ class Kernel:
         ledger_seq: int | None = None
         try:
             self.connection.execute("BEGIN IMMEDIATE")
+            prior = self.connection.execute(
+                "SELECT * FROM receipts WHERE idempotency_key = ?", (key,)
+            ).fetchone()
+            if prior:
+                self.connection.execute("ROLLBACK")
+                if prior["proposal_hash"] != proposal_hash:
+                    return Receipt(
+                        proposal.get("proposal_id", ""),
+                        "VALIDATION_ERROR",
+                        ("IDEMPOTENCY_KEY_REUSE",),
+                        None,
+                        self.state_root(),
+                    )
+                return self._row_to_receipt(prior)
+            self._validate_contract_object(proposal)
             self._validate_versions(proposal)
+            self._validate_required_operation_reads(proposal)
             self._validate_reads_and_guards(proposal)
             events: list[dict[str, Any]] = []
             new_conflicts: list[str] = []
@@ -158,12 +187,26 @@ class Kernel:
             self._insert_receipt(key, proposal_hash, proposal["proposal_id"], outcome, (), ledger_seq, post_root, conflict_ids)
             self.connection.execute("COMMIT")
         except TransactionConflict as exc:
-            self.connection.execute("ROLLBACK")
+            self._rollback_if_needed()
             outcome, reasons = "TRANSACTION_CONFLICT", (exc.code,)
             post_root = self.state_root()
             self._insert_receipt(key, proposal_hash, proposal.get("proposal_id", ""), outcome, reasons, None, post_root, ())
+        except sqlite3.IntegrityError as exc:
+            self._rollback_if_needed()
+            outcome, reasons = "VALIDATION_ERROR", (self._integrity_reason(exc),)
+            post_root = self.state_root()
+            self._insert_receipt(
+                key,
+                proposal_hash,
+                proposal.get("proposal_id", ""),
+                outcome,
+                reasons,
+                None,
+                post_root,
+                (),
+            )
         except (ValidationFailure, KeyError, TypeError, ValueError) as exc:
-            self.connection.execute("ROLLBACK")
+            self._rollback_if_needed()
             code = exc.code if isinstance(exc, ValidationFailure) else "MALFORMED_PROPOSAL"
             outcome, reasons = "VALIDATION_ERROR", (code,)
             post_root = self.state_root()
@@ -181,8 +224,33 @@ class Kernel:
 
     def _validate_versions(self, proposal: dict[str, Any]) -> None:
         versions = proposal["versions"]
+        if versions["schema"] != self.SUPPORTED_VERSIONS["schema"]:
+            raise ValidationFailure("UNSUPPORTED_SCHEMA_VERSION")
         if versions["predicate_registry"] != self.registry["version"]:
             raise ValidationFailure("UNSUPPORTED_PREDICATE_REGISTRY")
+        if versions["conflict_rules"] != self.SUPPORTED_VERSIONS["conflict_rules"]:
+            raise ValidationFailure("UNSUPPORTED_CONFLICT_RULES_VERSION")
+        if versions["guard_dsl"] != self.registry["guard_dsl_version"]:
+            raise ValidationFailure("UNSUPPORTED_GUARD_DSL_VERSION")
+        if versions["projection"] != self.SUPPORTED_VERSIONS["projection"]:
+            raise ValidationFailure("UNSUPPORTED_PROJECTION_VERSION")
+
+    def _validate_contract_object(self, value: dict[str, Any]) -> None:
+        if next(self.contract_validator.iter_errors(value), None) is not None:
+            raise ValidationFailure("SCHEMA_VALIDATION_FAILED")
+
+    def _validate_required_operation_reads(self, proposal: dict[str, Any]) -> None:
+        claim_reads = {
+            read["aggregate_id"]
+            for read in proposal["reads"]
+            if read["kind"] == "AGGREGATE" and read["aggregate_type"] == "CLAIM"
+        }
+        for operation in proposal["operations"]:
+            if (
+                operation["op"] == "SUPERSEDE_CLAIM"
+                and operation["target_claim_id"] not in claim_reads
+            ):
+                raise ValidationFailure("MISSING_REQUIRED_CLAIM_READ")
 
     def _validate_reads_and_guards(self, proposal: dict[str, Any]) -> None:
         for read in proposal.get("reads", []):
@@ -210,13 +278,27 @@ class Kernel:
             target = self.connection.execute("SELECT status FROM claims WHERE claim_id = ?", (operation["target_claim_id"],)).fetchone()
             if not target or target["status"] != "ACTIVE":
                 raise TransactionConflict("CLAIM_STATUS_MISMATCH")
-            self._assert_claim(operation["replacement_claim"], operation["initial_evidence"], events, conflict_ids)
+            self._assert_claim(
+                operation["replacement_claim"],
+                operation["initial_evidence"],
+                events,
+                conflict_ids,
+                ignored_conflict_claim_ids=frozenset({operation["target_claim_id"]}),
+            )
             self.connection.execute("UPDATE claims SET status = 'SUPERSEDED', version = version + 1, superseded_by = ? WHERE claim_id = ?", (operation["replacement_claim"]["claim_id"], operation["target_claim_id"]))
             events.append({"type": "CLAIM_SUPERSEDED", "claim_id": operation["target_claim_id"], "replacement_claim_id": operation["replacement_claim"]["claim_id"]})
         else:
             raise ValidationFailure("UNSUPPORTED_OPERATION")
 
-    def _assert_claim(self, claim: dict[str, Any], evidence: list[dict[str, Any]], events: list[dict[str, Any]], conflict_ids: list[str]) -> None:
+    def _assert_claim(
+        self,
+        claim: dict[str, Any],
+        evidence: list[dict[str, Any]],
+        events: list[dict[str, Any]],
+        conflict_ids: list[str],
+        *,
+        ignored_conflict_claim_ids: frozenset[str] = frozenset(),
+    ) -> None:
         proposition = claim["proposition"]
         if sha256_json(proposition) != claim["proposition_hash"]:
             raise ValidationFailure("PROPOSITION_HASH_MISMATCH")
@@ -235,7 +317,9 @@ class Kernel:
         for link in evidence:
             self._validate_and_insert_evidence(link, claim["claim_id"])
         events.append({"type": "CLAIM_ASSERTED", "claim_id": claim["claim_id"]})
-        for conflict_id in self._open_conflicts(claim, predicate, events):
+        for conflict_id in self._open_conflicts(
+            claim, predicate, events, ignored_conflict_claim_ids
+        ):
             conflict_ids.append(conflict_id)
 
     def _attach_evidence(self, link: dict[str, Any], events: list[dict[str, Any]]) -> None:
@@ -258,12 +342,20 @@ class Kernel:
             raise ValidationFailure("EVIDENCE_SELECTOR_MISMATCH")
         self.connection.execute("INSERT INTO evidence VALUES (?, ?, ?, ?)", (link["evidence_link_id"], claim_id, link["source_revision_id"], canonical_json(link)))
 
-    def _open_conflicts(self, incoming: dict[str, Any], predicate: dict[str, Any], events: list[dict[str, Any]]) -> list[str]:
+    def _open_conflicts(
+        self,
+        incoming: dict[str, Any],
+        predicate: dict[str, Any],
+        events: list[dict[str, Any]],
+        ignored_claim_ids: frozenset[str] = frozenset(),
+    ) -> list[str]:
         opened: list[str] = []
         p = incoming["proposition"]
         family = self._family_key(p, predicate)
         rows = self.connection.execute("SELECT claim_id, proposition FROM claims WHERE status = 'ACTIVE' AND claim_id <> ?", (incoming["claim_id"],)).fetchall()
         for row in rows:
+            if row["claim_id"] in ignored_claim_ids:
+                continue
             other = json.loads(row["proposition"])
             if self._family_key(other, predicate) != family or not self._overlaps(p["valid_time"], other["valid_time"]):
                 continue
@@ -322,3 +414,16 @@ class Kernel:
     @staticmethod
     def _row_to_receipt(row: sqlite3.Row) -> Receipt:
         return Receipt(row["proposal_id"], row["outcome"], tuple(json.loads(row["reason_codes"])), row["ledger_seq"], row["state_root"], tuple(json.loads(row["conflict_ids"])))
+
+    def _rollback_if_needed(self) -> None:
+        if self.connection.in_transaction:
+            self.connection.execute("ROLLBACK")
+
+    @staticmethod
+    def _integrity_reason(error: sqlite3.IntegrityError) -> str:
+        message = str(error)
+        if "UNIQUE constraint failed" in message:
+            return "DUPLICATE_OBJECT_ID"
+        if "FOREIGN KEY constraint failed" in message:
+            return "REFERENCE_NOT_FOUND"
+        return "INTEGRITY_CONSTRAINT_VIOLATION"

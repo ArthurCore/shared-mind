@@ -1,0 +1,35 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+from jsonschema import Draft202012Validator, FormatChecker
+
+
+SCHEMA_FILENAME = "shared-mind-kernel.schema.v1.json"
+
+
+def load_default_schema() -> dict[str, Any]:
+    """Load the v1 contract when running from a source checkout.
+
+    Installed callers may pass an explicit schema to ``Kernel``. Keeping that
+    injection point avoids silently running without validation when the
+    repository-level contract is not present in a built distribution.
+    """
+
+    schema_path = Path(__file__).resolve().parents[2] / "contracts" / SCHEMA_FILENAME
+    if not schema_path.is_file():
+        raise RuntimeError(
+            f"Shared Mind contract schema not found at {schema_path}; pass schema= explicitly"
+        )
+    with schema_path.open("r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def build_contract_validator(
+    schema: dict[str, Any] | None = None,
+) -> Draft202012Validator:
+    contract = schema if schema is not None else load_default_schema()
+    Draft202012Validator.check_schema(contract)
+    return Draft202012Validator(contract, format_checker=FormatChecker())
