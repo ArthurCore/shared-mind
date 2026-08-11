@@ -231,7 +231,8 @@ class InputResourceHardeningTest(unittest.TestCase):
         self.assertTrue(blob.is_symlink())
 
     def _store_snapshot(self) -> dict[str, Any]:
-        with sqlite3.connect(self.workspace.database_path) as connection:
+        connection = sqlite3.connect(self.workspace.database_path)
+        try:
             ledger = int(connection.execute("SELECT COUNT(*) FROM ledger").fetchone()[0])
             receipts = int(
                 connection.execute("SELECT COUNT(*) FROM receipts").fetchone()[0]
@@ -239,6 +240,8 @@ class InputResourceHardeningTest(unittest.TestCase):
             sources = int(
                 connection.execute("SELECT COUNT(*) FROM sources").fetchone()[0]
             )
+        finally:
+            connection.close()
         kernel = self.workspace.open_kernel()
         try:
             state_root = kernel.state_root()
