@@ -1,31 +1,66 @@
 # Shared Mind
 
-Shared Mind is a local-first external memory that lets a new AI session continue
-from a user's sources, evidence, decisions, questions, and work state. Its
-deterministic epistemic transaction kernel is the current implementation layer;
-the continuity records, projections, and handoff interface remain future work.
+Shared Mind is a local-first external memory for carrying sources, evidence,
+claims, decisions, questions, conflicts, and work state across AI sessions. A
+deterministic SQLite ledger owns canonical changes; Markdown, JSON, search, and
+handoff context are reproducible views of that ledger-backed state.
 
-This repository contains the first Atlas vertical slice:
+The current P0 path supports:
 
-- SQLite WAL-backed append-only mutation ledger
-- separate receipts for accepted and rejected commit attempts
-- idempotent `commit(proposal)`
-- Draft 2020-12 runtime validation for sources and proposals
-- exact schema, registry, conflict-rule, guard-DSL, and projection version checks
-- deterministic predicate and evidence validation
-- exclusive-value fact conflict creation
-- kernel-required Claim reads for destructive supersede operations
-- stale aggregate detection as a transaction conflict
-- structured normalization of malformed input and SQLite integrity errors
-- conflict-aware reads that return every active claim and open conflict
+- reproducible local workspace initialization;
+- immutable, content-hashed Markdown and UTF-8 text source revisions;
+- schema-validated, idempotent Proposal commits;
+- factual claims with byte-range evidence;
+- durable fact conflicts and guarded conflict resolution;
+- Decision, OpenQuestion, and WorkItem lifecycle records;
+- ledger verification and deterministic replay;
+- deterministic Markdown/JSON projection and budgeted handoff context; and
+- a non-interactive JSON CLI with stable result codes.
 
-## Layout
+The product boundary and acceptance criteria are defined in the [SRS](docs/SRS.md).
+
+## Quick start
+
+Shared Mind requires Python 3.11 or newer.
+
+```console
+$ python3 -m pip install -e .
+$ shared-mind init ./memory
+$ cd ./memory
+$ shared-mind context --budget-tokens 4096
+```
+
+Every operational CLI response is one JSON document. A newly initialized
+workspace has empty context; add source files beneath its `sources/` directory,
+then submit structured Proposals to accumulate canonical state.
+
+Coding agents should start with the [Coding-agent bootstrap](docs/agent-bootstrap.md).
+It gives the one-command handoff path, the Proposal-only mutation boundary, and
+the projection review workflow.
+
+## Authority model
+
+- Source bytes and their hashes are evidence authority.
+- The append-only operation ledger is change authority.
+- Materialized SQLite tables are replayable current state.
+- `projections/project.md`, `projections/project.json`, and context packs are
+  non-authoritative views.
+- A factual contradiction is preserved as an open `FACT_CONFLICT`; Shared Mind
+  does not claim to decide which assertion is true.
+- A stale destructive Proposal is rejected as `TRANSACTION_CONFLICT` without
+  advancing the ledger.
+
+Canonical state must change through `proposal commit` or the Proposal-backed
+`source add` command. Direct SQLite mutation is outside the public interface.
+
+## Repository layout
 
 ```text
-contracts/              Atlas Predicate Registry v1 and JSON Schema
-src/shared_mind/         kernel implementation
-tests/                   executable vertical-slice conformance tests
-AGENTS.md                invariants for coding agents
+contracts/              Versioned JSON Schema, predicate registry, fixtures
+docs/                    SRS, agent bootstrap, and verification notes
+src/shared_mind/         Kernel, continuity, workspace, CLI, and projections
+tests/                   Executable conformance and regression tests
+AGENTS.md                Contributor invariants
 ```
 
 ## Verify
@@ -35,10 +70,8 @@ python3 contracts/validate_contract.py
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-## Current boundary
+The CLI can also verify that ledger hashes and replayed state agree:
 
-The implementation supports the operations required by the first vertical
-slice: `ASSERT_CLAIM`, `ATTACH_EVIDENCE`, and `SUPERSEDE_CLAIM`. The contract
-also defines ledger-backed source registration, retraction, and conflict
-resolution. Those operations, deterministic replay/projection, continuity
-records, and the CLI are the next implementation slices.
+```console
+$ shared-mind replay --verify
+```
