@@ -6,6 +6,7 @@ import os
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest import mock
 
@@ -398,7 +399,7 @@ class SecurityBoundaryTest(unittest.TestCase):
         self.assertNotIn(secret_value, rendered)
 
     def _canonical_counts(self) -> tuple[int, int]:
-        with sqlite3.connect(self.workspace.database_path) as connection:
+        with closing(sqlite3.connect(self.workspace.database_path)) as connection:
             ledger = int(connection.execute("SELECT COUNT(*) FROM ledger").fetchone()[0])
             receipts = int(
                 connection.execute("SELECT COUNT(*) FROM receipts").fetchone()[0]

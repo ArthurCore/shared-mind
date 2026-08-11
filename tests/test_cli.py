@@ -7,6 +7,7 @@ import os
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 from shared_mind.cli import (
@@ -205,7 +206,7 @@ class SharedMindCliTest(unittest.TestCase):
         self.assertEqual(2, self._database_count("sources"))
         self.assertEqual(3, self._database_count("ledger"))
         database = self.workspace_root / ".shared-mind" / "shared-mind.sqlite3"
-        with sqlite3.connect(database) as connection:
+        with closing(sqlite3.connect(database)) as connection:
             retained_revision = connection.execute(
                 "SELECT source_revision_id FROM evidence "
                 "WHERE evidence_link_id = ?",
@@ -465,7 +466,7 @@ class SharedMindCliTest(unittest.TestCase):
 
     def _database_count(self, table: str) -> int:
         database = self.workspace_root / ".shared-mind" / "shared-mind.sqlite3"
-        with sqlite3.connect(database) as connection:
+        with closing(sqlite3.connect(database)) as connection:
             return int(connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])
 
 
