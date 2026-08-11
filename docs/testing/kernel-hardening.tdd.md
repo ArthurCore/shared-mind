@@ -1,5 +1,10 @@
 # Kernel hardening TDD evidence
 
+> Historical checkpoint: counts, environment notes, and gaps below describe the
+> initial hardening commits through `cf20800`, not the current product status.
+> See [the synchronized SRS](../SRS.md#13-현재-구현-상태) and run the current
+> verification commands for the live baseline.
+
 ## Source and user journeys
 
 No external plan file was used. The journeys came from the SRS-to-runtime audit.
@@ -44,12 +49,14 @@ shared_mind.validation    88%
 
 `pip wheel` built `shared_mind_kernel-0.1.0-py3-none-any.whl` with `--ignore-requires-python` because the local interpreter is Python 3.10 while the project requires Python 3.11+. The wheel contains the runtime contract under `share/shared-mind/contracts/`, and a temporary isolated installation successfully constructed `Kernel` using that packaged schema.
 
-## Known gaps
+## Gaps at that checkpoint
 
 - The local environment has no Python 3.11 interpreter, `ruff`, `pyright`, `build`, or `coverage`; compile checks and wheel construction were used where possible.
 - Global `pip check` reports unrelated pre-existing platform incompatibilities for `grpcio` and `torch`.
-- Rejected idempotency-key reuse attempts still need an append-only receipt history separate from the idempotency mapping.
-- Ledger-backed source registration, remaining mandatory operation guards, collection reads, replay, and continuity records remain future slices.
+- At this checkpoint rejected idempotency-key reuse receipts, ledger-backed
+  source registration, remaining guards/collection reads, replay, and continuity
+  records were not yet implemented. They are covered by the current conformance
+  suite and are no longer live gaps.
 
 ## Local checkpoint commits
 

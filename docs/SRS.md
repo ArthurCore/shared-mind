@@ -2,11 +2,11 @@
 
 | 항목 | 값 |
 |---|---|
-| 문서 버전 | 0.1.1 |
+| 문서 버전 | 1.0.0 |
 | 기준일 | 2026-08-11 |
-| 상태 | 개발 기준선(Baseline) |
+| 상태 | 구현 동기화 기준선(Implemented Baseline) |
 | 대상 저장소 | `ArthurCore/shared-mind` |
-| 구현 기준선 시작 커밋 | `3c3cdf0` (SRS merge 기준선; 이후 hardening은 branch history 참조) |
+| 구현 기준선 | 시작 `3c3cdf0`, 현재 `main`의 계약·conformance suite |
 | 주 독자 | 제품 책임자, 개발자, 코딩 에이전트, 검토자 |
 
 ## 1. 문서의 목적
@@ -321,7 +321,7 @@ Continuity 계층의 최소 연산은 다음과 같다.
 | FR-041 | P0 | ledger hash chain과 entry/state hash를 검증할 수 있어야 한다. | 임의 entry 변조를 탐지하고 손상 위치를 반환함 |
 | FR-042 | P0 | Markdown projection을 결정적으로 생성해야 한다. | 동일 ledger/version에서 byte-identical Markdown 생성 |
 | FR-043 | P0 | projection에는 claim, evidence locator, conflict, decision, question, work item, history link가 포함되어야 한다. | 정보 손실 검사 fixture 통과 |
-| FR-044 | P0 | 다음 AI를 위한 budgeted context pack을 생성해야 한다. | 목적·현재 상태·근거·열린 충돌·질문·다음 작업을 함께 포함함 |
+| FR-044 | P0 | 다음 AI를 위한 budgeted context pack을 생성해야 한다. | 목적 또는 명시적 `purpose_missing`, 현재 상태·근거·열린 충돌·질문·다음 작업을 함께 포함함 |
 | FR-045 | P0 | conflict가 열린 항목은 context에서 단일 확정 사실처럼 표현하면 안 된다. | open-conflict 노출률 100% |
 | FR-046 | P1 | `ripgrep`과 구조화 query로 projection을 검색할 수 있어야 한다. | 핵심 객체 id/제목/predicate/source로 검색 가능 |
 | FR-047 | P1 | projection을 Git으로 추적할 수 있어야 한다. | canonical DB 없이도 사람이 diff를 읽을 수 있고, DB 복원은 ledger로 수행됨 |
@@ -348,7 +348,7 @@ Continuity 계층의 최소 연산은 다음과 같다.
 | NFR-006 | 로컬 우선 | 기본 설정에서 source와 기억은 로컬에 저장되고 외부 전송은 명시적 adapter에서만 일어난다. |
 | NFR-007 | 감사 가능성 | 모든 canonical 변경은 actor, proposal, 결과, 이전/이후 revision을 추적할 수 있어야 한다. |
 | NFR-008 | 성능 | MVP 기준 10만 ledger entry에서 단일 project context 생성 p95 2초 이내를 목표로 한다. 측정 전에는 추정값으로 표시한다. |
-| NFR-009 | Context budget | byte/token budget을 초과하지 않으며 잘린 경우 제외 규칙과 원본 참조를 남긴다. |
+| NFR-009 | Context budget | byte budget은 hard limit으로 지키고, dependency-free token mode는 versioned estimator와 `exact=false`를 명시한다. 모델별 exact tokenizer가 필요한 호출자는 그 결과를 byte limit으로 전달한다. 잘린 경우 제외 규칙과 원본 참조를 남긴다. |
 | NFR-010 | 보안 | path traversal, 임의 파일 읽기, SQL injection을 차단하고 source root 밖 접근을 기본 거부한다. |
 | NFR-011 | 호환성 | schema나 projection 변경은 version을 올리고 migration/replay 경로와 conformance fixture를 제공한다. |
 | NFR-012 | 관측 가능성 | commit/replay/project 실패는 machine-readable reason code와 사람이 이해할 메시지를 함께 제공한다. |
@@ -358,11 +358,11 @@ Continuity 계층의 최소 연산은 다음과 같다.
 ### 12.1 CLI
 
 ```text
-shared-mind init <workspace>
+shared-mind init <workspace> [--purpose TEXT]
 shared-mind source add <path> [--source-id ID]
 shared-mind proposal validate <proposal.json>
 shared-mind proposal commit <proposal.json> --json
-shared-mind context [--project ID] [--subject ID] [--budget-tokens N]
+shared-mind context [--budget-tokens N] [--budget-bytes N]
 shared-mind conflict list [--status OPEN]
 shared-mind conflict resolve <conflict-id> --proposal <proposal.json>
 shared-mind replay --verify
@@ -370,145 +370,139 @@ shared-mind project --format markdown
 ```
 
 CLI는 interactive prompt 없이도 동작해야 하며 성공/실패를 exit code와 JSON으로 제공해야 한다.
+`--project`와 `--subject`는 parser 호환을 위해 예약되어 있으나 현재 workspace
+version에서는 사용 시 `CONTEXT_FILTER_UNSUPPORTED`를 반환하며 조용히 무시하지 않는다.
 
 ### 12.2 Commit 결과
 
 ```text
-COMMITTED
-  { ledger_sequence, state_root, changed_ids }
-
-FACT_CONFLICT
-  { ledger_sequence, state_root, conflict_ids, committed_claim_ids }
-
-TRANSACTION_CONFLICT
-  { failed_reads, failed_guards, current_revisions, rebase_hint }
-
-VALIDATION_ERROR
-  { errors: [{ code, object_path, message }] }
+{
+  ok,
+  code: COMMITTED | FACT_CONFLICT | TRANSACTION_CONFLICT | VALIDATION_ERROR,
+  data: {
+    proposal_id,
+    ledger_sequence,
+    state_root,
+    reason_codes,
+    conflict_ids,
+    decision_receipt
+  }
+}
 ```
 
 `FACT_CONFLICT`는 지식 상태에 기록된 성공 결과다. `TRANSACTION_CONFLICT`와 `VALIDATION_ERROR`는 해당 proposal의 mutation을 ledger에 추가하지 않는다.
+`proposal validate`의 schema 오류는 별도로 `errors[{code, path, message}]`를
+제공한다. `decision_receipt`는 versioned JSON 계약과 일치하는 canonical 문서다.
 
 ## 13. 현재 구현 상태
 
-### 13.1 확인된 구현
+### 13.1 동기화된 구현 기준선
 
-기준선 시작 커밋 `3c3cdf0`과 이후 kernel-hardening 변경에는 다음이 존재한다.
+2026-08-11 현재 write schema는 `1.2.0`, predicate registry는 version
+`1.0.0`과 canonical content hash, conflict rules는 `conflict-rules@1`, guard
+DSL은 `guard-dsl@1`, projection은 `markdown-projection@3`로 고정된다.
+Handoff output은 `handoff-context@2`와 `context-selection@2`를 자체 metadata에
+표시한다.
 
-- SQLite WAL 기반 `Kernel`
-- `sources`, `claims`, `evidence`, `conflicts`, `ledger`, `receipts` table
-- accepted mutation ledger와 rejected receipt의 분리
-- proposal idempotency와 idempotency key 재사용 거부
-- `ASSERT_CLAIM`, `ATTACH_EVIDENCE`, `SUPERSEDE_CLAIM`
-- source content hash와 evidence byte span/excerpt hash 검증
-- predicate registry version 확인
-- runtime Draft 2020-12 source/proposal schema validation
-- schema, predicate registry, conflict rule, guard DSL, projection version 확인
-- claim aggregate version read와 claim status/version guard의 일부
-- `SUPERSEDE_CLAIM`의 target Claim aggregate read 필수화
-- exclusive value 및 opposite polarity 계열 fact conflict 생성
-- supersede target을 replacement의 fact-conflict 후보에서 제외
-- conflict-aware epistemic context read
-- state root 및 ledger previous hash/entry hash 생성
-- malformed proposal과 SQLite integrity error의 reason code 정규화
-- Atlas Predicate Registry v1: 7 predicates
-- typed conformance fixtures 4개, negative schema case 2개, semantic case 2개
-- vertical-slice/hardening unit tests: 12개
+다음 흐름이 production code와 자동 시험에 함께 존재한다.
 
-검증 명령과 2026-08-11 결과:
+- reproducible local workspace, Markdown/UTF-8 ingest, immutable content-addressed revision
+- Proposal-backed source/claim/evidence/conflict/continuity mutation
+- runtime Draft 2020-12 shape validation과 registry-driven semantic validation
+- operation-derived destructive read/guard, collection digest, stale-write rejection
+- fact conflict 보존, resolve/reopen episode, retract/supersede lifecycle
+- DecisionRecord, OpenQuestion, WorkItem lifecycle와 typed reference resolution
+- append-only ledger/receipt/source trigger와 public SQLite write authorizer
+- schema-valid canonical `LedgerEntry`/`DecisionReceipt` document persistence
+- ledger/event/document/hash/digest verifier와 empty-target deterministic replay
+- baseline `3c3cdf0` format의 version-dispatched verify/replay migration
+- deterministic JSON/Markdown projection, history link, budgeted handoff context
+- JSON CLI, one-command agent bootstrap, Git projection review workflow
+- registry content drift, malformed input, corruption, concurrency, fault-injection 시험
+
+검증 명령과 현재 결과는 다음과 같다.
 
 ```bash
 python3 contracts/validate_contract.py
-# OK (Draft 2020-12 + registry): 7 predicates + 4 typed fixtures
-#   + 2 negative cases + 2 semantic cases
+# OK: 7 predicates + 16 typed fixtures + 6 negative cases
+#     + 6 semantic cases + 7 continuity operations
 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
-# Ran 12 tests ... OK
+# Ran 114 tests ... OK
 ```
 
-현재 12개 테스트가 증명하는 범위는 다음과 같다.
+### 13.2 요구사항 추적표
 
-1. 배타적 active claim 두 개를 모두 보존하고 fact conflict를 연다.
-2. stale supersede를 transaction conflict로 거부하고 ledger를 추가하지 않는다.
-3. 동일 proposal retry가 ledger를 중복 추가하지 않는다.
-4. 같은 idempotency key의 다른 payload를 validation error로 거부한다.
-5. runtime schema가 필수 필드 누락, unknown guard, non-object/non-JSON 입력을 거부한다.
-6. schema/registry/conflict-rule/guard-DSL/projection의 미지원 version을 거부한다.
-7. 중복 객체 ID를 구조화된 오류로 반환하고 transaction 전체를 rollback한다.
-8. destructive supersede가 target Claim version read 없이 커밋되지 않는다.
-9. supersede로 비활성화되는 target과 replacement 사이에 잘못된 fact conflict를 열지 않는다.
-
-### 13.2 계약에는 있으나 runtime이 완성하지 않은 부분
-
-| 영역 | 현재 상태 | 필요한 작업 |
+| 요구사항 | 상태 | 주 증거 |
 |---|---|---|
-| `REGISTER_SOURCE_REVISION` | `register_source()` 직접 호출만 존재하며 ledger 밖에서 실행됨 | Proposal operation으로 통합하고 replay 가능하게 변경 |
-| `RETRACT_CLAIM` | schema/계약에는 있으나 runtime 미구현 | 권한/버전 guard와 event/reducer 구현 |
-| `RESOLVE_CONFLICT` | schema/계약에는 있으나 runtime 미구현 | member digest, resolution epoch, reopen lifecycle 구현 |
-| mandatory guards | supersede target Claim read는 필수화했으나 attach/retract/resolve 및 collection precondition은 미완성 | 모든 operation의 필수 read/guard를 유도하고 약화 불가하게 구현 |
-| collection read | schema에는 있으나 runtime 미평가 | family collection digest 및 phantom 감지 구현 |
-| schema validation | source/proposal entry point에서 Draft 2020-12를 강제함 | 상세 object path/message와 registry의 object/qualifier/temporal semantic rule 완성 |
-| registry semantics | subject type/required scope/evidence minimum 일부만 강제 | object type, qualifier, temporal policy, conflict rule 전체 구현 |
-| replay | hash를 쓰지만 ledger reducer/rebuild 명령 없음 | 빈 DB replay, chain/state 검증, corruption report 구현 |
-| projection | 없음 | deterministic JSON/Markdown projector 구현 |
-| context pack | 좁은 `read_epistemic_context()`만 존재 | project handoff용 budgeted context 구현 |
-| continuity records | 없음 | Decision/OpenQuestion/WorkItem schema, operation, projection 구현 |
-| CLI/API | Python class만 존재 | 안정된 public API와 CLI 구현 |
-| concurrency suite | 단일 연결 unit test만 존재 | 다중 연결/프로세스, 24 attach, stale race, fault injection 추가 |
+| FR-001~005 | 완료 | `test_cli`: init, idempotent/large/changed revision, path/media 경계 |
+| FR-010~015 | 완료 | `test_authority_boundary`, `test_concurrency`, `test_kernel_hardening`, `test_registry_pin` |
+| FR-020~026 | 완료 | `test_vertical_slice`, `test_canonical_loop`, `test_integrity_semantics`, 24 attach race |
+| FR-030~033 | 완료 | continuity contract/runtime/kernel lifecycle 및 stale guard 시험 |
+| FR-040~045 | 완료 | replay/corruption/migration/projection/context conformance 시험 |
+| FR-046 | 부분 완료(P1) | Markdown/JSON은 `rg`와 ID/reference 검색 가능; 별도 query command는 미구현 |
+| FR-047, FR-050~052 | 완료 | Git workflow 문서, JSON CLI acceptance, agent bootstrap 시험 |
+| FR-053 | 계획(P1) | local MCP adapter 미구현; CLI/Python 의미론 재사용 예정 |
+| FR-054 | 계획(P2) | 외부 adapter 미구현; core 밖에서만 추가 |
+| NFR-001~007 | 완료 | version/hash pin, append-only receipts, rollback, replay, local-first audit trail |
+| NFR-008 | 목표/미측정 | 100k-entry p95 benchmark는 아직 측정하지 않았으며 성능 주장은 하지 않음 |
+| NFR-009~012 | 완료(아래 제한 포함) | hard byte budget, versioned token estimator, path/SQL boundary, stable CLI codes |
 
-### 13.3 현재 구현의 기술 부채와 주의점
+### 13.3 명시적 제한과 호환성 경계
 
-- 현재 `canonical_json()`은 v1의 제한된 JSON 값에서는 안정적이지만 완전한 RFC 8785 구현으로 검증된 것은 아니다.
-- SQLite table은 코드 경로상 append 방식으로 사용되지만 DB 수준에서 ledger update/delete를 금지하는 방어가 없다.
-- source BLOB이 materialized state root에 포함되지만 source 등록 자체가 ledger 밖에 있어 완전한 replay가 불가능하다.
-- conflict는 OPEN 생성만 지원하며 RESOLVED/REOPENED lifecycle이 없다.
-- 동일 idempotency key의 다른 payload로 생긴 rejected attempt는 현재 primary-key mapping 때문에 별도 receipt history로 남지 않는다.
-- non-JSON 입력은 구조화된 오류로 반환하지만 deterministic proposal hash가 없어 rejected receipt로 영속화하지 못한다.
-- current Atlas registry는 범용 제품 ontology가 아니라 커널 의미론을 검증하는 reference domain이다.
-- 현재 README의 “deterministic epistemic transaction kernel” 설명은 내부 기반에는 맞지만 사용자 제품 전체 설명으로는 너무 좁다.
+- `canonical_json()`은 현재 계약 값 범위에서 deterministic하게 시험되지만 완전한
+  RFC 8785 구현을 표방하지 않는다.
+- `budget_tokens`는 `ceil(utf8_bytes/4)` estimator이며 metadata에
+  `token_estimate_exact=false`를 남긴다. 모델별 hard token 제한은 외부 tokenizer가
+  계산한 byte budget을 사용한다.
+- local public API는 direct DML/DDL을 거부하지만 DB 파일 소유자가 별도 SQLite
+  process로 수행하는 forensic 작업까지 암호학적으로 차단하지 않는다.
+- `3c3cdf0` schema `1.0.0` ledger는 source registration event와 canonical
+  receipt/entry document가
+  없었다. Migration은 기존 source bytes/hash를 검증해 legacy reducer의 기원 상태로
+  사용하고 원래 hash fields를 바꾸지 않는다. Legacy contract document는
+  `*_CONTRACT_INCOMPLETE`로 명시되며 정상 문서처럼 합성하지 않는다.
+- schema `1.1.0`의 full-event ledger는 hash/state replay가 가능하지만 exact
+  persisted contract document 도입 전 row는 동일하게 incomplete로 노출한다.
+- local mode의 actor ID는 감사용으로 보존되지만 외부 인증 identity가 아니다.
+  Remote adapter는 별도의 trusted identity/policy 경계를 제공해야 한다.
+- Atlas registry는 범용 ontology가 아니라 현재 kernel semantics의 reference domain이다.
+- MCP, 외부 adapter, exact model tokenizer, 100k-entry 성능 benchmark는 현재 P0
+  완료 주장에 포함하지 않는다.
 
 ## 14. 개발 로드맵
 
-### Milestone 1 — Canonical loop 완성
+### Milestone 1 — Canonical loop 완성 (완료)
 
 목표: source 등록부터 conflict resolution까지 모든 canonical 변경이 하나의 ledger/replay 모델을 사용한다.
 
-1. runtime 전체 schema validation 도입
-2. `REGISTER_SOURCE_REVISION`을 Proposal operation으로 이동
-3. operation-derived mandatory read/guard 구현
-4. collection digest와 phantom detection 구현
-5. `RETRACT_CLAIM`, `RESOLVE_CONFLICT`, conflict reopen 구현
-6. ledger chain 검증과 deterministic replay 구현
-7. 오류를 안정된 reason code로 정규화
+완료 범위는 runtime schema/semantic validation, Proposal-backed source,
+mandatory read/guard와 collection digest, retract/resolve/reopen, exact ledger
+contract, verifier/replay, baseline migration, stable reason code다.
 
 완료 기준: FR-002~025, FR-040~041 관련 conformance test 통과.
 
-### Milestone 2 — 사용자가 체감하는 end-to-end 기억
+### Milestone 2 — 사용자가 체감하는 end-to-end 기억 (완료)
 
 목표: Markdown/text를 넣고 다음 AI가 이어받는 최초의 제품 흐름을 만든다.
 
-1. workspace/CLI 구현
-2. local Markdown/text ingest
-3. DecisionRecord, OpenQuestion, WorkItem 계약과 reducer 구현
-4. deterministic Markdown/JSON projection 구현
-5. budgeted project context/handoff 생성
-6. Shared Mind 저장소 자체를 dogfood source/project로 사용
+Workspace/CLI, local ingest, 세 continuity record, deterministic projection,
+budgeted context, persisted purpose와 agent bootstrap까지 구현했다. 실제 프로젝트
+dogfooding과 제품 연속성 정량 평가는 계속 수행한다.
 
 완료 기준: 사용자가 `source add` 후 DB를 직접 만지지 않고 context를 생성하며, 새 세션이 목적·결정·질문·다음 작업을 복원한다.
 
-### Milestone 3 — 다중 에이전트 통합
+### Milestone 3 — 다중 에이전트 통합 (부분 완료)
 
 목표: 서로 다른 에이전트가 동일 인터페이스로 읽고 제안한다.
 
-1. agent bootstrap 문서와 JSON contract 안정화
-2. 로컬 MCP adapter
-3. stale proposal rebase 정보와 review workflow
-4. 다중 프로세스 concurrency/fault suite
-5. Git projection commit workflow
+완료: agent bootstrap, JSON CLI/DecisionReceipt contract, concurrency/fault suite,
+Git projection review workflow. 남음: local MCP adapter와 richer rebase hint/query
+surface.
 
 완료 기준: 두 종류 이상의 coding agent가 같은 workspace를 사용하며 silent overwrite가 0건이다.
 
-### Milestone 4 — 선택적 adapter와 검색 확장
+### Milestone 4 — 선택적 adapter와 검색 확장 (계획)
 
 목표: core 의미론을 바꾸지 않고 기존 생태계의 장점을 흡수한다.
 
@@ -519,27 +513,16 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 
 ## 15. 구현 작업 백로그
 
-| 순서 | 작업 ID | 작업 | 선행 작업 | 산출물 |
-|---:|---|---|---|---|
-| 1 | DEV-001 | runtime schema validator | 없음 | validator module + negative fixtures |
-| 2 | DEV-002 | reason code/error path 표준화 | DEV-001 | structured error model |
-| 3 | DEV-003 | source registration operation | DEV-001 | event/reducer/test |
-| 4 | DEV-004 | mandatory guard derivation | DEV-001 | guard planner + tests |
-| 5 | DEV-005 | collection digest/phantom detection | DEV-004 | semantic OCC collection reads |
-| 6 | DEV-006 | retract claim | DEV-004 | lifecycle reducer/tests |
-| 7 | DEV-007 | resolve/reopen conflict | DEV-004 | conflict lifecycle/tests |
-| 8 | DEV-008 | ledger verifier/replay | DEV-003, DEV-006, DEV-007 | replay command + corruption tests |
-| 9 | DEV-009 | deterministic projector foundation | DEV-008 | JSON/Markdown manifest |
-| 10 | DEV-010 | workspace와 CLI | DEV-001 | public commands/JSON outputs |
-| 11 | DEV-011 | Markdown/text ingest | DEV-003, DEV-010 | local source adapter |
-| 12 | DEV-012 | continuity record contract | DEV-001 | Decision/Question/WorkItem schema |
-| 13 | DEV-013 | continuity operations/reducer | DEV-012, DEV-004 | ledger-backed state |
-| 14 | DEV-014 | project Markdown projection | DEV-009, DEV-013 | human-readable wiki/status pages |
-| 15 | DEV-015 | budgeted context pack | DEV-014 | handoff JSON/Markdown |
-| 16 | DEV-016 | concurrency/fault conformance suite | DEV-005~008 | multi-process automated tests |
-| 17 | DEV-017 | agent bootstrap/MCP | DEV-010, DEV-015 | shared agent interface |
-| 18 | DEV-018 | Git projection workflow | DEV-014 | reviewable diff workflow |
-| 19 | DEV-019 | external adapters | DEV-017 | AtomicStrata/Qarinah/SwarmVault adapters |
+| 상태 | 작업 ID | 작업 | 현재 산출물/다음 조건 |
+|---|---|---|---|
+| 완료 | DEV-001~008 | validator, errors, canonical operations, guards, conflict, replay | contract/kernel/conformance suite |
+| 완료 | DEV-009~016 | projector, workspace/CLI, ingest, continuity, context, concurrency | P0 end-to-end path |
+| 부분 | DEV-017 | agent bootstrap/MCP | bootstrap 완료, local MCP 남음 |
+| 완료 | DEV-018 | Git projection workflow | 문서 및 parser-checked commands |
+| 계획 | DEV-019 | external adapters | core 외부 adapter와 atomic failure 시험 필요 |
+| 계획 | DEV-020 | structured query/rebase hints | FR-046/다중 agent review surface |
+| 계획 | DEV-021 | 100k-entry benchmark | NFR-008 p95 측정과 병목 profile |
+| 계획 | DEV-022 | exact-token adapter | tokenizer/version을 명시하는 optional integration |
 
 ## 16. 시험 전략과 합격 기준
 

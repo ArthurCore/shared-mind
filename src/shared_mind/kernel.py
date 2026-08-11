@@ -62,11 +62,11 @@ class Kernel:
     """SQLite implementation of the first Atlas vertical slice."""
 
     SUPPORTED_VERSIONS = {
-        "schema": "1.1.0",
+        "schema": "1.2.0",
         "conflict_rules": "conflict-rules@1",
-        "projection": "markdown-projection@2",
+        "projection": "markdown-projection@3",
     }
-    READABLE_SCHEMA_VERSIONS = frozenset({"1.0.0", "1.1.0"})
+    READABLE_SCHEMA_VERSIONS = frozenset({"1.0.0", "1.1.0", "1.2.0"})
     _RECORD_ID = re.compile(
         r"^[a-z][a-z0-9_]{1,31}_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
     )
@@ -1621,7 +1621,7 @@ class Kernel:
                     )
                     if sha256_json(envelope) != row["entry_hash"]:
                         errors.append(f"ENTRY_HASH_MISMATCH:{seq}")
-                elif schema_version == self.SUPPORTED_VERSIONS["schema"]:
+                elif schema_version in {"1.1.0", self.SUPPORTED_VERSIONS["schema"]}:
                     if proposal["versions"].get(
                         "predicate_registry_hash"
                     ) != sha256_json(self.registry):
@@ -1641,7 +1641,11 @@ class Kernel:
                     ):
                         errors.append(f"LEDGER_EVENT_SCHEMA_INVALID:{seq}")
                     try:
-                        document = json.loads(row["document"])
+                        document = (
+                            json.loads(row["document"])
+                            if row["document"] is not None
+                            else None
+                        )
                         expected_document = {
                             "object_type": "LEDGER_ENTRY",
                             "entry_id": f"ledger_entry_{seq:020d}",
@@ -1656,8 +1660,11 @@ class Kernel:
                             "events": events,
                             "committed_at": row["committed_at"],
                         }
-                        if (
-                            next(
+                        if document is None and schema_version == "1.1.0":
+                            pass
+                        elif (
+                            document is None
+                            or next(
                                 self.ledger_entry_validator.iter_errors(document),
                                 None,
                             )
@@ -1854,7 +1861,7 @@ class Kernel:
                     }
                 )
             )
-            if schema_version == "1.0.0":
+            if schema_version == "1.0.0" or row["document"] is None:
                 target.connection.execute(
                     """INSERT INTO receipts(
                          idempotency_key, proposal_hash, proposal_id, outcome,

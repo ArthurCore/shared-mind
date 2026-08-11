@@ -270,6 +270,10 @@ class SharedMindCliTest(unittest.TestCase):
         self.assertEqual(proposal["proposal_id"], result["data"]["proposal_id"])
         self.assertIsInstance(result["data"]["ledger_sequence"], int)
         self.assertTrue(result["data"]["state_root"].startswith("sha256:"))
+        self.assertEqual(
+            "DECISION_RECEIPT",
+            result["data"]["decision_receipt"]["object_type"],
+        )
 
     def test_fr_051_conflict_list_is_json_and_read_only(self) -> None:
         self.initialize()

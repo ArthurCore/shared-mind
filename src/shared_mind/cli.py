@@ -364,13 +364,17 @@ def _emit_receipt(output: TextIO, receipt: Any) -> int:
 
 
 def _receipt_data(receipt: Any) -> dict[str, Any]:
-    return {
+    data = {
         "proposal_id": receipt.proposal_id,
         "ledger_sequence": receipt.ledger_seq,
         "state_root": receipt.state_root,
         "reason_codes": list(receipt.reason_codes),
         "conflict_ids": list(receipt.conflict_ids),
     }
+    document = getattr(receipt, "document", None)
+    if isinstance(document, dict):
+        data["decision_receipt"] = document
+    return data
 
 
 def _capability_unavailable(output: TextIO, capability: str) -> int:

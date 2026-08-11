@@ -25,7 +25,8 @@ eligible to commit.
 
 1. Recompute every `content_hash`, `excerpt_hash`, `proposition_hash`, collection
    digest, state root, proposal hash, ledger hash, and conflict member digest.
-2. Resolve the predicate from the exact registry version named by the proposal.
+2. Resolve the predicate from the exact registry version and canonical registry
+   content hash named by the proposal.
 3. Enforce predicate subject/object types, allowed scope fields, required
    non-null qualifiers, and temporal policy.
 4. Validate every evidence byte range against the immutable `SourceRevision`;
@@ -56,6 +57,29 @@ The v1 semantic family is computed from the registry's `family_key_fields`.
 For example, `deployment.database_engine@1` is partitioned by subject,
 predicate, and `scope.environment`. The object is intentionally excluded so
 PostgreSQL and MySQL land in the same exclusive-value family.
+
+## Ledger and receipt documents
+
+Write schema `1.2.0` stores a canonical, schema-valid `LedgerEntry` document
+beside normalized SQLite columns. Its `entry_hash` is the SHA-256 digest of
+canonical JSON for exactly this preimage; the hash itself, derived `entry_id`,
+and constant `object_type` are deliberately excluded:
+
+```text
+{
+  seq, prev_hash, proposal_hash, pre_state_root, post_state_root,
+  versions, events, committed_at
+}
+```
+
+The verifier recomputes that preimage and also checks byte-canonical document
+serialization and parity with every normalized column. A `DecisionReceipt`
+records the ledger head before and after evaluation. Accepted outcomes link to
+the exact `LedgerEntry`; rejected outcomes keep identical before/after heads
+and do not advance the ledger. If an attempted value is not a JSON Proposal,
+its stable diagnostic fingerprint occupies `proposal_hash` while invalid or
+missing proposal/idempotency identifiers are represented as JSON `null`, not
+fabricated canonical IDs.
 
 ## Outcome rules
 
@@ -131,8 +155,25 @@ trust their presence alone. The ledger event union includes a replayable event
 for all seven continuity operations. Mutation events carry previous and new
 versions so version progression can be verified during replay.
 
-This is an additive v1 contract extension: existing Atlas source, claim,
-conflict, proposal, ledger, and receipt fixtures remain valid without changes.
+## Version and migration boundary
+
+The current write schema is `1.2.0` and the current projection is
+`markdown-projection@3`. New proposals must also pin the registry content hash.
+Schema `1.0.0` ledgers from baseline commit `3c3cdf0` remain readable through a
+separate legacy envelope/event/state-root reducer. Opening such a database does
+not rewrite its hashed ledger fields. Replay verifies the pre-ledger source
+bytes and content hashes and uses them as the legacy origin state because that
+baseline registered sources outside the ledger.
+
+Schema `1.1.0` full-event rows are readable and replayable, but rows written
+before exact documents were introduced may still have a null document. Legacy
+rows cannot truthfully acquire event-complete `LedgerEntry` or historical
+`DecisionReceipt` documents after the fact. Their document columns therefore
+remain null and public exact-contract access reports
+`LEGACY_*_CONTRACT_INCOMPLETE`; they are never silently presented as current
+contract objects. A current `1.2.0` entry may follow the legacy head, crossing
+from the four-table legacy state-root domain to the continuity-inclusive current
+domain, and the mixed history must replay to the same final root.
 
 ## Validation
 

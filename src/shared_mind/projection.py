@@ -22,15 +22,15 @@ from typing import Any, Iterator, Mapping
 from .canonical import canonical_json, sha256_bytes, sha256_json
 
 
-PROJECTION_VERSION = "markdown-projection@2"
-CONTEXT_PACK_VERSION = "handoff-context@1"
+PROJECTION_VERSION = "markdown-projection@3"
+CONTEXT_PACK_VERSION = "handoff-context@2"
 DEFAULT_CONTEXT_BUDGET_BYTES = 32_000
 TOKEN_BYTES_ESTIMATE = 4
 TOKEN_ESTIMATOR_VERSION = "utf8-bytes-token-estimator@1"
-CONTEXT_SELECTION_RULE_VERSION = "context-selection@1"
+CONTEXT_SELECTION_RULE_VERSION = "context-selection@2"
 CONTEXT_SELECTION_RULE = (
-    "mandatory-purpose;mandatory-open-conflicts;greedy:decisions,open_questions,"
-    "work_items,current_claims;stable-projection-order"
+    "mandatory-purpose,open-conflicts,active-decisions,open-questions,"
+    "actionable-work-items;greedy:current_claims;stable-projection-order"
 )
 
 
@@ -45,7 +45,7 @@ class ContextBudgetError(ProjectionError):
         self.required_bytes = required_bytes
         self.budget_bytes = budget_bytes
         super().__init__(
-            "context budget cannot expose mandatory purpose and open conflicts: "
+            "context budget cannot expose mandatory purpose, continuity, and open conflicts: "
             f"requires {required_bytes} bytes, budget is {budget_bytes} bytes"
         )
 
@@ -131,9 +131,6 @@ def build_context_pack(
     )
 
     sections: tuple[tuple[str, list[dict[str, Any]], str], ...] = (
-        ("decisions", decisions, "project.json#/continuity/decisions"),
-        ("open_questions", questions, "project.json#/continuity/questions"),
-        ("work_items", work_items, "project.json#/continuity/work_items"),
         ("current_claims", current_claims, "project.json#/claims"),
     )
     pack: dict[str, Any] = {
@@ -144,9 +141,9 @@ def build_context_pack(
         "purpose": purpose,
         "purpose_missing": purpose is None,
         "open_conflicts": open_conflicts,
-        "decisions": [],
-        "open_questions": [],
-        "work_items": [],
+        "decisions": decisions,
+        "open_questions": questions,
+        "work_items": work_items,
         "current_claims": [],
         "truncation": _truncation_metadata(
             effective_budget,
@@ -224,7 +221,7 @@ def _build_projection(connection: sqlite3.Connection) -> dict[str, Any]:
             if isinstance(proposal, Mapping)
             else None
         )
-        if schema_version != "1.0.0" and not isinstance(
+        if schema_version not in {"1.0.0", "1.1.0"} and not isinstance(
             ledger_document, Mapping
         ):
             raise ProjectionError(
@@ -242,7 +239,8 @@ def _build_projection(connection: sqlite3.Connection) -> dict[str, Any]:
                 "proposal": proposal,
                 "events": events,
                 "ledger_entry": ledger_document,
-                "legacy_contract_incomplete": schema_version == "1.0.0",
+                "legacy_contract_incomplete": schema_version in {"1.0.0", "1.1.0"}
+                and ledger_document is None,
                 "pre_state_root": row.get("pre_state_root"),
                 "state_root": row["state_root"],
                 "committed_at": row.get("committed_at"),

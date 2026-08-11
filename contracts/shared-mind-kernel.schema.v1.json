@@ -915,7 +915,7 @@
         {
           "if": {
             "required": ["schema"],
-            "properties": {"schema": {"const": "1.1.0"}}
+            "properties": {"schema": {"enum": ["1.1.0", "1.2.0"]}}
           },
           "then": {"required": ["predicate_registry_hash"]}
         }

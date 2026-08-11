@@ -10,6 +10,7 @@ from typing import Any
 
 from shared_mind import Kernel
 from shared_mind.canonical import canonical_json, sha256_bytes, sha256_json
+from shared_mind.kernel import ValidationFailure
 from shared_mind.projection import project_json
 
 
@@ -76,7 +77,7 @@ class LegacyMigrationConformanceTest(unittest.TestCase):
             f"schema {BASELINE_SCHEMA_VERSION}: {verification['errors']}",
         )
         projection = json.loads(project_json(kernel))
-        self.assertEqual("markdown-projection@2", projection["projection_version"])
+        self.assertEqual("markdown-projection@3", projection["projection_version"])
         self.assertEqual(kernel.state_root(), projection["state_root"])
         replayed = kernel.replay(self.replay_database)
         self.addCleanup(replayed.close)
@@ -119,6 +120,64 @@ class LegacyMigrationConformanceTest(unittest.TestCase):
         self.addCleanup(replayed.close)
         self.assertEqual(kernel.state_root(), replayed.state_root())
         self.assertTrue(replayed.verify_ledger()["valid"])
+
+    def test_schema_1_1_full_events_remain_readable_without_exact_documents(
+        self,
+    ) -> None:
+        database = Path(self.temp.name) / "schema-1.1.sqlite3"
+        kernel = Kernel(database, self.registry)
+        source = copy.deepcopy(self.objects["source_revision_postgresql"])
+        content = (ROOT / "contracts" / "atlas-runbook.fixture.md").read_bytes()
+        kernel.register_source(source, content)
+        row = kernel.connection.execute(
+            "SELECT * FROM ledger WHERE seq = 1"
+        ).fetchone()
+        proposal = json.loads(row["proposal"])
+        proposal["versions"]["schema"] = "1.1.0"
+        proposal["versions"]["projection"] = "markdown-projection@2"
+        events = json.loads(row["events"])
+        proposal_hash = sha256_json(proposal)
+        entry_hash = sha256_json(
+            Kernel._ledger_envelope(
+                seq=1,
+                prev_hash=None,
+                proposal_hash=proposal_hash,
+                pre_state_root=row["pre_state_root"],
+                post_state_root=row["state_root"],
+                versions=proposal["versions"],
+                events=events,
+                committed_at=row["committed_at"],
+            )
+        )
+        with kernel._authorized_writes():
+            kernel.connection.execute("DROP TRIGGER ledger_no_update")
+            kernel.connection.execute("DROP TRIGGER receipts_no_update")
+            kernel.connection.execute(
+                """UPDATE ledger
+                   SET proposal = ?, proposal_hash = ?, entry_hash = ?, document = NULL
+                   WHERE seq = 1""",
+                (canonical_json(proposal), proposal_hash, entry_hash),
+            )
+            kernel.connection.execute(
+                "UPDATE receipts SET proposal_hash = ?, document = NULL",
+                (proposal_hash,),
+            )
+        kernel.close()
+
+        reopened = Kernel(database, self.registry)
+        self.addCleanup(reopened.close)
+        verification = reopened.verify_ledger()
+        replayed = reopened.replay(Path(self.temp.name) / "schema-1.1-replay.sqlite3")
+        self.addCleanup(replayed.close)
+
+        self.assertTrue(verification["valid"], verification["errors"])
+        self.assertEqual(reopened.state_root(), replayed.state_root())
+        self.assertTrue(replayed.verify_ledger()["valid"])
+        with self.assertRaises(ValidationFailure) as raised:
+            reopened.ledger_entries()
+        self.assertEqual(
+            "LEGACY_LEDGER_CONTRACT_INCOMPLETE:1", raised.exception.code
+        )
 
     def _write_baseline_database(self) -> dict[str, Any]:
         """Write the on-disk schema and hash envelope used at commit 3c3cdf0."""

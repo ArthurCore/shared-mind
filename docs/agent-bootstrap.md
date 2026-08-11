@@ -19,9 +19,15 @@ conflicts and their member claims, active decisions, open questions, actionable
 work items, the ledger sequence, the state root, and truncation metadata.
 
 If the response is `CONTEXT_BUDGET_TOO_SMALL`, increase the budget. Shared Mind
-will not hide an open conflict merely to fit a requested budget. If truncation
+will not hide an open conflict, active decision, open question, or actionable
+work item merely to fit a requested budget. If truncation
 metadata lists omitted records, follow its projection references before making
 a decision that depends on them.
+
+`--budget-tokens` uses the deterministic estimator declared in truncation
+metadata and reports `token_estimate_exact: false`. For a hard model-specific
+token ceiling, run that model's pinned tokenizer externally and pass the safe
+result through `--budget-bytes`.
 
 For a new workspace, initialize it once:
 

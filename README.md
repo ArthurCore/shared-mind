@@ -33,6 +33,9 @@ $ shared-mind context --budget-tokens 4096
 Every operational CLI response is one JSON document. A newly initialized
 workspace has empty context; add source files beneath its `sources/` directory,
 then submit structured Proposals to accumulate canonical state.
+`--budget-bytes` is a hard limit. Dependency-free `--budget-tokens` uses the
+versioned estimator reported in the context metadata with `exact: false`; use a
+model tokenizer to derive a byte limit when exact model accounting is required.
 
 Coding agents should start with the [Coding-agent bootstrap](docs/agent-bootstrap.md).
 It gives the one-command handoff path, the Proposal-only mutation boundary, and
@@ -52,6 +55,8 @@ the projection review workflow.
 
 Canonical state must change through `proposal commit` or the Proposal-backed
 `source add` command. Direct SQLite mutation is outside the public interface.
+The in-process SQLite authorizer blocks public DML/DDL; a database file owner
+performing external forensic SQL remains outside this local trust boundary.
 
 ## Repository layout
 

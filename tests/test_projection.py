@@ -63,7 +63,7 @@ class DeterministicProjectionTest(unittest.TestCase):
         mysql_claim_id = self.objects["assert_mysql_same_interval_proposal"][
             "operations"
         ][0]["claim"]["claim_id"]
-        self.assertEqual("markdown-projection@2", projection["projection_version"])
+        self.assertEqual("markdown-projection@3", projection["projection_version"])
         self.assertEqual(3, projection["ledger"]["head_sequence"])
         self.assertEqual(self.kernel.state_root(), projection["state_root"])
         self.assertEqual(
@@ -317,8 +317,8 @@ class DeterministicProjectionTest(unittest.TestCase):
             first["truncation"]["references"][0]["projection_ref"],
         )
         self.assertEqual(len(encoded), first["truncation"]["rendered_bytes"])
-        self.assertEqual("context-selection@1", first["truncation"]["selection_rule_version"])
-        self.assertIn("mandatory-open-conflicts", first["truncation"]["selection_rule"])
+        self.assertEqual("context-selection@2", first["truncation"]["selection_rule_version"])
+        self.assertIn("open-conflicts", first["truncation"]["selection_rule"])
         for reference in first["truncation"]["references"]:
             self._resolve_pointer(
                 json.loads(project_json(self.kernel)), reference["projection_ref"]
@@ -341,6 +341,49 @@ class DeterministicProjectionTest(unittest.TestCase):
         self.assertFalse(supplied["purpose_missing"])
         self.assertIsNone(missing["purpose"])
         self.assertTrue(missing["purpose_missing"])
+
+    def test_context_never_truncates_active_continuity_records(self) -> None:
+        with self.kernel._authorized_writes():
+            self.kernel.connection.execute(
+                "INSERT INTO decision_records VALUES (?, ?, ?, ?, ?)",
+                (
+                    "decision_mandatory_1",
+                    "ACTIVE",
+                    1,
+                    None,
+                    '{"decision_id":"decision_mandatory_1","status":"ACTIVE","title":"Keep handoff state","version":1}',
+                ),
+            )
+            self.kernel.connection.execute(
+                "INSERT INTO open_questions VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    "question_mandatory_1",
+                    "OPEN",
+                    1,
+                    None,
+                    None,
+                    '{"question":"What remains?","question_id":"question_mandatory_1","status":"OPEN","version":1}',
+                ),
+            )
+            self.kernel.connection.execute(
+                "INSERT INTO work_items VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    "work_mandatory_1",
+                    "BLOCKED",
+                    1,
+                    "Need a decision",
+                    "2026-08-11T00:00:00Z",
+                    '{"blocker":"Need a decision","description":"Finish handoff","status":"BLOCKED","version":1,"work_item_id":"work_mandatory_1"}',
+                ),
+            )
+
+        context = build_context_pack(self.kernel, budget_bytes=8_000)
+
+        self.assertEqual(1, len(context["decisions"]))
+        self.assertEqual(1, len(context["open_questions"]))
+        self.assertEqual(1, len(context["work_items"]))
+        with self.assertRaises(ContextBudgetError):
+            build_context_pack(self.kernel, budget_bytes=1_500)
 
     def test_token_budget_uses_a_declared_deterministic_estimator(self) -> None:
         self.kernel.commit(self.objects["assert_postgresql_proposal"])
