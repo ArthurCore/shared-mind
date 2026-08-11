@@ -1,0 +1,419 @@
+{
+  "scenario_version": "product-continuity-scenario@1",
+  "scenario_id": "atlas-continuity-golden-v1",
+  "description": "A context-only handoff must preserve purpose, grounded settled knowledge, unresolved contradiction, and actionable continuity.",
+  "response_schema": "product-continuity-response.schema.v1.json",
+  "metrics_schema": "product-continuity-metrics.schema.v1.json",
+  "report_schema": "product-continuity-report.schema.v1.json",
+  "execution_policy": {
+    "default_mode": "OFFLINE_GOLDEN",
+    "network_allowed_in_tests": false,
+    "live_client": {
+      "enabled_by_default": false,
+      "requires_explicit_opt_in": true,
+      "environment_variable": "SHARED_MIND_PRODUCT_CONTINUITY_LIVE"
+    }
+  },
+  "context": {
+    "context_pack_version": "handoff-context@2",
+    "projection_version": "markdown-projection@3",
+    "ledger_seq": 9,
+    "state_root": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "purpose": "Preserve Atlas database migration reasoning so the next agent can continue without treating an unresolved engine conflict as settled.",
+    "purpose_missing": false,
+    "current_claims": [
+      {
+        "claim_id": "claim_atlas_backup_verified_001",
+        "status": "ACTIVE",
+        "version": 1,
+        "proposition_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "proposition": {
+          "subject": "system:atlas",
+          "predicate": "operations.backup_verified@1",
+          "object": true,
+          "scope": {"environment": "production"}
+        },
+        "evidence": [
+          {
+            "evidence_link_id": "evidence_atlas_backup_verified_001",
+            "source_revision_id": "revision_atlas_runbook_20260801",
+            "stance": "SUPPORTS",
+            "selector": {
+              "start_byte": 95,
+              "end_byte": 143,
+              "excerpt_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+            },
+            "projection_ref": "project.json#/evidence/2"
+          }
+        ],
+        "projection_ref": "project.json#/claims/2",
+        "history_sequences": [4],
+        "history_refs": ["project.json#/ledger/entries/3"]
+      }
+    ],
+    "open_conflicts": [
+      {
+        "conflict_id": "conflict_atlas_database_engine_001",
+        "kind": "EXCLUSIVE_VALUE_CONFLICT",
+        "status": "OPEN",
+        "episode": 1,
+        "member_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "members": [
+          {
+            "claim_id": "claim_atlas_mysql_0000001",
+            "status": "ACTIVE",
+            "version": 1,
+            "proposition_hash": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+            "proposition": {
+              "subject": "system:atlas",
+              "predicate": "deployment.database_engine@1",
+              "object": "software:mysql",
+              "scope": {"environment": "production"}
+            },
+            "evidence": [
+              {
+                "evidence_link_id": "evidence_atlas_mysql_0000001",
+                "source_revision_id": "revision_atlas_runbook_20260801",
+                "stance": "SUPPORTS",
+                "selector": {
+                  "start_byte": 50,
+                  "end_byte": 94,
+                  "excerpt_hash": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+                },
+                "projection_ref": "project.json#/evidence/0"
+              }
+            ],
+            "projection_ref": "project.json#/claims/0",
+            "history_sequences": [3],
+            "history_refs": ["project.json#/ledger/entries/2"]
+          },
+          {
+            "claim_id": "claim_atlas_postgresql_001",
+            "status": "ACTIVE",
+            "version": 1,
+            "proposition_hash": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+            "proposition": {
+              "subject": "system:atlas",
+              "predicate": "deployment.database_engine@1",
+              "object": "software:postgresql",
+              "scope": {"environment": "production"}
+            },
+            "evidence": [
+              {
+                "evidence_link_id": "evidence_atlas_postgresql_001",
+                "source_revision_id": "revision_atlas_runbook_20260801",
+                "stance": "SUPPORTS",
+                "selector": {
+                  "start_byte": 0,
+                  "end_byte": 49,
+                  "excerpt_hash": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+                },
+                "projection_ref": "project.json#/evidence/1"
+              }
+            ],
+            "projection_ref": "project.json#/claims/1",
+            "history_sequences": [2],
+            "history_refs": ["project.json#/ledger/entries/1"]
+          }
+        ],
+        "projection_ref": "project.json#/conflicts/0",
+        "history_sequences": [3],
+        "history_refs": ["project.json#/ledger/entries/2"]
+      }
+    ],
+    "decisions": [
+      {
+        "table": "decision_records",
+        "document": {
+          "decision_id": "decision_atlas_database_strategy_001",
+          "title": "Keep PostgreSQL until migration readiness is reviewed",
+          "conclusion": "Do not cut over the production database yet.",
+          "rationale": "The migration window is unapproved and the active database-engine claims remain in conflict.",
+          "status": "ACTIVE",
+          "version": 1
+        },
+        "projection_ref": "project.json#/continuity/decisions/0",
+        "history_sequences": [5],
+        "history_refs": ["project.json#/ledger/entries/4"]
+      }
+    ],
+    "open_questions": [
+      {
+        "table": "open_questions",
+        "document": {
+          "question_id": "question_atlas_cutover_window_001",
+          "question": "Which maintenance window is approved for the database cutover?",
+          "status": "OPEN",
+          "version": 1
+        },
+        "projection_ref": "project.json#/continuity/questions/0",
+        "history_sequences": [6],
+        "history_refs": ["project.json#/ledger/entries/5"]
+      }
+    ],
+    "work_items": [
+      {
+        "table": "work_items",
+        "document": {
+          "work_item_id": "workitem_prepare_atlas_migration_001",
+          "description": "Validate the migration runbook and obtain an approved cutover window.",
+          "status": "DOING",
+          "version": 2,
+          "blocker": null
+        },
+        "projection_ref": "project.json#/continuity/work_items/0",
+        "history_sequences": [7, 9],
+        "history_refs": [
+          "project.json#/ledger/entries/6",
+          "project.json#/ledger/entries/8"
+        ]
+      }
+    ],
+    "truncation": {
+      "truncated": false,
+      "budget_bytes": 32000,
+      "rendered_bytes": 9720,
+      "estimated_tokens": 2430,
+      "token_estimator_version": "utf8-bytes-token-estimator@1",
+      "token_estimate_exact": false
+    }
+  },
+  "expected_response": {
+    "scenario_id": "atlas-continuity-golden-v1",
+    "project_purpose": "Preserve Atlas database migration reasoning so the next agent can continue without treating an unresolved engine conflict as settled.",
+    "current_decisions": [
+      {
+        "decision_id": "decision_atlas_database_strategy_001",
+        "title": "Keep PostgreSQL until migration readiness is reviewed",
+        "conclusion": "Do not cut over the production database yet.",
+        "rationale": "The migration window is unapproved and the active database-engine claims remain in conflict."
+      }
+    ],
+    "settled_claims": [
+      {
+        "claim_id": "claim_atlas_backup_verified_001",
+        "summary": "The Atlas production backup is verified.",
+        "evidence_locators": [
+          {
+            "evidence_link_id": "evidence_atlas_backup_verified_001",
+            "source_revision_id": "revision_atlas_runbook_20260801",
+            "start_byte": 95,
+            "end_byte": 143,
+            "excerpt_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+          }
+        ]
+      }
+    ],
+    "open_conflicts": [
+      {
+        "conflict_id": "conflict_atlas_database_engine_001",
+        "status": "OPEN",
+        "member_claims": [
+          {
+            "claim_id": "claim_atlas_mysql_0000001",
+            "summary": "Atlas production uses MySQL."
+          },
+          {
+            "claim_id": "claim_atlas_postgresql_001",
+            "summary": "Atlas production uses PostgreSQL."
+          }
+        ]
+      }
+    ],
+    "open_questions": [
+      {
+        "question_id": "question_atlas_cutover_window_001",
+        "question": "Which maintenance window is approved for the database cutover?"
+      }
+    ],
+    "actionable_work_items": [
+      {
+        "work_item_id": "workitem_prepare_atlas_migration_001",
+        "status": "DOING",
+        "description": "Validate the migration runbook and obtain an approved cutover window."
+      }
+    ]
+  },
+  "adversarial_cases": [
+    {
+      "name": "false_settled_conflict_member",
+      "expected_penalty_code": "FALSE_SETTLED_CONFLICT_MEMBER",
+      "response": {
+        "scenario_id": "atlas-continuity-golden-v1",
+        "project_purpose": "Preserve Atlas database migration reasoning so the next agent can continue without treating an unresolved engine conflict as settled.",
+        "current_decisions": [
+          {
+            "decision_id": "decision_atlas_database_strategy_001",
+            "title": "Keep PostgreSQL until migration readiness is reviewed",
+            "conclusion": "Do not cut over the production database yet.",
+            "rationale": "The migration window is unapproved and the active database-engine claims remain in conflict."
+          }
+        ],
+        "settled_claims": [
+          {
+            "claim_id": "claim_atlas_backup_verified_001",
+            "summary": "The Atlas production backup is verified.",
+            "evidence_locators": [
+              {
+                "evidence_link_id": "evidence_atlas_backup_verified_001",
+                "source_revision_id": "revision_atlas_runbook_20260801",
+                "start_byte": 95,
+                "end_byte": 143,
+                "excerpt_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+              }
+            ]
+          },
+          {
+            "claim_id": "claim_atlas_mysql_0000001",
+            "summary": "Atlas production definitively uses MySQL.",
+            "evidence_locators": [
+              {
+                "evidence_link_id": "evidence_atlas_mysql_0000001",
+                "source_revision_id": "revision_atlas_runbook_20260801",
+                "start_byte": 50,
+                "end_byte": 94,
+                "excerpt_hash": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+              }
+            ]
+          }
+        ],
+        "open_conflicts": [
+          {
+            "conflict_id": "conflict_atlas_database_engine_001",
+            "status": "OPEN",
+            "member_claims": [
+              {
+                "claim_id": "claim_atlas_mysql_0000001",
+                "summary": "Atlas production uses MySQL."
+              },
+              {
+                "claim_id": "claim_atlas_postgresql_001",
+                "summary": "Atlas production uses PostgreSQL."
+              }
+            ]
+          }
+        ],
+        "open_questions": [
+          {
+            "question_id": "question_atlas_cutover_window_001",
+            "question": "Which maintenance window is approved for the database cutover?"
+          }
+        ],
+        "actionable_work_items": [
+          {
+            "work_item_id": "workitem_prepare_atlas_migration_001",
+            "status": "DOING",
+            "description": "Validate the migration runbook and obtain an approved cutover window."
+          }
+        ]
+      }
+    },
+    {
+      "name": "hallucinated_question_id",
+      "expected_penalty_code": "HALLUCINATED_ID",
+      "response": {
+        "scenario_id": "atlas-continuity-golden-v1",
+        "project_purpose": "Preserve Atlas database migration reasoning so the next agent can continue without treating an unresolved engine conflict as settled.",
+        "current_decisions": [
+          {
+            "decision_id": "decision_atlas_database_strategy_001",
+            "title": "Keep PostgreSQL until migration readiness is reviewed",
+            "conclusion": "Do not cut over the production database yet.",
+            "rationale": "The migration window is unapproved and the active database-engine claims remain in conflict."
+          }
+        ],
+        "settled_claims": [
+          {
+            "claim_id": "claim_atlas_backup_verified_001",
+            "summary": "The Atlas production backup is verified.",
+            "evidence_locators": [
+              {
+                "evidence_link_id": "evidence_atlas_backup_verified_001",
+                "source_revision_id": "revision_atlas_runbook_20260801",
+                "start_byte": 95,
+                "end_byte": 143,
+                "excerpt_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+              }
+            ]
+          }
+        ],
+        "open_conflicts": [
+          {
+            "conflict_id": "conflict_atlas_database_engine_001",
+            "status": "OPEN",
+            "member_claims": [
+              {
+                "claim_id": "claim_atlas_mysql_0000001",
+                "summary": "Atlas production uses MySQL."
+              },
+              {
+                "claim_id": "claim_atlas_postgresql_001",
+                "summary": "Atlas production uses PostgreSQL."
+              }
+            ]
+          }
+        ],
+        "open_questions": [
+          {
+            "question_id": "question_atlas_cutover_window_001",
+            "question": "Which maintenance window is approved for the database cutover?"
+          },
+          {
+            "question_id": "question_hallucinated_followup_001",
+            "question": "Has the fictional secondary region approved the cutover?"
+          }
+        ],
+        "actionable_work_items": [
+          {
+            "work_item_id": "workitem_prepare_atlas_migration_001",
+            "status": "DOING",
+            "description": "Validate the migration runbook and obtain an approved cutover window."
+          }
+        ]
+      }
+    }
+  ],
+  "scoring": {
+    "maximum_score": 100,
+    "passing_score": 100,
+    "dimensions": {
+      "project_purpose": 10,
+      "decision_and_rationale": 20,
+      "settled_claim_and_evidence_locator": 20,
+      "open_conflict_and_all_members": 25,
+      "open_question": 10,
+      "actionable_work": 15
+    },
+    "penalties": {
+      "FALSE_SETTLED_CONFLICT_MEMBER": 50,
+      "HALLUCINATED_ID": 25,
+      "OMITTED_CONFLICT_MEMBER": 25
+    },
+    "required_fact_accuracy": 1.0,
+    "required_open_conflict_member_recall": 1.0
+  },
+  "metrics": {
+    "metric_version": "product-continuity-metrics@1",
+    "minimum_reduction_fraction": 0.5,
+    "manual_baseline": {
+      "bytes": 24000,
+      "tokens": 6000,
+      "time_seconds": 120.0
+    },
+    "context_only": {
+      "bytes": 9720,
+      "tokens": 2430,
+      "time_seconds": 45.0
+    },
+    "quality": {
+      "manual_baseline": {
+        "fact_accuracy": 1.0,
+        "open_conflict_member_recall": 1.0
+      },
+      "context_only": {
+        "fact_accuracy": 1.0,
+        "open_conflict_member_recall": 1.0
+      }
+    }
+  }
+}

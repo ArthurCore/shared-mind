@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shared-mind.local/evals/product-continuity/metrics/v1",
+  "title": "Shared Mind product-continuity comparison metrics v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "metric_version",
+    "minimum_reduction_fraction",
+    "manual_baseline",
+    "context_only",
+    "quality"
+  ],
+  "properties": {
+    "metric_version": {"const": "product-continuity-metrics@1"},
+    "minimum_reduction_fraction": {"const": 0.5},
+    "manual_baseline": {"$ref": "#/$defs/ResourceMetrics"},
+    "context_only": {"$ref": "#/$defs/ResourceMetrics"},
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manual_baseline", "context_only"],
+      "properties": {
+        "manual_baseline": {"$ref": "#/$defs/QualityMetrics"},
+        "context_only": {"$ref": "#/$defs/QualityMetrics"}
+      }
+    }
+  },
+  "$defs": {
+    "ResourceMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bytes", "tokens", "time_seconds"],
+      "properties": {
+        "bytes": {"type": "integer", "minimum": 1},
+        "tokens": {"type": "integer", "minimum": 1},
+        "time_seconds": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "QualityMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fact_accuracy", "open_conflict_member_recall"],
+      "properties": {
+        "fact_accuracy": {"type": "number", "minimum": 0, "maximum": 1},
+        "open_conflict_member_recall": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    }
+  }
+}

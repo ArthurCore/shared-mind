@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shared-mind.local/evals/product-continuity/response/v1",
+  "title": "Shared Mind product-continuity response v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scenario_id",
+    "project_purpose",
+    "current_decisions",
+    "settled_claims",
+    "open_conflicts",
+    "open_questions",
+    "actionable_work_items"
+  ],
+  "properties": {
+    "scenario_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$"
+    },
+    "project_purpose": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "current_decisions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/DecisionAnswer"}
+    },
+    "settled_claims": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/SettledClaimAnswer"}
+    },
+    "open_conflicts": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/OpenConflictAnswer"}
+    },
+    "open_questions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/OpenQuestionAnswer"}
+    },
+    "actionable_work_items": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/WorkItemAnswer"}
+    }
+  },
+  "$defs": {
+    "RecordId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{1,31}_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+    },
+    "Hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "DecisionAnswer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision_id", "title", "conclusion", "rationale"],
+      "properties": {
+        "decision_id": {"$ref": "#/$defs/RecordId"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 512},
+        "conclusion": {"type": "string", "minLength": 1, "maxLength": 8192},
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 8192}
+      }
+    },
+    "EvidenceLocatorAnswer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_link_id",
+        "source_revision_id",
+        "start_byte",
+        "end_byte",
+        "excerpt_hash"
+      ],
+      "properties": {
+        "evidence_link_id": {"$ref": "#/$defs/RecordId"},
+        "source_revision_id": {"$ref": "#/$defs/RecordId"},
+        "start_byte": {"type": "integer", "minimum": 0},
+        "end_byte": {"type": "integer", "minimum": 1},
+        "excerpt_hash": {"$ref": "#/$defs/Hash"}
+      }
+    },
+    "SettledClaimAnswer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim_id", "summary", "evidence_locators"],
+      "properties": {
+        "claim_id": {"$ref": "#/$defs/RecordId"},
+        "summary": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "evidence_locators": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/EvidenceLocatorAnswer"}
+        }
+      }
+    },
+    "ConflictMemberAnswer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim_id", "summary"],
+      "properties": {
+        "claim_id": {"$ref": "#/$defs/RecordId"},
+        "summary": {"type": "string", "minLength": 1, "maxLength": 4096}
+      }
+    },
+    "OpenConflictAnswer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conflict_id", "status", "member_claims"],
+      "properties": {
+        "conflict_id": {"$ref": "#/$defs/RecordId"},
+        "status": {"const": "OPEN"},
+        "member_claims": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/ConflictMemberAnswer"}
+        }
+      }
+    },
+    "OpenQuestionAnswer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question_id", "question"],
+      "properties": {
+        "question_id": {"$ref": "#/$defs/RecordId"},
+        "question": {"type": "string", "minLength": 1, "maxLength": 4096}
+      }
+    },
+    "WorkItemAnswer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["work_item_id", "status", "description"],
+      "properties": {
+        "work_item_id": {"$ref": "#/$defs/RecordId"},
+        "status": {"enum": ["TODO", "DOING", "BLOCKED"]},
+        "description": {"type": "string", "minLength": 1, "maxLength": 8192}
+      }
+    }
+  }
+}

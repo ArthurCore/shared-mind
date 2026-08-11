@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shared-mind.local/evals/product-continuity/report/v1",
+  "title": "Shared Mind product-continuity evaluation report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_version",
+    "scenario_id",
+    "score",
+    "maximum_score",
+    "passed",
+    "fact_accuracy",
+    "open_conflict_member_recall",
+    "dimension_scores",
+    "penalty_codes",
+    "metric_comparison"
+  ],
+  "properties": {
+    "report_version": {"const": "product-continuity-report@1"},
+    "scenario_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._-]{2,127}$"
+    },
+    "score": {"type": "integer", "minimum": 0, "maximum": 100},
+    "maximum_score": {"const": 100},
+    "passed": {"type": "boolean"},
+    "fact_accuracy": {"type": "number", "minimum": 0, "maximum": 1},
+    "open_conflict_member_recall": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "dimension_scores": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project_purpose",
+        "decision_and_rationale",
+        "settled_claim_and_evidence_locator",
+        "open_conflict_and_all_members",
+        "open_question",
+        "actionable_work"
+      ],
+      "properties": {
+        "project_purpose": {"type": "integer", "minimum": 0, "maximum": 10},
+        "decision_and_rationale": {"type": "integer", "minimum": 0, "maximum": 20},
+        "settled_claim_and_evidence_locator": {"type": "integer", "minimum": 0, "maximum": 20},
+        "open_conflict_and_all_members": {"type": "integer", "minimum": 0, "maximum": 25},
+        "open_question": {"type": "integer", "minimum": 0, "maximum": 10},
+        "actionable_work": {"type": "integer", "minimum": 0, "maximum": 15}
+      }
+    },
+    "penalty_codes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "FALSE_SETTLED_CONFLICT_MEMBER",
+          "HALLUCINATED_ID",
+          "OMITTED_CONFLICT_MEMBER"
+        ]
+      }
+    },
+    "metric_comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reductions", "meets_reduction_target", "quality_preserved"],
+      "properties": {
+        "reductions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["bytes", "tokens", "time_seconds"],
+          "properties": {
+            "bytes": {"type": "number", "minimum": 0, "maximum": 1},
+            "tokens": {"type": "number", "minimum": 0, "maximum": 1},
+            "time_seconds": {"type": "number", "minimum": 0, "maximum": 1}
+          }
+        },
+        "meets_reduction_target": {"type": "boolean"},
+        "quality_preserved": {"type": "boolean"}
+      }
+    }
+  }
+}
