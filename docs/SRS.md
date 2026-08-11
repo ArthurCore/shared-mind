@@ -2,11 +2,11 @@
 
 | 항목 | 값 |
 |---|---|
-| 문서 버전 | 0.1.0 |
+| 문서 버전 | 0.1.1 |
 | 기준일 | 2026-08-11 |
 | 상태 | 개발 기준선(Baseline) |
 | 대상 저장소 | `ArthurCore/shared-mind` |
-| 구현 기준 커밋 | `7515cb6` (`feat: implement Atlas kernel vertical slice`) |
+| 구현 기준선 시작 커밋 | `3c3cdf0` (SRS merge 기준선; 이후 hardening은 branch history 참조) |
 | 주 독자 | 제품 책임자, 개발자, 코딩 에이전트, 검토자 |
 
 ## 1. 문서의 목적
@@ -393,7 +393,7 @@ VALIDATION_ERROR
 
 ### 13.1 확인된 구현
 
-기준 커밋 `7515cb6`에는 다음이 존재한다.
+기준선 시작 커밋 `3c3cdf0`과 이후 kernel-hardening 변경에는 다음이 존재한다.
 
 - SQLite WAL 기반 `Kernel`
 - `sources`, `claims`, `evidence`, `conflicts`, `ledger`, `receipts` table
@@ -402,30 +402,41 @@ VALIDATION_ERROR
 - `ASSERT_CLAIM`, `ATTACH_EVIDENCE`, `SUPERSEDE_CLAIM`
 - source content hash와 evidence byte span/excerpt hash 검증
 - predicate registry version 확인
+- runtime Draft 2020-12 source/proposal schema validation
+- schema, predicate registry, conflict rule, guard DSL, projection version 확인
 - claim aggregate version read와 claim status/version guard의 일부
+- `SUPERSEDE_CLAIM`의 target Claim aggregate read 필수화
 - exclusive value 및 opposite polarity 계열 fact conflict 생성
+- supersede target을 replacement의 fact-conflict 후보에서 제외
 - conflict-aware epistemic context read
 - state root 및 ledger previous hash/entry hash 생성
+- malformed proposal과 SQLite integrity error의 reason code 정규화
 - Atlas Predicate Registry v1: 7 predicates
-- typed conformance fixtures: 4개
-- vertical-slice unit tests: 4개
+- typed conformance fixtures 4개, negative schema case 2개, semantic case 2개
+- vertical-slice/hardening unit tests: 12개
 
 검증 명령과 2026-08-11 결과:
 
 ```bash
 python3 contracts/validate_contract.py
-# OK (registry consistency): 7 predicates + 4 typed fixtures
+# OK (Draft 2020-12 + registry): 7 predicates + 4 typed fixtures
+#   + 2 negative cases + 2 semantic cases
 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
-# Ran 4 tests ... OK
+# Ran 12 tests ... OK
 ```
 
-현재 4개 테스트가 증명하는 범위는 다음과 같다.
+현재 12개 테스트가 증명하는 범위는 다음과 같다.
 
 1. 배타적 active claim 두 개를 모두 보존하고 fact conflict를 연다.
 2. stale supersede를 transaction conflict로 거부하고 ledger를 추가하지 않는다.
 3. 동일 proposal retry가 ledger를 중복 추가하지 않는다.
 4. 같은 idempotency key의 다른 payload를 validation error로 거부한다.
+5. runtime schema가 필수 필드 누락, unknown guard, non-object/non-JSON 입력을 거부한다.
+6. schema/registry/conflict-rule/guard-DSL/projection의 미지원 version을 거부한다.
+7. 중복 객체 ID를 구조화된 오류로 반환하고 transaction 전체를 rollback한다.
+8. destructive supersede가 target Claim version read 없이 커밋되지 않는다.
+9. supersede로 비활성화되는 target과 replacement 사이에 잘못된 fact conflict를 열지 않는다.
 
 ### 13.2 계약에는 있으나 runtime이 완성하지 않은 부분
 
@@ -434,9 +445,9 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 | `REGISTER_SOURCE_REVISION` | `register_source()` 직접 호출만 존재하며 ledger 밖에서 실행됨 | Proposal operation으로 통합하고 replay 가능하게 변경 |
 | `RETRACT_CLAIM` | schema/계약에는 있으나 runtime 미구현 | 권한/버전 guard와 event/reducer 구현 |
 | `RESOLVE_CONFLICT` | schema/계약에는 있으나 runtime 미구현 | member digest, resolution epoch, reopen lifecycle 구현 |
-| mandatory guards | caller read/guard 일부만 평가 | operation에서 필수 read/guard를 유도하고 약화 불가하게 구현 |
+| mandatory guards | supersede target Claim read는 필수화했으나 attach/retract/resolve 및 collection precondition은 미완성 | 모든 operation의 필수 read/guard를 유도하고 약화 불가하게 구현 |
 | collection read | schema에는 있으나 runtime 미평가 | family collection digest 및 phantom 감지 구현 |
-| schema validation | 별도 계약 validator는 존재하나 `Kernel.commit()`이 전체 schema를 강제하지 않음 | runtime entry point에서 Draft 2020-12 또는 동등 validator 실행 |
+| schema validation | source/proposal entry point에서 Draft 2020-12를 강제함 | 상세 object path/message와 registry의 object/qualifier/temporal semantic rule 완성 |
 | registry semantics | subject type/required scope/evidence minimum 일부만 강제 | object type, qualifier, temporal policy, conflict rule 전체 구현 |
 | replay | hash를 쓰지만 ledger reducer/rebuild 명령 없음 | 빈 DB replay, chain/state 검증, corruption report 구현 |
 | projection | 없음 | deterministic JSON/Markdown projector 구현 |
@@ -451,8 +462,8 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 - SQLite table은 코드 경로상 append 방식으로 사용되지만 DB 수준에서 ledger update/delete를 금지하는 방어가 없다.
 - source BLOB이 materialized state root에 포함되지만 source 등록 자체가 ledger 밖에 있어 완전한 replay가 불가능하다.
 - conflict는 OPEN 생성만 지원하며 RESOLVED/REOPENED lifecycle이 없다.
-- unsupported read/guard 종류가 명시적으로 거부되지 않고 지나갈 가능성을 제거해야 한다.
-- 빈 idempotency key, 중복 객체 id, SQLite integrity error 등은 전체 schema validation 이전에 예측 가능한 reason code로 정규화해야 한다.
+- 동일 idempotency key의 다른 payload로 생긴 rejected attempt는 현재 primary-key mapping 때문에 별도 receipt history로 남지 않는다.
+- non-JSON 입력은 구조화된 오류로 반환하지만 deterministic proposal hash가 없어 rejected receipt로 영속화하지 못한다.
 - current Atlas registry는 범용 제품 ontology가 아니라 커널 의미론을 검증하는 reference domain이다.
 - 현재 README의 “deterministic epistemic transaction kernel” 설명은 내부 기반에는 맞지만 사용자 제품 전체 설명으로는 너무 좁다.
 

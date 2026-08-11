@@ -223,5 +223,39 @@
         ]
       }
     }
+  ],
+  "negative_schema_cases": [
+    {
+      "name": "proposal_missing_idempotency_key",
+      "base_object": "assert_postgresql_proposal",
+      "remove_fields": ["idempotency_key"],
+      "replace_fields": {},
+      "expected_reason_code": "SCHEMA_VALIDATION_FAILED"
+    },
+    {
+      "name": "proposal_with_unknown_guard",
+      "base_object": "assert_postgresql_proposal",
+      "remove_fields": [],
+      "replace_fields": {"guards": [{"op": "BOGUS_GUARD"}]},
+      "expected_reason_code": "SCHEMA_VALIDATION_FAILED"
+    }
+  ],
+  "semantic_cases": [
+    {
+      "name": "supersede_requires_claim_version_read",
+      "given": ["source_revision_postgresql", "assert_postgresql_proposal"],
+      "proposal": "stale_supersede_proposal",
+      "variation": "remove the target CLAIM aggregate read while retaining only its ACTIVE status guard",
+      "expected_semantic_outcome": "VALIDATION_ERROR",
+      "expected_reason_code": "MISSING_REQUIRED_CLAIM_READ"
+    },
+    {
+      "name": "supersede_excludes_its_target_from_conflict_evaluation",
+      "given": ["source_revision_postgresql", "assert_postgresql_proposal"],
+      "proposal": "stale_supersede_proposal",
+      "replacement_claim_from": "assert_mysql_same_interval_proposal",
+      "expected_semantic_outcome": "COMMITTED",
+      "expected_open_conflict_count": 0
+    }
   ]
 }

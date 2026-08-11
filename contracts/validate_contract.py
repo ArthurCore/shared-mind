@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Validate the Shared Mind Atlas v1 contract and its typed fixtures."""
+"""Validate the Shared Mind Atlas v1 contract and conformance fixtures."""
 
 from __future__ import annotations
 
-import json
+import copy
 import hashlib
+import json
 from pathlib import Path
 
 try:
@@ -44,6 +45,9 @@ def main() -> None:
     fixtures = load_json("atlas-conformance-fixtures.v1.json")
 
     typed_objects = fixtures["typed_objects"]
+    typed_by_name = {item["name"]: item["object"] for item in typed_objects}
+    negative_cases = fixtures.get("negative_schema_cases", [])
+    semantic_cases = fixtures.get("semantic_cases", [])
     enhanced = Draft202012Validator is not None
     if enhanced:
         Draft202012Validator.check_schema(schema)
@@ -51,6 +55,22 @@ def main() -> None:
         validator.validate(registry)
         for fixture in typed_objects:
             validator.validate(fixture["object"])
+        for case in negative_cases:
+            candidate = copy.deepcopy(typed_by_name[case["base_object"]])
+            for field in case["remove_fields"]:
+                candidate.pop(field, None)
+            candidate.update(copy.deepcopy(case["replace_fields"]))
+            if validator.is_valid(candidate):
+                raise ValueError(f"Negative fixture unexpectedly passed: {case['name']}")
+
+    for case in semantic_cases:
+        references = list(case["given"]) + [case["proposal"]]
+        replacement = case.get("replacement_claim_from")
+        if replacement is not None:
+            references.append(replacement)
+        unknown = [name for name in references if name not in typed_by_name]
+        if unknown:
+            raise ValueError(f"Unknown fixture reference in {case['name']}: {unknown}")
 
     predicate_keys = [item["key"] for item in registry["predicates"]]
     if len(predicate_keys) != len(set(predicate_keys)):
@@ -104,7 +124,11 @@ def main() -> None:
                         raise ValueError(f"Evidence hash mismatch: {link['evidence_link_id']}")
 
     mode = "Draft 2020-12 + registry" if enhanced else "registry consistency"
-    print(f"OK ({mode}): {len(predicate_keys)} predicates + {len(typed_objects)} typed fixtures")
+    print(
+        f"OK ({mode}): {len(predicate_keys)} predicates + "
+        f"{len(typed_objects)} typed fixtures + {len(negative_cases)} negative cases + "
+        f"{len(semantic_cases)} semantic cases"
+    )
 
 
 if __name__ == "__main__":

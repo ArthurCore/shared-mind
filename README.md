@@ -1,18 +1,22 @@
-# Shared Mind Kernel
+# Shared Mind
 
-Shared Mind is a deterministic epistemic transaction kernel for multiple agents
-sharing external memory. It preserves claims, their source evidence, factual
-conflicts, decisions, and mutation history without silently overwriting a
-different assertion.
+Shared Mind is a local-first external memory that lets a new AI session continue
+from a user's sources, evidence, decisions, questions, and work state. Its
+deterministic epistemic transaction kernel is the current implementation layer;
+the continuity records, projections, and handoff interface remain future work.
 
 This repository contains the first Atlas vertical slice:
 
 - SQLite WAL-backed append-only mutation ledger
 - separate receipts for accepted and rejected commit attempts
 - idempotent `commit(proposal)`
+- Draft 2020-12 runtime validation for sources and proposals
+- exact schema, registry, conflict-rule, guard-DSL, and projection version checks
 - deterministic predicate and evidence validation
 - exclusive-value fact conflict creation
+- kernel-required Claim reads for destructive supersede operations
 - stale aggregate detection as a transaction conflict
+- structured normalization of malformed input and SQLite integrity errors
 - conflict-aware reads that return every active claim and open conflict
 
 ## Layout
@@ -35,5 +39,6 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 
 The implementation supports the operations required by the first vertical
 slice: `ASSERT_CLAIM`, `ATTACH_EVIDENCE`, and `SUPERSEDE_CLAIM`. The contract
-also defines source registration, retraction, and conflict resolution; those
-remaining operations are the next implementation slice.
+also defines ledger-backed source registration, retraction, and conflict
+resolution. Those operations, deterministic replay/projection, continuity
+records, and the CLI are the next implementation slices.

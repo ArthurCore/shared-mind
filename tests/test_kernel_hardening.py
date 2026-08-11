@@ -88,6 +88,7 @@ class KernelHardeningTest(unittest.TestCase):
     def test_fr_015_rejects_every_unsupported_pinned_version(self) -> None:
         cases = {
             "schema": ("99.0.0", "UNSUPPORTED_SCHEMA_VERSION"),
+            "predicate_registry": ("99.0.0", "UNSUPPORTED_PREDICATE_REGISTRY"),
             "conflict_rules": ("conflict-rules@9", "UNSUPPORTED_CONFLICT_RULES_VERSION"),
             "guard_dsl": ("guard-dsl@9", "UNSUPPORTED_GUARD_DSL_VERSION"),
             "projection": ("markdown-projection@9", "UNSUPPORTED_PROJECTION_VERSION"),

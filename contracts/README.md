@@ -11,8 +11,8 @@ accepting arbitrary predicates.
 - `shared-mind-kernel.schema.v1.json` — JSON Schema Draft 2020-12 definitions
   for the registry, source revisions, claims, evidence, proposals, conflicts,
   ledger entries, and decision receipts.
-- `atlas-conformance-fixtures.v1.json` — three input scenarios with expected
-  semantic outcomes.
+- `atlas-conformance-fixtures.v1.json` — typed objects, negative schema cases,
+  and semantic scenarios with expected outcomes.
 - `atlas-runbook.fixture.md` — immutable source bytes referenced by the
   fixtures; its content and excerpt hashes are real, not placeholders.
 - `validate_contract.py` — validates the schema, registry, and fixture objects.
@@ -103,6 +103,7 @@ python3 validate_contract.py
 The validator always performs dependency-free registry consistency, canonical
 proposition hash, source-content hash, and evidence-range/hash checks. If Python
 `jsonschema` is installed, it additionally checks Draft 2020-12 schema validity
-and validates the registry plus every typed fixture object. The
+and validates the registry, every typed fixture object, and every negative
+schema case. The
 expected commit outcomes in the fixtures are conformance expectations for the
 future kernel, not results produced by the shape validator.
