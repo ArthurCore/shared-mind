@@ -428,7 +428,7 @@ python3 contracts/validate_contract.py
 #     + 6 semantic cases + 7 continuity operations
 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
-# Ran 116 tests ... OK
+# Ran 117 tests ... OK
 ```
 
 ### 13.2 요구사항 추적표

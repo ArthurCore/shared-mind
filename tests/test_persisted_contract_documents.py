@@ -247,6 +247,31 @@ class PersistedContractDocumentTest(unittest.TestCase):
             f"RECEIPT_DOCUMENT_MISMATCH:{row['id']}", result["errors"]
         )
 
+    def test_verifier_recomputes_rejected_receipt_head_from_history(self) -> None:
+        rejected = self.kernel.commit(self._invalid_evidence_proposal())
+        self.assertEqual("VALIDATION_ERROR", rejected.outcome)
+        row = self.kernel.connection.execute(
+            "SELECT id, document FROM receipts WHERE ledger_seq IS NULL"
+        ).fetchone()
+        self.assertIsNotNone(row)
+        document = json.loads(row["document"])
+        forged_head = "sha256:" + "0" * 64
+        document["head_before"] = forged_head
+        document["head_after"] = forged_head
+        with self.kernel._authorized_writes():
+            self.kernel.connection.execute("DROP TRIGGER receipts_no_update")
+            self.kernel.connection.execute(
+                "UPDATE receipts SET document = ? WHERE id = ?",
+                (canonical_json(document), row["id"]),
+            )
+
+        result = self.kernel.verify_ledger()
+
+        self.assertFalse(result["valid"])
+        self.assertIn(
+            f"RECEIPT_DOCUMENT_MISMATCH:{row['id']}", result["errors"]
+        )
+
     def test_verifier_rejects_missing_documents_for_current_receipts(self) -> None:
         rejected = self.kernel.commit(self._invalid_evidence_proposal())
         self.assertEqual("VALIDATION_ERROR", rejected.outcome)
@@ -256,7 +281,9 @@ class PersistedContractDocumentTest(unittest.TestCase):
         self.assertEqual(2, len(rows))
         with self.kernel._authorized_writes():
             self.kernel.connection.execute("DROP TRIGGER receipts_no_update")
-            self.kernel.connection.execute("UPDATE receipts SET document = NULL")
+            self.kernel.connection.execute(
+                "UPDATE receipts SET document = NULL, schema_version = NULL"
+            )
 
         result = self.kernel.verify_ledger()
 

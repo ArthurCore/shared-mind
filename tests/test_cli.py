@@ -4,6 +4,7 @@ import copy
 import io
 import json
 import os
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,6 +14,7 @@ from shared_mind.cli import (
     EXIT_VALIDATION_ERROR,
     main,
 )
+from shared_mind.canonical import sha256_bytes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -160,6 +162,28 @@ class SharedMindCliTest(unittest.TestCase):
             "document:evolving",
         )
         first_blob = self.workspace_root / first["data"]["blob_path"]
+        first_content = source.read_bytes()
+        proposal = self._fixture("assert_postgresql_proposal")
+        evidence = proposal["operations"][0]["initial_evidence"][0]
+        evidence["source_revision_id"] = first["data"]["revision_id"]
+        evidence["selector"].update(
+            {
+                "start_byte": 0,
+                "end_byte": len(first_content),
+                "excerpt": first_content.decode("utf-8"),
+                "excerpt_hash": sha256_bytes(first_content),
+            }
+        )
+        proposal_path = self.workspace_root / "evolving-evidence.json"
+        proposal_path.write_text(json.dumps(proposal), encoding="utf-8")
+        proposal_code, proposal_result, _ = self.invoke(
+            "--workspace",
+            str(self.workspace_root),
+            "proposal",
+            "commit",
+            str(proposal_path),
+        )
+        self.assertEqual(EXIT_OK, proposal_code, proposal_result)
         source.write_text("version two\n", encoding="utf-8")
 
         second_code, second, _ = self.invoke(
@@ -179,7 +203,15 @@ class SharedMindCliTest(unittest.TestCase):
         )
         self.assertEqual(b"version one\n", first_blob.read_bytes())
         self.assertEqual(2, self._database_count("sources"))
-        self.assertEqual(2, self._database_count("ledger"))
+        self.assertEqual(3, self._database_count("ledger"))
+        database = self.workspace_root / ".shared-mind" / "shared-mind.sqlite3"
+        with sqlite3.connect(database) as connection:
+            retained_revision = connection.execute(
+                "SELECT source_revision_id FROM evidence "
+                "WHERE evidence_link_id = ?",
+                (evidence["evidence_link_id"],),
+            ).fetchone()[0]
+        self.assertEqual(first["data"]["revision_id"], retained_revision)
 
     def test_fr_002_source_add_rejects_non_utf8_and_unknown_media_type(self) -> None:
         self.initialize()
@@ -432,8 +464,6 @@ class SharedMindCliTest(unittest.TestCase):
         return copy.deepcopy(objects[name])
 
     def _database_count(self, table: str) -> int:
-        import sqlite3
-
         database = self.workspace_root / ".shared-mind" / "shared-mind.sqlite3"
         with sqlite3.connect(database) as connection:
             return int(connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])

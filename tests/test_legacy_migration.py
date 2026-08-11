@@ -179,6 +179,27 @@ class LegacyMigrationConformanceTest(unittest.TestCase):
         self.assertEqual(
             "LEGACY_LEDGER_CONTRACT_INCOMPLETE:1", raised.exception.code
         )
+        with self.assertRaises(ValidationFailure) as raised:
+            reopened.decision_receipts()
+        self.assertEqual(
+            "LEGACY_RECEIPT_CONTRACT_INCOMPLETE:1", raised.exception.code
+        )
+
+        with reopened._authorized_writes():
+            reopened.connection.execute("DROP TRIGGER receipts_no_update")
+            reopened.connection.execute(
+                "UPDATE receipts SET document = '{}', schema_version = '1.2.0' "
+                "WHERE id = 1"
+            )
+
+        corrupted = reopened.verify_ledger()
+        self.assertFalse(corrupted["valid"])
+        self.assertIn("RECEIPT_DOCUMENT_MISMATCH:1", corrupted["errors"])
+        with self.assertRaises(ValidationFailure) as raised:
+            reopened.decision_receipts()
+        self.assertEqual(
+            "LEGACY_RECEIPT_CONTRACT_INCOMPLETE:1", raised.exception.code
+        )
 
     def _write_baseline_database(self) -> dict[str, Any]:
         """Write the on-disk schema and hash envelope used at commit 3c3cdf0."""

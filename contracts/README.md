@@ -114,7 +114,7 @@ database predicate. Therefore “planned migration to MySQL” does not contradi
 |---|---|
 | `REGISTER_SOURCE_REVISION` | revision ID is unused, or identical content hash for an idempotent replay |
 | `ASSERT_CLAIM` | source revisions exist; evidence and predicate policy pass |
-| `ATTACH_EVIDENCE` | target Claim version/status and source hash are current |
+| `ATTACH_EVIDENCE` | target Claim is `ACTIVE`; selector/excerpt hashes are revalidated against the named immutable source revision (concurrent attaches are commutative and do not require an observed Claim version) |
 | `SUPERSEDE_CLAIM` | target Claim is `ACTIVE` at the observed lifecycle version |
 | `RETRACT_CLAIM` | target Claim is `ACTIVE` at the observed lifecycle version; actor is authorized |
 | `RESOLVE_CONFLICT` | conflict is `OPEN`; member digest and resolution epoch match |

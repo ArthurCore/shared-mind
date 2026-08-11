@@ -1619,14 +1619,36 @@ class Kernel:
     def decision_receipts(self) -> tuple[dict[str, Any], ...]:
         documents = []
         for row in self.connection.execute(
-            "SELECT id, document FROM receipts ORDER BY id"
+            "SELECT id, ledger_seq, document, schema_version "
+            "FROM receipts ORDER BY id"
         ):
-            if row["document"] is None:
+            linked_schema = self._linked_receipt_schema(row["ledger_seq"])
+            if (
+                row["schema_version"] != self.SUPPORTED_VERSIONS["schema"]
+                or (
+                    row["ledger_seq"] is not None
+                    and linked_schema != self.SUPPORTED_VERSIONS["schema"]
+                )
+                or row["document"] is None
+            ):
                 raise ValidationFailure(
                     f"LEGACY_RECEIPT_CONTRACT_INCOMPLETE:{row['id']}"
                 )
             documents.append(json.loads(row["document"]))
         return tuple(documents)
+
+    def _linked_receipt_schema(self, ledger_seq: int | None) -> str | None:
+        if ledger_seq is None:
+            return None
+        ledger = self.connection.execute(
+            "SELECT proposal FROM ledger WHERE seq = ?", (ledger_seq,)
+        ).fetchone()
+        try:
+            if ledger is not None:
+                return str(json.loads(ledger["proposal"])["versions"]["schema"])
+        except (KeyError, TypeError, json.JSONDecodeError):
+            pass
+        return None
 
     def _verify_ledger_rows(self, rows: list[sqlite3.Row]) -> list[str]:
         errors: list[str] = []
@@ -1735,15 +1757,27 @@ class Kernel:
 
     def _verify_receipt_documents(self) -> list[str]:
         errors: list[str] = []
+        expected_head: str | None = None
         for row in self.connection.execute("SELECT * FROM receipts ORDER BY id"):
             if row["document"] is None:
-                if row["schema_version"] == self.SUPPORTED_VERSIONS["schema"]:
+                legacy_schema = self._linked_receipt_schema(row["ledger_seq"])
+                if legacy_schema not in {"1.0.0", "1.1.0"}:
                     errors.append(f"RECEIPT_DOCUMENT_MISMATCH:{row['id']}")
+                else:
+                    ledger = self.connection.execute(
+                        "SELECT entry_hash FROM ledger WHERE seq = ?",
+                        (row["ledger_seq"],),
+                    ).fetchone()
+                    if ledger is None:
+                        errors.append(f"RECEIPT_DOCUMENT_MISMATCH:{row['id']}")
+                    else:
+                        expected_head = str(ledger["entry_hash"])
                 continue
             try:
                 document = json.loads(row["document"])
                 proposal_id = row["proposal_id"]
                 key = row["idempotency_key"]
+                receipt_order_mismatch = False
                 expected = {
                     "object_type": "DECISION_RECEIPT",
                     "receipt_id": f"receipt_decision_{int(row['id']):020d}",
@@ -1767,8 +1801,8 @@ class Kernel:
                 if row["ledger_seq"] is None:
                     expected.update(
                         {
-                            "head_before": document.get("head_before"),
-                            "head_after": document.get("head_before"),
+                            "head_before": expected_head,
+                            "head_after": expected_head,
                             "ledger_entry_id": None,
                         }
                     )
@@ -1778,7 +1812,11 @@ class Kernel:
                         (row["ledger_seq"],),
                     ).fetchone()
                     if ledger is None or ledger["document"] is None:
+                        errors.append(f"RECEIPT_DOCUMENT_MISMATCH:{row['id']}")
+                        if ledger is not None:
+                            expected_head = str(ledger["entry_hash"])
                         continue
+                    receipt_order_mismatch = ledger["prev_hash"] != expected_head
                     expected.update(
                         {
                             "head_before": ledger["prev_hash"],
@@ -1788,8 +1826,11 @@ class Kernel:
                             ],
                         }
                     )
+                    expected_head = str(ledger["entry_hash"])
                 mismatch = (
-                    next(
+                    receipt_order_mismatch
+                    or row["schema_version"] != self.SUPPORTED_VERSIONS["schema"]
+                    or next(
                         self.decision_receipt_validator.iter_errors(document),
                         None,
                     )
