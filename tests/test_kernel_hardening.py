@@ -41,7 +41,7 @@ class KernelHardeningTest(unittest.TestCase):
 
         self.assertEqual("VALIDATION_ERROR", receipt.outcome)
         self.assertEqual(("SCHEMA_VALIDATION_FAILED",), receipt.reason_codes)
-        self.assertEqual(0, self._count("ledger"))
+        self.assertEqual(1, self._count("ledger"))
 
     def test_fr_011_runtime_schema_rejects_unknown_guard(self) -> None:
         proposal = copy.deepcopy(self.objects["assert_postgresql_proposal"])
@@ -51,7 +51,7 @@ class KernelHardeningTest(unittest.TestCase):
 
         self.assertEqual("VALIDATION_ERROR", receipt.outcome)
         self.assertEqual(("SCHEMA_VALIDATION_FAILED",), receipt.reason_codes)
-        self.assertEqual(0, self._count("ledger"))
+        self.assertEqual(1, self._count("ledger"))
 
     def test_fr_011_non_object_proposal_returns_a_structured_error(self) -> None:
         receipt = self.kernel.commit([])  # type: ignore[arg-type]
@@ -59,7 +59,7 @@ class KernelHardeningTest(unittest.TestCase):
         self.assertEqual("VALIDATION_ERROR", receipt.outcome)
         self.assertEqual(("SCHEMA_VALIDATION_FAILED",), receipt.reason_codes)
         self.assertFalse(self.kernel.connection.in_transaction)
-        self.assertEqual(0, self._count("ledger"))
+        self.assertEqual(1, self._count("ledger"))
 
     def test_fr_011_non_json_value_returns_a_structured_error(self) -> None:
         receipt = self.kernel.commit({"unsupported": {"set"}})
@@ -67,7 +67,17 @@ class KernelHardeningTest(unittest.TestCase):
         self.assertEqual("VALIDATION_ERROR", receipt.outcome)
         self.assertEqual(("MALFORMED_PROPOSAL",), receipt.reason_codes)
         self.assertFalse(self.kernel.connection.in_transaction)
-        self.assertEqual(0, self._count("ledger"))
+        self.assertEqual(1, self._count("ledger"))
+        persisted = self.kernel.connection.execute(
+            """SELECT outcome, reason_codes, ledger_seq
+               FROM receipts
+               WHERE reason_codes = '["MALFORMED_PROPOSAL"]'
+               ORDER BY id"""
+        ).fetchall()
+        self.assertEqual(1, len(persisted))
+        self.assertEqual("VALIDATION_ERROR", persisted[0]["outcome"])
+        self.assertEqual('["MALFORMED_PROPOSAL"]', persisted[0]["reason_codes"])
+        self.assertIsNone(persisted[0]["ledger_seq"])
 
     def test_fr_011_duplicate_ids_are_normalized_and_rolled_back(self) -> None:
         first = self.kernel.commit(self.objects["assert_postgresql_proposal"])
@@ -82,7 +92,7 @@ class KernelHardeningTest(unittest.TestCase):
         self.assertEqual("VALIDATION_ERROR", receipt.outcome)
         self.assertEqual(("DUPLICATE_OBJECT_ID",), receipt.reason_codes)
         self.assertFalse(self.kernel.connection.in_transaction)
-        self.assertEqual(1, self._count("ledger"))
+        self.assertEqual(2, self._count("ledger"))
         self.assertEqual(1, self._count("claims"))
         self.assertEqual(root_before, self.kernel.state_root())
 
@@ -112,7 +122,7 @@ class KernelHardeningTest(unittest.TestCase):
 
                 self.assertEqual("VALIDATION_ERROR", receipt.outcome)
                 self.assertEqual((expected_code,), receipt.reason_codes)
-        self.assertEqual(0, self._count("ledger"))
+        self.assertEqual(1, self._count("ledger"))
 
     def test_fr_011_registry_semantics_are_enforced_at_runtime(self) -> None:
         cases = (
@@ -198,7 +208,7 @@ class KernelHardeningTest(unittest.TestCase):
                 self.assertEqual("VALIDATION_ERROR", receipt.outcome)
                 self.assertEqual((expected_code,), receipt.reason_codes)
 
-        self.assertEqual(0, self._count("ledger"))
+        self.assertEqual(1, self._count("ledger"))
 
     def test_fr_024_destructive_operation_requires_a_claim_version_read(self) -> None:
         self.assertEqual(

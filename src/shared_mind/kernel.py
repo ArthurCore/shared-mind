@@ -5,10 +5,11 @@ import binascii
 import copy
 import json
 import sqlite3
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 from urllib.parse import unquote_to_bytes
 
 from .canonical import canonical_json, sha256_bytes, sha256_json
@@ -23,7 +24,11 @@ from .continuity import (
     validate_guard as validate_continuity_guard,
     validate_read as validate_continuity_read,
 )
-from .validation import build_contract_validator
+from .validation import (
+    build_contract_validator,
+    build_definition_validator,
+    load_default_schema,
+)
 
 
 @dataclass(frozen=True)
@@ -65,7 +70,11 @@ class Kernel:
         self.database = str(database)
         self.registry = registry
         self.predicates = {item["key"]: item for item in registry["predicates"]}
-        self.contract_validator = build_contract_validator(schema)
+        contract = schema if schema is not None else load_default_schema()
+        self.contract_validator = build_contract_validator(contract)
+        self.ledger_event_validator = build_definition_validator(
+            "LedgerEvent", contract
+        )
         registry_errors = list(self.contract_validator.iter_errors(registry))
         if registry_errors:
             raise ValueError(f"Invalid predicate registry: {registry_errors[0].message}")
@@ -74,6 +83,8 @@ class Kernel:
         self.connection.execute("PRAGMA foreign_keys = ON")
         self.connection.execute("PRAGMA journal_mode = WAL")
         self._create_schema()
+        self._write_authorization_depth = 0
+        self.connection.set_authorizer(self._authorize_sql)
 
     def close(self) -> None:
         self.connection.close()
@@ -245,37 +256,94 @@ class Kernel:
             """
         )
 
-    def register_source(self, source: dict[str, Any], content: bytes) -> None:
+    def register_source(self, source: dict[str, Any], content: bytes) -> Receipt:
+        """Compatibility convenience that commits a source Proposal.
+
+        The method remains for early Python callers, but it no longer owns a
+        ledger-bypassing mutation path. New integrations should submit an
+        explicit ``REGISTER_SOURCE_REVISION`` Proposal or use ``source add``.
+        """
+
         self._validate_contract_object(source)
         if sha256_bytes(content) != source["content_hash"]:
             raise ValidationFailure("SOURCE_CONTENT_HASH_MISMATCH")
-        document = canonical_json(source)
-        with self.connection:
-            row = self.connection.execute(
-                "SELECT content_hash FROM sources WHERE revision_id = ?", (source["revision_id"],)
-            ).fetchone()
-            if row and row["content_hash"] != source["content_hash"]:
-                raise ValidationFailure("SOURCE_REVISION_IMMUTABILITY_VIOLATION")
-            if row:
-                return
-            self.connection.execute(
-                "INSERT OR IGNORE INTO sources VALUES (?, ?, ?, ?)",
-                (source["revision_id"], source["content_hash"], document, content),
-            )
+        source_revision = copy.deepcopy(source)
+        source_revision["blob_ref"] = (
+            f"data:{source_revision['media_type']};base64,"
+            + base64.b64encode(content).decode("ascii")
+        )
+        identity = sha256_json(
+            {
+                "revision_id": source_revision["revision_id"],
+                "content_hash": source_revision["content_hash"],
+            }
+        ).split(":", 1)[1]
+        proposal = {
+            "object_type": "PROPOSAL",
+            "proposal_id": f"proposal_register_{identity[:32]}",
+            "idempotency_key": f"source-register:{identity[:48]}",
+            "proposer": copy.deepcopy(source_revision["registered_by"]),
+            "proposed_at": source_revision["captured_at"],
+            "base_state_root": None,
+            "versions": {
+                "schema": self.SUPPORTED_VERSIONS["schema"],
+                "predicate_registry": self.registry["version"],
+                "conflict_rules": self.SUPPORTED_VERSIONS["conflict_rules"],
+                "guard_dsl": self.registry["guard_dsl_version"],
+                "projection": self.SUPPORTED_VERSIONS["projection"],
+            },
+            "reads": [],
+            "guards": [],
+            "operations": [
+                {
+                    "op_id": f"operation_register_{identity[:32]}",
+                    "op": "REGISTER_SOURCE_REVISION",
+                    "source_revision": source_revision,
+                }
+            ],
+        }
+        receipt = self.commit(proposal)
+        if receipt.outcome not in {"COMMITTED", "FACT_CONFLICT"}:
+            raise ValidationFailure(receipt.reason_codes[0])
+        return receipt
 
     def commit(self, proposal: Any) -> Receipt:
+        with self._authorized_writes():
+            return self._commit(proposal)
+
+    def _commit(self, proposal: Any) -> Receipt:
         proposal_id = proposal.get("proposal_id", "") if isinstance(proposal, dict) else ""
         key = proposal.get("idempotency_key", "") if isinstance(proposal, dict) else ""
         try:
             proposal_hash = sha256_json(proposal)
         except (TypeError, ValueError):
-            return Receipt(
+            proposal_hash = sha256_json(
+                {
+                    "malformed_proposal_type": (
+                        f"{type(proposal).__module__}.{type(proposal).__qualname__}"
+                    ),
+                    "proposal_id": proposal_id,
+                    "idempotency_key": key,
+                }
+            )
+            receipt = Receipt(
                 proposal_id,
                 "VALIDATION_ERROR",
                 ("MALFORMED_PROPOSAL",),
                 None,
                 self.state_root(),
             )
+            self._insert_receipt(
+                key,
+                proposal_hash,
+                proposal_id,
+                receipt.outcome,
+                receipt.reason_codes,
+                None,
+                receipt.state_root,
+                (),
+            )
+            return receipt
 
         outcome = "COMMITTED"
         reasons: tuple[str, ...] = ()
@@ -313,6 +381,7 @@ class Kernel:
             self._validate_versions(proposal)
             self._validate_required_operation_reads(proposal)
             self._validate_reads_and_guards(proposal)
+            self._validate_continuity_references(proposal["operations"])
             pre_root = self.state_root()
             next_seq = self._next_ledger_seq()
             events: list[dict[str, Any]] = []
@@ -518,6 +587,94 @@ class Kernel:
             elif guard["op"] == "NO_ACTIVE_CLAIM":
                 if self._active_family_members(guard["family_key"]):
                     raise TransactionConflict("ACTIVE_CLAIM_EXISTS")
+
+    def _validate_continuity_references(
+        self, operations: list[dict[str, Any]]
+    ) -> None:
+        """Resolve typed continuity links against the proposal's final namespace."""
+
+        targets = {
+            "SOURCE_REVISION": ("sources", "revision_id"),
+            "CLAIM": ("claims", "claim_id"),
+            "CONFLICT": ("conflicts", "conflict_id"),
+            "DECISION_RECORD": ("decision_records", "decision_id"),
+            "OPEN_QUESTION": ("open_questions", "question_id"),
+            "WORK_ITEM": ("work_items", "work_item_id"),
+        }
+        namespace = {
+            record_type: {
+                str(row[0])
+                for row in self.connection.execute(
+                    f"SELECT {id_column} FROM {table}"
+                )
+            }
+            for record_type, (table, id_column) in targets.items()
+        }
+        for operation in operations:
+            kind = operation["op"]
+            if kind == "REGISTER_SOURCE_REVISION":
+                namespace["SOURCE_REVISION"].add(
+                    operation["source_revision"]["revision_id"]
+                )
+            elif kind == "ASSERT_CLAIM":
+                namespace["CLAIM"].add(operation["claim"]["claim_id"])
+            elif kind == "SUPERSEDE_CLAIM":
+                namespace["CLAIM"].add(
+                    operation["replacement_claim"]["claim_id"]
+                )
+            elif kind == "RECORD_DECISION":
+                namespace["DECISION_RECORD"].add(
+                    operation["decision"]["decision_id"]
+                )
+            elif kind == "SUPERSEDE_DECISION":
+                namespace["DECISION_RECORD"].add(
+                    operation["replacement_decision"]["decision_id"]
+                )
+            elif kind == "OPEN_QUESTION":
+                namespace["OPEN_QUESTION"].add(
+                    operation["question"]["question_id"]
+                )
+            elif kind == "CREATE_WORK_ITEM":
+                namespace["WORK_ITEM"].add(
+                    operation["work_item"]["work_item_id"]
+                )
+
+        def require(record_type: str, record_id: str) -> None:
+            if record_id in namespace[record_type]:
+                return
+            if any(
+                record_id in identifiers
+                for other_type, identifiers in namespace.items()
+                if other_type != record_type
+            ):
+                raise ValidationFailure("REFERENCE_TYPE_MISMATCH")
+            raise ValidationFailure("REFERENCE_NOT_FOUND")
+
+        def decision_references(decision: dict[str, Any]) -> None:
+            for revision_id in decision["related_source_revision_ids"]:
+                require("SOURCE_REVISION", revision_id)
+            for claim_id in decision["related_claim_ids"]:
+                require("CLAIM", claim_id)
+
+        def record_references(records: list[dict[str, Any]]) -> None:
+            for reference in records:
+                require(reference["record_type"], reference["record_id"])
+
+        for operation in operations:
+            kind = operation["op"]
+            if kind == "RECORD_DECISION":
+                decision_references(operation["decision"])
+            elif kind == "SUPERSEDE_DECISION":
+                decision_references(operation["replacement_decision"])
+            elif kind == "OPEN_QUESTION":
+                record_references(operation["question"]["related_objects"])
+            elif kind == "ANSWER_QUESTION":
+                answer_reference = operation["answer"]["answer_reference"]
+                require(
+                    answer_reference["record_type"], answer_reference["record_id"]
+                )
+            elif kind == "CREATE_WORK_ITEM":
+                record_references(operation["work_item"]["related_objects"])
 
     def _apply_operation(
         self,
@@ -784,18 +941,35 @@ class Kernel:
         opened: list[str] = []
         p = incoming["proposition"]
         family = self._family_key(p, predicate)
+        conflict_rules = {
+            rule["kind"] for rule in predicate.get("conflict_rules", [])
+        }
         rows = self.connection.execute("SELECT claim_id, proposition FROM claims WHERE status = 'ACTIVE' AND claim_id <> ?", (incoming["claim_id"],)).fetchall()
         members_by_kind: dict[str, set[str]] = {}
         for row in rows:
             if row["claim_id"] in ignored_claim_ids:
                 continue
             other = json.loads(row["proposition"])
-            if self._family_key(other, predicate) != family or not self._overlaps(p["valid_time"], other["valid_time"]):
+            if self._family_key(other, predicate) != family:
+                continue
+            if (
+                "TEMPORAL_OVERLAP" in conflict_rules
+                and not self._overlaps(p["valid_time"], other["valid_time"])
+            ):
                 continue
             kind = None
-            if p["object"] == other["object"] and p["polarity"] != other["polarity"]:
+            if (
+                "OPPOSITE_POLARITY" in conflict_rules
+                and p["object"] == other["object"]
+                and p["polarity"] != other["polarity"]
+            ):
                 kind = "POLARITY_CONFLICT"
-            elif predicate["cardinality"] == "ONE" and p["polarity"] == other["polarity"] == "POSITIVE" and p["object"] != other["object"]:
+            elif (
+                "EXCLUSIVE_OBJECT" in conflict_rules
+                and predicate["cardinality"] == "ONE"
+                and p["polarity"] == other["polarity"] == "POSITIVE"
+                and p["object"] != other["object"]
+            ):
                 kind = "EXCLUSIVE_VALUE_CONFLICT"
             if not kind:
                 continue
@@ -920,7 +1094,7 @@ class Kernel:
         if expected_object["kind"] == "entity":
             if actual_object["entity_type"] not in expected_object["entity_types"]:
                 raise ValidationFailure("OBJECT_ENTITY_TYPE_MISMATCH")
-        elif actual_object["value"] not in expected_object["enum_values"]:
+        elif expected_object["kind"] == "enum" and actual_object["value"] not in expected_object["enum_values"]:
             raise ValidationFailure("OBJECT_ENUM_VALUE_NOT_ALLOWED")
 
         scope = proposition["scope"]
@@ -936,6 +1110,8 @@ class Kernel:
         end = self._parse_time(valid_time["to"])
         if predicate["temporal"] == "REQUIRED" and start is None:
             raise ValidationFailure("VALID_TIME_REQUIRED")
+        if predicate["temporal"] == "FORBIDDEN" and (start is not None or end is not None):
+            raise ValidationFailure("VALID_TIME_FORBIDDEN")
         if start is not None and end is not None and start >= end:
             raise ValidationFailure("INVALID_VALID_TIME_RANGE")
         self._validate_evidence_interpretations(predicate, evidence)
@@ -1037,6 +1213,18 @@ class Kernel:
                 events = json.loads(row["events"])
                 if sha256_json(proposal) != row["proposal_hash"]:
                     errors.append(f"PROPOSAL_HASH_MISMATCH:{seq}")
+                if next(self.contract_validator.iter_errors(proposal), None) is not None:
+                    errors.append(f"PROPOSAL_SCHEMA_INVALID:{seq}")
+                if (
+                    not isinstance(events, list)
+                    or not events
+                    or any(
+                        next(self.ledger_event_validator.iter_errors(event), None)
+                        is not None
+                        for event in events
+                    )
+                ):
+                    errors.append(f"LEDGER_EVENT_SCHEMA_INVALID:{seq}")
                 if not row["pre_state_root"] or not row["committed_at"]:
                     errors.append(f"LEGACY_LEDGER_ENTRY_NOT_REPLAYABLE:{seq}")
                 else:
@@ -1066,76 +1254,87 @@ class Kernel:
             raise ValidationFailure(errors[0])
         target = Kernel(database, copy.deepcopy(self.registry))
         try:
-            if any(
-                target.connection.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone()
-                for table in (
-                    "sources",
-                    "claims",
-                    "evidence",
-                    "conflicts",
-                    "decision_records",
-                    "open_questions",
-                    "work_items",
-                    "ledger",
-                )
-            ):
-                raise ValidationFailure("REPLAY_TARGET_NOT_EMPTY")
-            expected_prev: str | None = None
-            for row in rows:
-                target.connection.execute("BEGIN IMMEDIATE")
-                if target.state_root() != row["pre_state_root"]:
-                    raise ValidationFailure(f"REPLAY_PRE_STATE_ROOT_MISMATCH:{row['seq']}")
-                events = json.loads(row["events"])
-                for event in events:
-                    target._apply_replay_event(event)
-                if target.state_root() != row["state_root"]:
-                    raise ValidationFailure(f"REPLAY_POST_STATE_ROOT_MISMATCH:{row['seq']}")
-                if row["prev_hash"] != expected_prev:
-                    raise ValidationFailure(f"PREVIOUS_HASH_MISMATCH:{row['seq']}")
-                target.connection.execute(
-                    """INSERT INTO ledger(
-                         seq, prev_hash, entry_hash, proposal_hash, proposal, events,
-                         pre_state_root, state_root, committed_at
-                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (
-                        row["seq"],
-                        row["prev_hash"],
-                        row["entry_hash"],
-                        row["proposal_hash"],
-                        row["proposal"],
-                        row["events"],
-                        row["pre_state_root"],
-                        row["state_root"],
-                        row["committed_at"],
-                    ),
-                )
-                proposal = json.loads(row["proposal"])
-                conflict_ids = tuple(
-                    sorted(
-                        {
-                            event["conflict"]["conflict_id"]
-                            for event in events
-                            if event.get("event_type") == "CONFLICT_OPENED"
-                        }
-                    )
-                )
-                target._insert_receipt(
-                    proposal["idempotency_key"],
-                    row["proposal_hash"],
-                    proposal["proposal_id"],
-                    "FACT_CONFLICT" if conflict_ids else "COMMITTED",
-                    (),
-                    row["seq"],
-                    row["state_root"],
-                    conflict_ids,
-                )
-                target.connection.execute("COMMIT")
-                expected_prev = row["entry_hash"]
+            with target._authorized_writes():
+                self._replay_rows(target, rows)
             return target
         except Exception:
             target._rollback_if_needed()
             target.close()
             raise
+
+    @staticmethod
+    def _replay_rows(target: Kernel, rows: list[sqlite3.Row]) -> None:
+        if any(
+            target.connection.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone()
+            for table in (
+                "sources",
+                "claims",
+                "evidence",
+                "conflicts",
+                "decision_records",
+                "open_questions",
+                "work_items",
+                "ledger",
+            )
+        ):
+            raise ValidationFailure("REPLAY_TARGET_NOT_EMPTY")
+        expected_prev: str | None = None
+        for row in rows:
+            target.connection.execute("BEGIN IMMEDIATE")
+            if target.state_root() != row["pre_state_root"]:
+                raise ValidationFailure(f"REPLAY_PRE_STATE_ROOT_MISMATCH:{row['seq']}")
+            proposal = json.loads(row["proposal"])
+            target._validate_continuity_references(proposal["operations"])
+            events = json.loads(row["events"])
+            try:
+                for event in events:
+                    target._apply_replay_event(event)
+            except ValidationFailure as exc:
+                raise ValidationFailure(f"{exc.code}:{row['seq']}") from exc
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                raise ValidationFailure(f"REPLAY_EVENT_INVALID:{row['seq']}") from exc
+            if target.state_root() != row["state_root"]:
+                raise ValidationFailure(f"REPLAY_POST_STATE_ROOT_MISMATCH:{row['seq']}")
+            if row["prev_hash"] != expected_prev:
+                raise ValidationFailure(f"PREVIOUS_HASH_MISMATCH:{row['seq']}")
+            target.connection.execute(
+                """INSERT INTO ledger(
+                     seq, prev_hash, entry_hash, proposal_hash, proposal, events,
+                     pre_state_root, state_root, committed_at
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    row["seq"],
+                    row["prev_hash"],
+                    row["entry_hash"],
+                    row["proposal_hash"],
+                    row["proposal"],
+                    row["events"],
+                    row["pre_state_root"],
+                    row["state_root"],
+                    row["committed_at"],
+                ),
+            )
+            conflict_ids = tuple(
+                sorted(
+                    {
+                        event["conflict"]["conflict_id"]
+                        for event in events
+                        if event.get("event_type") == "CONFLICT_OPENED"
+                    }
+                )
+            )
+            target._insert_receipt(
+                proposal["idempotency_key"],
+                row["proposal_hash"],
+                proposal["proposal_id"],
+                "FACT_CONFLICT" if conflict_ids else "COMMITTED",
+                (),
+                row["seq"],
+                row["state_root"],
+                conflict_ids,
+            )
+            target.connection.execute("COMMIT")
+            expected_prev = row["entry_hash"]
 
     def _apply_replay_event(self, event: dict[str, Any]) -> None:
         try:
@@ -1206,6 +1405,23 @@ class Kernel:
             self._validate_and_insert_evidence(link, claim["claim_id"])
 
     def _replay_open_conflict(self, conflict: dict[str, Any]) -> None:
+        members = sorted(conflict["member_claim_ids"])
+        if sha256_json(members) != conflict["member_digest"]:
+            raise ValidationFailure("CONFLICT_MEMBER_DIGEST_MISMATCH")
+        family_keys = set()
+        for claim_id in members:
+            claim = self.connection.execute(
+                "SELECT proposition FROM claims WHERE claim_id = ?", (claim_id,)
+            ).fetchone()
+            if claim is None:
+                raise ValidationFailure("CONFLICT_MEMBER_NOT_FOUND")
+            proposition = json.loads(claim["proposition"])
+            predicate = self.predicates.get(proposition["predicate"])
+            if predicate is None:
+                raise ValidationFailure("UNKNOWN_PREDICATE")
+            family_keys.add(self._family_key(proposition, predicate))
+        if family_keys != {conflict["family_key"]}:
+            raise ValidationFailure("CONFLICT_FAMILY_KEY_MISMATCH")
         existing = self.connection.execute(
             "SELECT version FROM conflicts WHERE conflict_id = ?",
             (conflict["conflict_id"],),
@@ -1215,7 +1431,7 @@ class Kernel:
             conflict["family_key"],
             conflict["kind"],
             conflict["member_digest"],
-            canonical_json(conflict["member_claim_ids"]),
+            canonical_json(members),
             conflict["status"],
             conflict["episode"],
             version,
@@ -1267,6 +1483,60 @@ class Kernel:
     def _rollback_if_needed(self) -> None:
         if self.connection.in_transaction:
             self.connection.execute("ROLLBACK")
+
+    @contextmanager
+    def _authorized_writes(self) -> Iterator[None]:
+        self._write_authorization_depth += 1
+        try:
+            yield
+        finally:
+            self._write_authorization_depth -= 1
+
+    def _authorize_sql(
+        self,
+        action: int,
+        argument_one: str | None,
+        argument_two: str | None,
+        database: str | None,
+        source: str | None,
+    ) -> int:
+        del argument_one, database, source
+        write_actions = {
+            getattr(sqlite3, name)
+            for name in (
+                "SQLITE_INSERT",
+                "SQLITE_UPDATE",
+                "SQLITE_DELETE",
+                "SQLITE_CREATE_INDEX",
+                "SQLITE_CREATE_TABLE",
+                "SQLITE_CREATE_TEMP_INDEX",
+                "SQLITE_CREATE_TEMP_TABLE",
+                "SQLITE_CREATE_TEMP_TRIGGER",
+                "SQLITE_CREATE_TEMP_VIEW",
+                "SQLITE_CREATE_TRIGGER",
+                "SQLITE_CREATE_VIEW",
+                "SQLITE_DROP_INDEX",
+                "SQLITE_DROP_TABLE",
+                "SQLITE_DROP_TEMP_INDEX",
+                "SQLITE_DROP_TEMP_TABLE",
+                "SQLITE_DROP_TEMP_TRIGGER",
+                "SQLITE_DROP_TEMP_VIEW",
+                "SQLITE_DROP_TRIGGER",
+                "SQLITE_DROP_VIEW",
+                "SQLITE_ALTER_TABLE",
+                "SQLITE_REINDEX",
+                "SQLITE_ANALYZE",
+                "SQLITE_ATTACH",
+                "SQLITE_DETACH",
+            )
+            if hasattr(sqlite3, name)
+        }
+        denied = action in write_actions or (
+            action == sqlite3.SQLITE_PRAGMA and argument_two is not None
+        )
+        if denied and self._write_authorization_depth == 0:
+            return sqlite3.SQLITE_DENY
+        return sqlite3.SQLITE_OK
 
     @staticmethod
     def _integrity_reason(error: sqlite3.IntegrityError) -> str:

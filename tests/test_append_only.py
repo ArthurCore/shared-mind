@@ -39,19 +39,21 @@ class AppendOnlyDatabaseConformanceTest(unittest.TestCase):
     def test_nfr_002_ledger_update_is_rejected_by_database(self) -> None:
         before = self._row("SELECT * FROM ledger WHERE seq = 1")
 
-        with self.assertRaises(sqlite3.IntegrityError):
-            self.kernel.connection.execute(
-                "UPDATE ledger SET events = ? WHERE seq = 1",
-                ('[{"event_type":"FORGED"}]',),
-            )
+        with self.kernel._authorized_writes():
+            with self.assertRaises(sqlite3.IntegrityError):
+                self.kernel.connection.execute(
+                    "UPDATE ledger SET events = ? WHERE seq = 1",
+                    ('[{"event_type":"FORGED"}]',),
+                )
 
         self.assertEqual(before, self._row("SELECT * FROM ledger WHERE seq = 1"))
 
     def test_nfr_002_ledger_delete_is_rejected_by_database(self) -> None:
         before = self._row("SELECT * FROM ledger WHERE seq = 1")
 
-        with self.assertRaises(sqlite3.IntegrityError):
-            self.kernel.connection.execute("DELETE FROM ledger WHERE seq = 1")
+        with self.kernel._authorized_writes():
+            with self.assertRaises(sqlite3.IntegrityError):
+                self.kernel.connection.execute("DELETE FROM ledger WHERE seq = 1")
 
         self.assertEqual(before, self._row("SELECT * FROM ledger WHERE seq = 1"))
 
@@ -59,11 +61,12 @@ class AppendOnlyDatabaseConformanceTest(unittest.TestCase):
         receipt_id = self._accepted_receipt_id()
         before = self._row("SELECT * FROM receipts WHERE id = ?", (receipt_id,))
 
-        with self.assertRaises(sqlite3.IntegrityError):
-            self.kernel.connection.execute(
-                "UPDATE receipts SET outcome = ? WHERE id = ?",
-                ("VALIDATION_ERROR", receipt_id),
-            )
+        with self.kernel._authorized_writes():
+            with self.assertRaises(sqlite3.IntegrityError):
+                self.kernel.connection.execute(
+                    "UPDATE receipts SET outcome = ? WHERE id = ?",
+                    ("VALIDATION_ERROR", receipt_id),
+                )
 
         self.assertEqual(
             before, self._row("SELECT * FROM receipts WHERE id = ?", (receipt_id,))
@@ -73,10 +76,11 @@ class AppendOnlyDatabaseConformanceTest(unittest.TestCase):
         receipt_id = self._accepted_receipt_id()
         before = self._row("SELECT * FROM receipts WHERE id = ?", (receipt_id,))
 
-        with self.assertRaises(sqlite3.IntegrityError):
-            self.kernel.connection.execute(
-                "DELETE FROM receipts WHERE id = ?", (receipt_id,)
-            )
+        with self.kernel._authorized_writes():
+            with self.assertRaises(sqlite3.IntegrityError):
+                self.kernel.connection.execute(
+                    "DELETE FROM receipts WHERE id = ?", (receipt_id,)
+                )
 
         self.assertEqual(
             before, self._row("SELECT * FROM receipts WHERE id = ?", (receipt_id,))
@@ -86,11 +90,12 @@ class AppendOnlyDatabaseConformanceTest(unittest.TestCase):
         revision_id = self.objects["source_revision_postgresql"]["revision_id"]
         before = self._source_row(revision_id)
 
-        with self.assertRaises(sqlite3.IntegrityError):
-            self.kernel.connection.execute(
-                "UPDATE sources SET content_hash = ?, content = ? WHERE revision_id = ?",
-                ("sha256:" + "0" * 64, b"forged source bytes", revision_id),
-            )
+        with self.kernel._authorized_writes():
+            with self.assertRaises(sqlite3.IntegrityError):
+                self.kernel.connection.execute(
+                    "UPDATE sources SET content_hash = ?, content = ? WHERE revision_id = ?",
+                    ("sha256:" + "0" * 64, b"forged source bytes", revision_id),
+                )
 
         self.assertEqual(before, self._source_row(revision_id))
 
@@ -98,17 +103,18 @@ class AppendOnlyDatabaseConformanceTest(unittest.TestCase):
         revision_id = self.objects["source_revision_postgresql"]["revision_id"]
         before = self._source_row(revision_id)
 
-        with self.assertRaises(sqlite3.IntegrityError):
-            self.kernel.connection.execute(
-                "INSERT OR REPLACE INTO sources "
-                "(revision_id, content_hash, document, content) VALUES (?, ?, ?, ?)",
-                (
-                    revision_id,
-                    "sha256:" + "0" * 64,
-                    '{"forged":true}',
-                    b"forged replacement bytes",
-                ),
-            )
+        with self.kernel._authorized_writes():
+            with self.assertRaises(sqlite3.IntegrityError):
+                self.kernel.connection.execute(
+                    "INSERT OR REPLACE INTO sources "
+                    "(revision_id, content_hash, document, content) VALUES (?, ?, ?, ?)",
+                    (
+                        revision_id,
+                        "sha256:" + "0" * 64,
+                        '{"forged":true}',
+                        b"forged replacement bytes",
+                    ),
+                )
 
         self.assertEqual(before, self._source_row(revision_id))
 

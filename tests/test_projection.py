@@ -8,7 +8,6 @@ from pathlib import Path
 
 from shared_mind import Kernel
 from shared_mind.canonical import canonical_json, sha256_bytes, sha256_json
-from shared_mind.continuity import create_schema as create_continuity_schema
 from shared_mind.projection import (
     ContextBudgetError,
     ProjectionError,
@@ -65,7 +64,7 @@ class DeterministicProjectionTest(unittest.TestCase):
             "operations"
         ][0]["claim"]["claim_id"]
         self.assertEqual("markdown-projection@1", projection["projection_version"])
-        self.assertEqual(2, projection["ledger"]["head_sequence"])
+        self.assertEqual(3, projection["ledger"]["head_sequence"])
         self.assertEqual(self.kernel.state_root(), projection["state_root"])
         self.assertEqual(
             sorted([mysql_claim_id, "claim_atlas_postgresql_001"]),
@@ -86,8 +85,8 @@ class DeterministicProjectionTest(unittest.TestCase):
             sorted([mysql_claim_id, "claim_atlas_postgresql_001"]),
             conflict["members"],
         )
-        self.assertEqual([2], conflict["history_sequences"])
-        self.assertEqual([1], projection["claims"][1]["history_sequences"])
+        self.assertEqual([3], conflict["history_sequences"])
+        self.assertEqual([2], projection["claims"][1]["history_sequences"])
 
         for searchable_value in (
             mysql_claim_id,
@@ -102,40 +101,40 @@ class DeterministicProjectionTest(unittest.TestCase):
     def test_projection_includes_future_continuity_tables_without_schema_assumptions(
         self,
     ) -> None:
-        create_continuity_schema(self.kernel.connection)
         empty_root = json.loads(project_json(self.kernel))["state_root"]
-        self.kernel.connection.execute(
-            "INSERT INTO decision_records VALUES (?, ?, ?, ?, ?)",
-            (
-                "decision_2",
-                "ACTIVE",
-                1,
-                None,
-                '{"decision_id":"decision_2","status":"ACTIVE","title":"Ship SQLite","version":1}',
-            ),
-        )
-        self.kernel.connection.execute(
-            "INSERT INTO open_questions VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                "question_1",
-                "OPEN",
-                1,
-                None,
-                None,
-                '{"question":"Which CLI?","question_id":"question_1","status":"OPEN","version":1}',
-            ),
-        )
-        self.kernel.connection.execute(
-            "INSERT INTO work_items VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                "work_1",
-                "TODO",
-                1,
-                None,
-                "2026-08-11T00:00:00Z",
-                '{"description":"Build projector","status":"TODO","version":1,"work_item_id":"work_1"}',
-            ),
-        )
+        with self.kernel._authorized_writes():
+            self.kernel.connection.execute(
+                "INSERT INTO decision_records VALUES (?, ?, ?, ?, ?)",
+                (
+                    "decision_2",
+                    "ACTIVE",
+                    1,
+                    None,
+                    '{"decision_id":"decision_2","status":"ACTIVE","title":"Ship SQLite","version":1}',
+                ),
+            )
+            self.kernel.connection.execute(
+                "INSERT INTO open_questions VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    "question_1",
+                    "OPEN",
+                    1,
+                    None,
+                    None,
+                    '{"question":"Which CLI?","question_id":"question_1","status":"OPEN","version":1}',
+                ),
+            )
+            self.kernel.connection.execute(
+                "INSERT INTO work_items VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    "work_1",
+                    "TODO",
+                    1,
+                    None,
+                    "2026-08-11T00:00:00Z",
+                    '{"description":"Build projector","status":"TODO","version":1,"work_item_id":"work_1"}',
+                ),
+            )
 
         projection = json.loads(project_json(self.kernel))
 
@@ -166,53 +165,53 @@ class DeterministicProjectionTest(unittest.TestCase):
     def test_projection_preserves_full_ledger_conflict_and_continuity_history(self) -> None:
         self.kernel.commit(self.objects["assert_postgresql_proposal"])
         self.kernel.commit(self.objects["assert_mysql_same_interval_proposal"])
-        create_continuity_schema(self.kernel.connection)
         decision = {
             "decision_id": "decision_history_1",
             "status": "ACTIVE",
             "version": 1,
             "title": "Keep complete history",
         }
-        self.kernel.connection.execute(
-            "INSERT INTO decision_records VALUES (?, ?, ?, ?, ?)",
-            (
-                decision["decision_id"],
-                decision["status"],
-                decision["version"],
-                None,
-                canonical_json(decision),
-            ),
-        )
         head = self.kernel.connection.execute(
             "SELECT entry_hash, state_root FROM ledger ORDER BY seq DESC LIMIT 1"
         ).fetchone()
-        self.kernel.connection.execute(
-            """INSERT INTO ledger(
-                 prev_hash, entry_hash, proposal_hash, proposal, events,
-                 pre_state_root, state_root, committed_at
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                head["entry_hash"],
-                "sha256:" + "a" * 64,
-                "sha256:" + "b" * 64,
-                canonical_json({"proposal_id": "proposal_history_1"}),
-                canonical_json(
-                    [{"event_type": "DECISION_RECORDED", "decision": decision}]
-                ),
-                head["state_root"],
-                self._expected_state_root(),
-                "2026-08-11T01:02:03Z",
-            ),
-        )
         resolution = {
             "resolution_epoch": 1,
             "selected_claim_ids": [],
             "rejected_claim_ids": [],
         }
-        self.kernel.connection.execute(
-            "UPDATE conflicts SET status = 'RESOLVED', version = 2, resolution = ?",
-            (canonical_json(resolution),),
-        )
+        with self.kernel._authorized_writes():
+            self.kernel.connection.execute(
+                "INSERT INTO decision_records VALUES (?, ?, ?, ?, ?)",
+                (
+                    decision["decision_id"],
+                    decision["status"],
+                    decision["version"],
+                    None,
+                    canonical_json(decision),
+                ),
+            )
+            self.kernel.connection.execute(
+                """INSERT INTO ledger(
+                     prev_hash, entry_hash, proposal_hash, proposal, events,
+                     pre_state_root, state_root, committed_at
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    head["entry_hash"],
+                    "sha256:" + "a" * 64,
+                    "sha256:" + "b" * 64,
+                    canonical_json({"proposal_id": "proposal_history_1"}),
+                    canonical_json(
+                        [{"event_type": "DECISION_RECORDED", "decision": decision}]
+                    ),
+                    head["state_root"],
+                    self._expected_state_root(),
+                    "2026-08-11T01:02:03Z",
+                ),
+            )
+            self.kernel.connection.execute(
+                "UPDATE conflicts SET status = 'RESOLVED', version = 2, resolution = ?",
+                (canonical_json(resolution),),
+            )
 
         projection = json.loads(project_json(self.kernel))
 
@@ -223,12 +222,12 @@ class DeterministicProjectionTest(unittest.TestCase):
         conflict = projection["conflicts"][0]
         self.assertEqual(2, conflict["version"])
         self.assertEqual(resolution, conflict["resolution"])
-        self.assertEqual(2, conflict["opened_sequence"])
+        self.assertEqual(3, conflict["opened_sequence"])
         decision_projection = projection["continuity"]["decisions"][0]
         self.assertEqual(decision, decision_projection["document"])
-        self.assertEqual([3], decision_projection["history_sequences"])
+        self.assertEqual([4], decision_projection["history_sequences"])
         self.assertEqual(
-            ["project.json#/ledger/entries/2"],
+            ["project.json#/ledger/entries/3"],
             decision_projection["history_refs"],
         )
         self.assertEqual(
@@ -258,9 +257,9 @@ class DeterministicProjectionTest(unittest.TestCase):
 
         projection = json.loads(project_json(self.kernel))
 
-        self.assertEqual(12, projection["ledger"]["head_sequence"])
+        self.assertEqual(13, projection["ledger"]["head_sequence"])
         self.assertEqual(
-            list(range(1, 13)),
+            list(range(1, 14)),
             [entry["sequence"] for entry in projection["ledger"]["entries"]],
         )
 
@@ -378,18 +377,18 @@ class DeterministicProjectionTest(unittest.TestCase):
             self.kernel.connection.execute("ROLLBACK")
 
     def test_unknown_continuity_status_fails_closed(self) -> None:
-        create_continuity_schema(self.kernel.connection)
-        self.kernel.connection.execute("PRAGMA ignore_check_constraints = ON")
-        self.kernel.connection.execute(
-            "INSERT INTO decision_records VALUES (?, ?, ?, ?, ?)",
-            (
-                "decision_unknown_1",
-                "ARCHIVED",
-                1,
-                None,
-                '{"decision_id":"decision_unknown_1","status":"ARCHIVED","version":1}',
-            ),
-        )
+        with self.kernel._authorized_writes():
+            self.kernel.connection.execute("PRAGMA ignore_check_constraints = ON")
+            self.kernel.connection.execute(
+                "INSERT INTO decision_records VALUES (?, ?, ?, ?, ?)",
+                (
+                    "decision_unknown_1",
+                    "ARCHIVED",
+                    1,
+                    None,
+                    '{"decision_id":"decision_unknown_1","status":"ARCHIVED","version":1}',
+                ),
+            )
 
         with self.assertRaises(ProjectionError) as caught:
             project_json(self.kernel)
@@ -404,10 +403,11 @@ class DeterministicProjectionTest(unittest.TestCase):
         ).fetchone()
         members = json.loads(conflict["members"])
         members.append("claim_missing_1")
-        self.kernel.connection.execute(
-            "UPDATE conflicts SET members = ? WHERE conflict_id = ?",
-            (canonical_json(sorted(members)), conflict["conflict_id"]),
-        )
+        with self.kernel._authorized_writes():
+            self.kernel.connection.execute(
+                "UPDATE conflicts SET members = ? WHERE conflict_id = ?",
+                (canonical_json(sorted(members)), conflict["conflict_id"]),
+            )
 
         with self.assertRaises(ProjectionError) as caught:
             project_json(self.kernel)
@@ -418,22 +418,23 @@ class DeterministicProjectionTest(unittest.TestCase):
         template = copy.deepcopy(
             self.objects["assert_postgresql_proposal"]["operations"][0]["claim"]
         )
-        for index in range(count):
-            claim = copy.deepcopy(template)
-            claim["claim_id"] = f"claim_optional_{index:02d}"
-            claim["proposition"]["subject"]["entity_id"] = (
-                f"system:optional:{index:02d}"
-            )
-            claim["proposition_hash"] = sha256_json(claim["proposition"])
-            self.kernel.connection.execute(
-                "INSERT INTO claims VALUES (?, ?, ?, ?, 'ACTIVE', 1, NULL)",
-                (
-                    claim["claim_id"],
-                    claim["proposition_hash"],
-                    canonical_json(claim["proposition"]),
-                    canonical_json(claim),
-                ),
-            )
+        with self.kernel._authorized_writes():
+            for index in range(count):
+                claim = copy.deepcopy(template)
+                claim["claim_id"] = f"claim_optional_{index:02d}"
+                claim["proposition"]["subject"]["entity_id"] = (
+                    f"system:optional:{index:02d}"
+                )
+                claim["proposition_hash"] = sha256_json(claim["proposition"])
+                self.kernel.connection.execute(
+                    "INSERT INTO claims VALUES (?, ?, ?, ?, 'ACTIVE', 1, NULL)",
+                    (
+                        claim["claim_id"],
+                        claim["proposition_hash"],
+                        canonical_json(claim["proposition"]),
+                        canonical_json(claim),
+                    ),
+                )
 
     def _expected_state_root(self) -> str:
         state: dict[str, list[object]] = {}

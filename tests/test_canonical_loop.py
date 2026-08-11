@@ -226,11 +226,12 @@ class CanonicalLoopTest(unittest.TestCase):
         self.assertEqual("COMMITTED", self.kernel.commit(self._source_proposal()).outcome)
         # Simulate a privileged forensic/owner-level tamper. Ordinary DML is
         # rejected by the append-only trigger and covered separately.
-        self.kernel.connection.execute("DROP TRIGGER ledger_no_update")
-        self.kernel.connection.execute(
-            "UPDATE ledger SET events = ? WHERE seq = 1",
-            ('[{"event_type":"CORRUPTED"}]',),
-        )
+        with self.kernel._authorized_writes():
+            self.kernel.connection.execute("DROP TRIGGER ledger_no_update")
+            self.kernel.connection.execute(
+                "UPDATE ledger SET events = ? WHERE seq = 1",
+                ('[{"event_type":"CORRUPTED"}]',),
+            )
 
         result = self.kernel.verify_ledger()
 

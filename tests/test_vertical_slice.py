@@ -58,7 +58,7 @@ class AtlasVerticalSliceTest(unittest.TestCase):
         first = self.kernel.commit(proposal)
         second = self.kernel.commit(proposal)
         self.assertEqual(first, second)
-        self.assertEqual(1, self.kernel.connection.execute("SELECT COUNT(*) FROM ledger").fetchone()[0])
+        self.assertEqual(2, self.kernel.connection.execute("SELECT COUNT(*) FROM ledger").fetchone()[0])
 
     def test_same_idempotency_key_with_different_payload_is_rejected(self) -> None:
         proposal = self.objects["assert_postgresql_proposal"]["object"]

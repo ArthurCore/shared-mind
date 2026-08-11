@@ -43,3 +43,21 @@ def build_contract_validator(
     contract = schema if schema is not None else load_default_schema()
     Draft202012Validator.check_schema(contract)
     return Draft202012Validator(contract, format_checker=FormatChecker())
+
+
+def build_definition_validator(
+    definition: str,
+    schema: dict[str, Any] | None = None,
+) -> Draft202012Validator:
+    """Build a validator for one named contract definition."""
+
+    contract = schema if schema is not None else load_default_schema()
+    Draft202012Validator.check_schema(contract)
+    if definition not in contract.get("$defs", {}):
+        raise KeyError(f"Unknown contract definition: {definition}")
+    focused = {
+        "$schema": contract["$schema"],
+        "$defs": contract["$defs"],
+        "$ref": f"#/$defs/{definition}",
+    }
+    return Draft202012Validator(focused, format_checker=FormatChecker())
