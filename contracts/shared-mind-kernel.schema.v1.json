@@ -1,0 +1,731 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shared-mind.local/schema/kernel/v1",
+  "title": "Shared Mind Kernel Contract v1",
+  "description": "Shape contract for the Atlas epistemic transaction kernel. Cross-object and hashing invariants are enforced by the semantic validator.",
+  "oneOf": [
+    {"$ref": "#/$defs/PredicateRegistry"},
+    {"$ref": "#/$defs/SourceRevision"},
+    {"$ref": "#/$defs/Claim"},
+    {"$ref": "#/$defs/EvidenceLink"},
+    {"$ref": "#/$defs/Proposal"},
+    {"$ref": "#/$defs/Conflict"},
+    {"$ref": "#/$defs/LedgerEntry"},
+    {"$ref": "#/$defs/DecisionReceipt"}
+  ],
+  "$defs": {
+    "Hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "SemanticId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{1,31}:[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "RecordId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{1,31}_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+    },
+    "SemVer": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "ActorRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor_id", "actor_type"],
+      "properties": {
+        "actor_id": {"$ref": "#/$defs/SemanticId"},
+        "actor_type": {"enum": ["AGENT", "HUMAN", "SERVICE"]}
+      }
+    },
+    "EntityRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entity_id", "entity_type"],
+      "properties": {
+        "entity_id": {"$ref": "#/$defs/SemanticId"},
+        "entity_type": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+        }
+      }
+    },
+    "ObjectValue": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "entity_id", "entity_type"],
+          "properties": {
+            "kind": {"const": "entity"},
+            "entity_id": {"$ref": "#/$defs/SemanticId"},
+            "entity_type": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": {"const": "string"},
+            "value": {"type": "string", "minLength": 1, "maxLength": 4096}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": {"const": "number"},
+            "value": {"type": "number"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": {"const": "boolean"},
+            "value": {"type": "boolean"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": {"const": "enum"},
+            "value": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,63}$"}
+          }
+        }
+      ]
+    },
+    "ScopeV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["component", "environment", "region", "tenant"],
+      "properties": {
+        "component": {"type": ["string", "null"], "minLength": 1, "maxLength": 128},
+        "environment": {"type": ["string", "null"], "minLength": 1, "maxLength": 64},
+        "region": {"type": ["string", "null"], "minLength": 1, "maxLength": 64},
+        "tenant": {"type": ["string", "null"], "minLength": 1, "maxLength": 128}
+      }
+    },
+    "ValidTime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": {"type": ["string", "null"], "format": "date-time"},
+        "to": {"type": ["string", "null"], "format": "date-time"}
+      }
+    },
+    "Proposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["proposition_version", "subject", "predicate", "object", "polarity", "scope", "valid_time"],
+      "properties": {
+        "proposition_version": {"const": 1},
+        "subject": {"$ref": "#/$defs/EntityRef"},
+        "predicate": {"type": "string", "pattern": "^[a-z][a-z0-9_.]*@[1-9][0-9]*$"},
+        "object": {"$ref": "#/$defs/ObjectValue"},
+        "polarity": {"enum": ["POSITIVE", "NEGATIVE"]},
+        "scope": {"$ref": "#/$defs/ScopeV1"},
+        "valid_time": {"$ref": "#/$defs/ValidTime"}
+      }
+    },
+    "SourceRevision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["object_type", "source_id", "revision_id", "content_hash", "blob_ref", "media_type", "captured_at", "registered_by"],
+      "properties": {
+        "object_type": {"const": "SOURCE_REVISION"},
+        "source_id": {"$ref": "#/$defs/SemanticId"},
+        "revision_id": {"$ref": "#/$defs/RecordId"},
+        "content_hash": {"$ref": "#/$defs/Hash"},
+        "blob_ref": {"type": "string", "format": "uri", "maxLength": 2048},
+        "source_locator": {"type": ["string", "null"], "format": "uri", "maxLength": 2048},
+        "title": {"type": ["string", "null"], "maxLength": 512},
+        "media_type": {"enum": ["text/markdown", "text/plain", "application/json"]},
+        "captured_at": {"type": "string", "format": "date-time"},
+        "registered_by": {"$ref": "#/$defs/ActorRef"}
+      }
+    },
+    "Claim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["object_type", "claim_id", "proposition_hash", "proposition", "asserted_by", "asserted_at"],
+      "properties": {
+        "object_type": {"const": "CLAIM"},
+        "claim_id": {"$ref": "#/$defs/RecordId"},
+        "proposition_hash": {"$ref": "#/$defs/Hash"},
+        "proposition": {"$ref": "#/$defs/Proposition"},
+        "asserted_by": {"$ref": "#/$defs/ActorRef"},
+        "asserted_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "TextSelector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "start_byte", "end_byte", "excerpt", "excerpt_hash", "prefix_hash", "suffix_hash"],
+      "properties": {
+        "kind": {"const": "TEXT_BYTE_RANGE"},
+        "start_byte": {"type": "integer", "minimum": 0},
+        "end_byte": {"type": "integer", "minimum": 1},
+        "excerpt": {"type": "string", "minLength": 1, "maxLength": 16384},
+        "excerpt_hash": {"$ref": "#/$defs/Hash"},
+        "prefix_hash": {
+          "oneOf": [{"$ref": "#/$defs/Hash"}, {"type": "null"}]
+        },
+        "suffix_hash": {
+          "oneOf": [{"$ref": "#/$defs/Hash"}, {"type": "null"}]
+        }
+      }
+    },
+    "EvidenceLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["object_type", "evidence_link_id", "claim_id", "source_revision_id", "selector", "stance", "interpretation", "linked_by", "linked_at"],
+      "properties": {
+        "object_type": {"const": "EVIDENCE_LINK"},
+        "evidence_link_id": {"$ref": "#/$defs/RecordId"},
+        "claim_id": {"$ref": "#/$defs/RecordId"},
+        "source_revision_id": {"$ref": "#/$defs/RecordId"},
+        "selector": {"$ref": "#/$defs/TextSelector"},
+        "stance": {"enum": ["SUPPORTS", "CHALLENGES", "MENTIONS"]},
+        "interpretation": {"enum": ["DIRECT", "REPORTED", "INFERRED"]},
+        "linked_by": {"$ref": "#/$defs/ActorRef"},
+        "linked_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "PredicateObjectDefinition": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "entity_types"],
+          "properties": {
+            "kind": {"const": "entity"},
+            "entity_types": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"}
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "enum_values"],
+          "properties": {
+            "kind": {"const": "enum"},
+            "enum_values": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,63}$"}
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {"kind": {"enum": ["string", "number", "boolean"]}}
+        }
+      ]
+    },
+    "PredicateDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "description", "subject_types", "object", "scope", "temporal", "cardinality", "family_key_fields", "conflict_rules", "evidence_policy"],
+      "properties": {
+        "key": {"type": "string", "pattern": "^[a-z][a-z0-9_.]*@[1-9][0-9]*$"},
+        "description": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "subject_types": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"}
+        },
+        "object": {"$ref": "#/$defs/PredicateObjectDefinition"},
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["allowed_fields", "required_fields"],
+          "properties": {
+            "allowed_fields": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"enum": ["component", "environment", "region", "tenant"]}
+            },
+            "required_fields": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"enum": ["component", "environment", "region", "tenant"]}
+            }
+          }
+        },
+        "temporal": {"enum": ["REQUIRED", "OPTIONAL", "FORBIDDEN"]},
+        "cardinality": {"enum": ["ONE", "MANY"]},
+        "family_key_fields": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_.]{0,127}$"}
+        },
+        "conflict_rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "rule_version"],
+            "properties": {
+              "kind": {"enum": ["OPPOSITE_POLARITY", "EXCLUSIVE_OBJECT", "TEMPORAL_OVERLAP"]},
+              "rule_version": {"type": "string", "pattern": "^[a-z][a-z0-9-]*@[1-9][0-9]*$"}
+            }
+          }
+        },
+        "evidence_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["minimum_evidence_links", "allowed_interpretations"],
+          "properties": {
+            "minimum_evidence_links": {"type": "integer", "minimum": 0, "maximum": 16},
+            "allowed_interpretations": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"enum": ["DIRECT", "REPORTED", "INFERRED"]}
+            }
+          }
+        }
+      }
+    },
+    "PredicateRegistry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["object_type", "registry_id", "version", "canonicalization_version", "guard_dsl_version", "entity_types", "scope_fields", "predicates"],
+      "properties": {
+        "object_type": {"const": "PREDICATE_REGISTRY"},
+        "registry_id": {"type": "string", "pattern": "^[a-z][a-z0-9.-]{2,127}$"},
+        "version": {"$ref": "#/$defs/SemVer"},
+        "canonicalization_version": {"type": "string", "pattern": "^[a-z][a-z0-9-]*@[1-9][0-9]*$"},
+        "guard_dsl_version": {"type": "string", "pattern": "^[a-z][a-z0-9-]*@[1-9][0-9]*$"},
+        "entity_types": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"}
+        },
+        "scope_fields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["component", "environment", "region", "tenant"]}
+        },
+        "predicates": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/PredicateDefinition"}
+        }
+      }
+    },
+    "AggregateRead": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "aggregate_type", "aggregate_id", "expected_version"],
+      "properties": {
+        "kind": {"const": "AGGREGATE"},
+        "aggregate_type": {"enum": ["CLAIM", "CONFLICT", "SOURCE_REVISION"]},
+        "aggregate_id": {"$ref": "#/$defs/RecordId"},
+        "expected_version": {"type": "integer", "minimum": 0}
+      }
+    },
+    "CollectionRead": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "family_key", "expected_digest"],
+      "properties": {
+        "kind": {"const": "COLLECTION"},
+        "family_key": {"$ref": "#/$defs/Hash"},
+        "expected_digest": {"$ref": "#/$defs/Hash"}
+      }
+    },
+    "ReadRef": {
+      "oneOf": [
+        {"$ref": "#/$defs/AggregateRead"},
+        {"$ref": "#/$defs/CollectionRead"}
+      ]
+    },
+    "Guard": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "claim_id", "expected_status"],
+          "properties": {
+            "op": {"const": "CLAIM_STATUS_EQ"},
+            "claim_id": {"$ref": "#/$defs/RecordId"},
+            "expected_status": {"enum": ["ACTIVE", "SUPERSEDED", "RETRACTED"]}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "claim_id", "expected_version"],
+          "properties": {
+            "op": {"const": "CLAIM_VERSION_EQ"},
+            "claim_id": {"$ref": "#/$defs/RecordId"},
+            "expected_version": {"type": "integer", "minimum": 0}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "conflict_id", "expected_status"],
+          "properties": {
+            "op": {"const": "CONFLICT_STATUS_EQ"},
+            "conflict_id": {"$ref": "#/$defs/RecordId"},
+            "expected_status": {"enum": ["OPEN", "RESOLVED"]}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "conflict_id", "expected_digest"],
+          "properties": {
+            "op": {"const": "CONFLICT_MEMBER_DIGEST_EQ"},
+            "conflict_id": {"$ref": "#/$defs/RecordId"},
+            "expected_digest": {"$ref": "#/$defs/Hash"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "family_key", "expected_digest"],
+          "properties": {
+            "op": {"const": "ACTIVE_SET_DIGEST_EQ"},
+            "family_key": {"$ref": "#/$defs/Hash"},
+            "expected_digest": {"$ref": "#/$defs/Hash"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "source_revision_id", "expected_hash"],
+          "properties": {
+            "op": {"const": "SOURCE_HASH_EQ"},
+            "source_revision_id": {"$ref": "#/$defs/RecordId"},
+            "expected_hash": {"$ref": "#/$defs/Hash"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["op", "family_key"],
+          "properties": {
+            "op": {"const": "NO_ACTIVE_CLAIM"},
+            "family_key": {"$ref": "#/$defs/Hash"}
+          }
+        }
+      ]
+    },
+    "RegisterSourceRevisionOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op_id", "op", "source_revision"],
+      "properties": {
+        "op_id": {"$ref": "#/$defs/RecordId"},
+        "op": {"const": "REGISTER_SOURCE_REVISION"},
+        "source_revision": {"$ref": "#/$defs/SourceRevision"}
+      }
+    },
+    "AssertClaimOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op_id", "op", "claim", "initial_evidence"],
+      "properties": {
+        "op_id": {"$ref": "#/$defs/RecordId"},
+        "op": {"const": "ASSERT_CLAIM"},
+        "claim": {"$ref": "#/$defs/Claim"},
+        "initial_evidence": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/EvidenceLink"}
+        }
+      }
+    },
+    "AttachEvidenceOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op_id", "op", "evidence_link"],
+      "properties": {
+        "op_id": {"$ref": "#/$defs/RecordId"},
+        "op": {"const": "ATTACH_EVIDENCE"},
+        "evidence_link": {"$ref": "#/$defs/EvidenceLink"}
+      }
+    },
+    "SupersedeClaimOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op_id", "op", "target_claim_id", "replacement_claim", "initial_evidence", "rationale"],
+      "properties": {
+        "op_id": {"$ref": "#/$defs/RecordId"},
+        "op": {"const": "SUPERSEDE_CLAIM"},
+        "target_claim_id": {"$ref": "#/$defs/RecordId"},
+        "replacement_claim": {"$ref": "#/$defs/Claim"},
+        "initial_evidence": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/EvidenceLink"}
+        },
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 4096}
+      }
+    },
+    "RetractClaimOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op_id", "op", "target_claim_id", "rationale", "authority_policy_version", "evidence_link_ids"],
+      "properties": {
+        "op_id": {"$ref": "#/$defs/RecordId"},
+        "op": {"const": "RETRACT_CLAIM"},
+        "target_claim_id": {"$ref": "#/$defs/RecordId"},
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "authority_policy_version": {"type": "string", "pattern": "^[a-z][a-z0-9-]*@[1-9][0-9]*$"},
+        "evidence_link_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/RecordId"}
+        }
+      }
+    },
+    "Resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resolver", "authority_policy_version", "selected_claim_ids", "rejected_claim_ids", "rationale", "evidence_link_ids", "decided_at", "resolution_epoch"],
+      "properties": {
+        "resolver": {"$ref": "#/$defs/ActorRef"},
+        "authority_policy_version": {"type": "string", "pattern": "^[a-z][a-z0-9-]*@[1-9][0-9]*$"},
+        "selected_claim_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/RecordId"}},
+        "rejected_claim_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/RecordId"}},
+        "rationale": {"type": "string", "minLength": 1, "maxLength": 8192},
+        "evidence_link_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/RecordId"}},
+        "decided_at": {"type": "string", "format": "date-time"},
+        "resolution_epoch": {"type": "integer", "minimum": 1}
+      }
+    },
+    "ResolveConflictOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op_id", "op", "conflict_id", "expected_member_digest", "resolution"],
+      "properties": {
+        "op_id": {"$ref": "#/$defs/RecordId"},
+        "op": {"const": "RESOLVE_CONFLICT"},
+        "conflict_id": {"$ref": "#/$defs/RecordId"},
+        "expected_member_digest": {"$ref": "#/$defs/Hash"},
+        "resolution": {"$ref": "#/$defs/Resolution"}
+      }
+    },
+    "Operation": {
+      "oneOf": [
+        {"$ref": "#/$defs/RegisterSourceRevisionOp"},
+        {"$ref": "#/$defs/AssertClaimOp"},
+        {"$ref": "#/$defs/AttachEvidenceOp"},
+        {"$ref": "#/$defs/SupersedeClaimOp"},
+        {"$ref": "#/$defs/RetractClaimOp"},
+        {"$ref": "#/$defs/ResolveConflictOp"}
+      ]
+    },
+    "VersionBundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "predicate_registry", "conflict_rules", "guard_dsl", "projection"],
+      "properties": {
+        "schema": {"$ref": "#/$defs/SemVer"},
+        "predicate_registry": {"$ref": "#/$defs/SemVer"},
+        "conflict_rules": {"type": "string", "pattern": "^[a-z][a-z0-9-]*@[1-9][0-9]*$"},
+        "guard_dsl": {"type": "string", "pattern": "^[a-z][a-z0-9-]*@[1-9][0-9]*$"},
+        "projection": {"type": "string", "pattern": "^[a-z][a-z0-9-]*@[1-9][0-9]*$"}
+      }
+    },
+    "Proposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["object_type", "proposal_id", "idempotency_key", "proposer", "proposed_at", "base_state_root", "versions", "reads", "guards", "operations"],
+      "properties": {
+        "object_type": {"const": "PROPOSAL"},
+        "proposal_id": {"$ref": "#/$defs/RecordId"},
+        "idempotency_key": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{8,128}$"},
+        "proposer": {"$ref": "#/$defs/ActorRef"},
+        "proposed_at": {"type": "string", "format": "date-time"},
+        "base_state_root": {
+          "oneOf": [{"$ref": "#/$defs/Hash"}, {"type": "null"}]
+        },
+        "versions": {"$ref": "#/$defs/VersionBundle"},
+        "reads": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/ReadRef"}},
+        "guards": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/Guard"}},
+        "operations": {"type": "array", "minItems": 1, "maxItems": 128, "items": {"$ref": "#/$defs/Operation"}}
+      }
+    },
+    "Conflict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["object_type", "conflict_id", "family_key", "episode", "kind", "member_claim_ids", "member_digest", "status", "opened_seq", "resolution"],
+      "properties": {
+        "object_type": {"const": "CONFLICT"},
+        "conflict_id": {"$ref": "#/$defs/RecordId"},
+        "family_key": {"$ref": "#/$defs/Hash"},
+        "episode": {"type": "integer", "minimum": 1},
+        "kind": {"enum": ["POLARITY_CONFLICT", "EXCLUSIVE_VALUE_CONFLICT", "TEMPORAL_OVERLAP_CONFLICT"]},
+        "member_claim_ids": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"$ref": "#/$defs/RecordId"}},
+        "member_digest": {"$ref": "#/$defs/Hash"},
+        "status": {"enum": ["OPEN", "RESOLVED"]},
+        "opened_seq": {"type": "integer", "minimum": 1},
+        "resolution": {
+          "oneOf": [{"$ref": "#/$defs/Resolution"}, {"type": "null"}]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "OPEN"}}},
+          "then": {"properties": {"resolution": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"status": {"const": "RESOLVED"}}},
+          "then": {"properties": {"resolution": {"$ref": "#/$defs/Resolution"}}}
+        }
+      ]
+    },
+    "LedgerEvent": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["event_type", "source_revision"],
+          "properties": {
+            "event_type": {"const": "SOURCE_REVISION_REGISTERED"},
+            "source_revision": {"$ref": "#/$defs/SourceRevision"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["event_type", "claim", "initial_evidence"],
+          "properties": {
+            "event_type": {"const": "CLAIM_ASSERTED"},
+            "claim": {"$ref": "#/$defs/Claim"},
+            "initial_evidence": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/EvidenceLink"}}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["event_type", "evidence_link"],
+          "properties": {
+            "event_type": {"const": "EVIDENCE_ATTACHED"},
+            "evidence_link": {"$ref": "#/$defs/EvidenceLink"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["event_type", "target_claim_id", "replacement_claim_id", "rationale"],
+          "properties": {
+            "event_type": {"const": "CLAIM_SUPERSEDED"},
+            "target_claim_id": {"$ref": "#/$defs/RecordId"},
+            "replacement_claim_id": {"$ref": "#/$defs/RecordId"},
+            "rationale": {"type": "string", "minLength": 1}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["event_type", "target_claim_id", "actor", "authority_policy_version", "rationale"],
+          "properties": {
+            "event_type": {"const": "CLAIM_RETRACTED"},
+            "target_claim_id": {"$ref": "#/$defs/RecordId"},
+            "actor": {"$ref": "#/$defs/ActorRef"},
+            "authority_policy_version": {"type": "string"},
+            "rationale": {"type": "string", "minLength": 1}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["event_type", "conflict"],
+          "properties": {
+            "event_type": {"const": "CONFLICT_OPENED"},
+            "conflict": {"$ref": "#/$defs/Conflict"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["event_type", "conflict_id", "resolution"],
+          "properties": {
+            "event_type": {"const": "CONFLICT_RESOLVED"},
+            "conflict_id": {"$ref": "#/$defs/RecordId"},
+            "resolution": {"$ref": "#/$defs/Resolution"}
+          }
+        }
+      ]
+    },
+    "LedgerEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["object_type", "entry_id", "seq", "prev_hash", "entry_hash", "pre_state_root", "post_state_root", "proposal_id", "proposal_hash", "versions", "events", "committed_at"],
+      "properties": {
+        "object_type": {"const": "LEDGER_ENTRY"},
+        "entry_id": {"$ref": "#/$defs/RecordId"},
+        "seq": {"type": "integer", "minimum": 1},
+        "prev_hash": {"oneOf": [{"$ref": "#/$defs/Hash"}, {"type": "null"}]},
+        "entry_hash": {"$ref": "#/$defs/Hash"},
+        "pre_state_root": {"$ref": "#/$defs/Hash"},
+        "post_state_root": {"$ref": "#/$defs/Hash"},
+        "proposal_id": {"$ref": "#/$defs/RecordId"},
+        "proposal_hash": {"$ref": "#/$defs/Hash"},
+        "versions": {"$ref": "#/$defs/VersionBundle"},
+        "events": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/LedgerEvent"}},
+        "committed_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "DecisionReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["object_type", "receipt_id", "proposal_id", "proposal_hash", "idempotency_key", "outcome", "reason_codes", "head_before", "head_after", "ledger_entry_id", "conflict_ids", "decided_at"],
+      "properties": {
+        "object_type": {"const": "DECISION_RECEIPT"},
+        "receipt_id": {"$ref": "#/$defs/RecordId"},
+        "proposal_id": {"$ref": "#/$defs/RecordId"},
+        "proposal_hash": {"$ref": "#/$defs/Hash"},
+        "idempotency_key": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{8,128}$"},
+        "outcome": {"enum": ["COMMITTED", "FACT_CONFLICT", "TRANSACTION_CONFLICT", "VALIDATION_ERROR"]},
+        "reason_codes": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,127}$"}},
+        "head_before": {"oneOf": [{"$ref": "#/$defs/Hash"}, {"type": "null"}]},
+        "head_after": {"oneOf": [{"$ref": "#/$defs/Hash"}, {"type": "null"}]},
+        "ledger_entry_id": {"oneOf": [{"$ref": "#/$defs/RecordId"}, {"type": "null"}]},
+        "conflict_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/RecordId"}},
+        "decided_at": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"outcome": {"enum": ["COMMITTED", "FACT_CONFLICT"]}}},
+          "then": {"properties": {"ledger_entry_id": {"$ref": "#/$defs/RecordId"}}}
+        },
+        {
+          "if": {"properties": {"outcome": {"enum": ["TRANSACTION_CONFLICT", "VALIDATION_ERROR"]}}},
+          "then": {"properties": {"ledger_entry_id": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"outcome": {"const": "FACT_CONFLICT"}}},
+          "then": {"properties": {"conflict_ids": {"minItems": 1}}}
+        }
+      ]
+    }
+  }
+}
