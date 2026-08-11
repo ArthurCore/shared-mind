@@ -262,6 +262,24 @@ class ReleaseGateStructureTest(unittest.TestCase):
             with self.subTest(packaged_contract=contract):
                 self.assertIn(contract, self.workflow)
 
+    def test_ci_retains_coverage_test_and_wheel_evidence(self) -> None:
+        upload_action = (
+            "actions/upload-artifact@"
+            "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+        )
+        self.assertIn(upload_action, self.workflow)
+        self.assertRegex(self.workflow_lower, r"coverage\s+xml\b")
+        self.assertIn(".xml", self.workflow_lower)
+        self.assertIn("unittest", self.workflow_lower)
+        self.assertIn(".log", self.workflow_lower)
+        self.assertIn("dist/*.whl", self.workflow_lower)
+        self.assertIn("release-manifest.txt", self.workflow_lower)
+        self.assertRegex(self.workflow_lower, r"\bsha256sum\b")
+        self.assertRegex(
+            self.workflow_lower,
+            r"if-no-files-found:\s*warn",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -216,6 +216,22 @@ class SecurityBoundaryTest(unittest.TestCase):
         self.assertEqual("WORKSPACE_CONFIG_INVALID", caught.exception.code)
         self.assertEqual((0, 0), self._canonical_counts())
 
+    def test_nfr_010_workspace_control_root_symlink_is_rejected(self) -> None:
+        workspace_root = self.temp_root / "symlink-control-workspace"
+        workspace_root.mkdir()
+        external_control = self.temp_root / "external-control"
+        external_control.mkdir()
+        try:
+            os.symlink(external_control, workspace_root / ".shared-mind")
+        except (NotImplementedError, OSError):
+            self.skipTest("directory symlinks are not available")
+
+        with self.assertRaises(WorkspaceError) as caught:
+            Workspace.initialize(workspace_root)
+
+        self.assertEqual("WORKSPACE_CONFIG_INVALID", caught.exception.code)
+        self.assertEqual([], sorted(path.name for path in external_control.iterdir()))
+
     def test_nfr_010_malformed_json_fails_before_receipt_or_ledger_write(self) -> None:
         proposal_path = self.workspace_root / "malformed.json"
         proposal_path.write_text("{", encoding="utf-8")

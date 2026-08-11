@@ -93,6 +93,7 @@ class Workspace:
             )
         root_path.mkdir(parents=True, exist_ok=True)
         control_root = root_path / WORKSPACE_DIRECTORY
+        cls._reject_control_symlink(control_root, "Workspace control directory")
         control_root.mkdir(exist_ok=True)
         (root_path / "sources").mkdir(exist_ok=True)
         (root_path / "projections").mkdir(exist_ok=True)
@@ -161,7 +162,9 @@ class Workspace:
         candidate = start_path if start_path.is_dir() else start_path.parent
         config_path: Path | None = None
         for directory in (candidate, *candidate.parents):
-            possible = directory / WORKSPACE_DIRECTORY / CONFIG_FILENAME
+            control_root = directory / WORKSPACE_DIRECTORY
+            cls._reject_control_symlink(control_root, "Workspace control directory")
+            possible = control_root / CONFIG_FILENAME
             cls._reject_control_symlink(possible, "Workspace config")
             if possible.is_file():
                 config_path = possible

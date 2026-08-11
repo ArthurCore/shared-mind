@@ -33,9 +33,33 @@ jobs:
       - name: Validate executable contracts
         run: python contracts/validate_contract.py
       - name: Run the full suite with branch coverage
+        shell: bash
         run: |
-          python -m coverage run -m unittest discover -s tests -v
-          python -m coverage report --fail-under=80
+          mkdir -p .ci/test-results
+          test_status=0
+          coverage_status=0
+          set -o pipefail
+          python -m coverage run -m unittest discover -s tests -v 2>&1 \
+            | tee ".ci/test-results/unittest-${{ matrix.python-version }}.log" \
+            || test_status=$?
+          python -m coverage xml \
+            -o ".ci/test-results/coverage-${{ matrix.python-version }}.xml" \
+            || true
+          python -m coverage report --fail-under=80 || coverage_status=$?
+          if [ "$test_status" -ne 0 ]; then
+            exit "$test_status"
+          fi
+          exit "$coverage_status"
+      - name: Retain coverage and unittest evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: python-${{ matrix.python-version }}-test-evidence
+          path: |
+            .ci/test-results/unittest-${{ matrix.python-version }}.log
+            .ci/test-results/coverage-${{ matrix.python-version }}.xml
+          if-no-files-found: warn
+          retention-days: 14
 
   os-determinism:
     name: Determinism on ${{ matrix.os }}
@@ -116,10 +140,18 @@ jobs:
           cache: pip
       - name: Build and inspect wheel metadata
         run: |
+          mkdir -p .ci/release
           python -m pip install "build>=1.2,<2" "twine>=6,<7"
           python -m build
           twine check dist/*
           test -n "$(find dist/ -maxdepth 1 -name '*.whl' -print -quit)"
+          {
+            echo "repository=${GITHUB_REPOSITORY}"
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "sha=${GITHUB_SHA}"
+            echo "ref=${GITHUB_REF}"
+            find dist -maxdepth 1 -type f -print0 | sort -z | xargs -0 sha256sum
+          } > .ci/release/release-manifest.txt
       - name: Base no MCP wheel smoke
         run: |
           WHEEL_PATH="$(find dist/ -maxdepth 1 -name '*.whl' -print -quit)"
@@ -149,3 +181,14 @@ jobs:
           .venv-mcp/bin/pip install "${WHEEL_PATH}[mcp]"
           .venv-mcp/bin/python -c "import mcp"
           .venv-mcp/bin/shared-mind-mcp --help
+      - name: Retain wheel and release-manifest evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: wheel-release-evidence
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+            .ci/release/release-manifest.txt
+          if-no-files-found: warn
+          retention-days: 14

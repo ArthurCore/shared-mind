@@ -309,12 +309,15 @@ print(shared_mind.__name__, McpApplication.__name__)
         """SDK v2 removed the v1 ``mcp.server.fastmcp`` module entirely."""
 
         module = self.module()
+        types_module = types.ModuleType("mcp.types")
+        types_module.ToolAnnotations = RecordingToolAnnotations
         server_module = types.ModuleType("mcp.server")
         server_module.MCPServer = RecordingFastMCP
 
         with patch.dict(
             sys.modules,
             {
+                "mcp.types": types_module,
                 "mcp.server": server_module,
                 "mcp.server.fastmcp": None,
             },
