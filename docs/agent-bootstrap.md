@@ -26,8 +26,11 @@ a decision that depends on them.
 
 `--budget-tokens` uses the deterministic estimator declared in truncation
 metadata and reports `token_estimate_exact: false`. For a hard model-specific
-token ceiling, run that model's pinned tokenizer externally and pass the safe
-result through `--budget-bytes`.
+token ceiling, use the optional `exact-token-counter@1` Python protocol with a
+pinned tokenizer name, version, fingerprint, and model, or run that tokenizer
+externally and pass the safe result through `--budget-bytes`. Shared Mind does
+not bundle a provider tokenizer. Current context metadata is versioned as
+`handoff-context@3` and `context-selection@3`.
 
 For a new workspace, initialize it once:
 
@@ -94,6 +97,18 @@ Resolution also goes through an explicit Proposal whose single
 $ shared-mind conflict resolve conflict_example_12345678 --proposal resolution.json
 ```
 
+When a transaction conflict includes `data.rebase_hint`, treat it only as an
+advisory description of failed and replacement preconditions. It is explicitly
+`safe_to_auto_apply: false`: refresh state, review the current aggregate, and
+build a new Proposal. The canonical `decision_receipt` remains unchanged.
+
+For deterministic structured reads, the CLI also supports `shared-mind query`
+with repeatable `--kind`, `--id`, `--predicate`, `--source-id`,
+`--source-revision-id`, and `--status` filters plus title, pagination, and
+`--summary-only`. Filter categories are ANDed and repeated values within a
+category are ORed. Query output is a non-authoritative projection and cannot
+mutate canonical state.
+
 After accepted changes, run the context command again before choosing the next
 task.
 
@@ -124,6 +139,28 @@ For a machine-readable full projection, use:
 ```console
 $ shared-mind project --format json
 ```
+
+## Local MCP and external adapters
+
+The optional local MCP server exposes the same transport-neutral service
+envelopes as the CLI. Its workspace is fixed at startup. `context`, `query`,
+`proposal_validate`, `conflict_list`, and `ledger_verify` are read-only;
+`proposal_commit` and `source_add` can write canonical state and require the
+same explicit user approval as their CLI equivalents. Tool annotations are
+hints, not an authorization mechanism. See the [local MCP guide](mcp.md).
+
+The AtomicStrata, Qarinah, and SwarmVault adapters accept already-captured
+bytes and create source revisions only by default. They do not contact vendors
+or promote imported text to truth. See [external source adapters](adapters.md)
+and the local-only [remote policy boundary](remote-policy.md).
+
+Two-process acceptance tests show one winner and one auditable transaction
+conflict for competing destructive changes, while independent commutative
+evidence attaches are both preserved: silent overwrite is 0 in that automated
+scenario. This is not a claim that a paid live Codex+Claude interoperability
+evaluation has been run. The checked-in continuity scorer is deterministic and
+offline; its live protocol remains opt-in as documented in
+[product-continuity dogfooding](dogfooding.md).
 
 See the [SRS](SRS.md) for the authoritative product requirements and lifecycle
 semantics.

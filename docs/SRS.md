@@ -2,11 +2,11 @@
 
 | 항목 | 값 |
 |---|---|
-| 문서 버전 | 1.0.0 |
+| 문서 버전 | 1.1.0 |
 | 기준일 | 2026-08-11 |
 | 상태 | 구현 동기화 기준선(Implemented Baseline) |
 | 대상 저장소 | `ArthurCore/shared-mind` |
-| 구현 기준선 | 시작 `3c3cdf0`, 현재 `main`의 계약·conformance suite |
+| 구현 기준선 | 시작 `3c3cdf0`, 현재 `main`의 로컬 계약·conformance suite |
 | 주 독자 | 제품 책임자, 개발자, 코딩 에이전트, 검토자 |
 
 ## 1. 문서의 목적
@@ -333,8 +333,8 @@ Continuity 계층의 최소 연산은 다음과 같다.
 | FR-050 | P0 | Python API와 JSON 출력 CLI를 제공해야 한다. | 에이전트가 shell에서 parse 가능한 안정된 결과 code를 받음 |
 | FR-051 | P0 | 최소 CLI는 `init`, `source add`, `proposal validate`, `proposal commit`, `context`, `conflict list/resolve`, `replay --verify`, `project`를 제공해야 한다. | end-to-end acceptance script가 수동 DB 접근 없이 통과함 |
 | FR-052 | P1 | coding agent용 명시적 사용 지침과 context bootstrap 명령을 제공해야 한다. | 새 에이전트가 한 명령으로 handoff context를 얻음 |
-| FR-053 | P1 | 로컬 MCP adapter를 제공할 수 있어야 한다. | Codex/Claude Code가 동일 commit/query 의미론을 사용함 |
-| FR-054 | P2 | AtomicStrata, Qarinah, SwarmVault adapter를 core 밖에서 제공할 수 있어야 한다. | adapter 실패가 canonical store를 부분 변경하지 않음 |
+| FR-053 | P1 | 로컬 MCP adapter를 제공할 수 있어야 한다. | optional stdio server가 CLI/Python과 동일한 commit/query envelope를 사용하고 workspace/path 권한을 넓히지 않음 |
+| FR-054 | P2 | AtomicStrata, Qarinah, SwarmVault adapter를 core 밖에서 제공할 수 있어야 한다. | source-only 기본값이며 adapter 실패가 canonical store를 부분 변경하지 않음 |
 
 ## 11. 비기능 요구사항
 
@@ -367,6 +367,9 @@ shared-mind conflict list [--status OPEN]
 shared-mind conflict resolve <conflict-id> --proposal <proposal.json>
 shared-mind replay --verify
 shared-mind project --format markdown
+shared-mind query [--kind KIND] [--id ID] [--predicate KEY]
+                  [--source-id ID] [--source-revision-id ID]
+                  [--status STATUS] [--limit N] [--offset N] [--summary-only]
 ```
 
 CLI는 interactive prompt 없이도 동작해야 하며 성공/실패를 exit code와 JSON으로 제공해야 한다.
@@ -393,15 +396,33 @@ version에서는 사용 시 `CONTEXT_FILTER_UNSUPPORTED`를 반환하며 조용�
 `FACT_CONFLICT`는 지식 상태에 기록된 성공 결과다. `TRANSACTION_CONFLICT`와 `VALIDATION_ERROR`는 해당 proposal의 mutation을 ledger에 추가하지 않는다.
 `proposal validate`의 schema 오류는 별도로 `errors[{code, object_path, message}]`를
 제공한다. `decision_receipt`는 versioned JSON 계약과 일치하는 canonical 문서다.
+해석 가능한 `TRANSACTION_CONFLICT`는 canonical receipt의 sibling으로
+`rebase-hint@1`을 추가할 수 있지만, 이는 `safe_to_auto_apply=false`인 검토용
+정보이며 자동 재제출 권한이 아니다.
+
+### 12.3 로컬 MCP와 선택적 protocol
+
+`shared-mind-mcp --workspace .`는 optional `mcp>=2,<3` extra에서 실행되는
+로컬 stdio adapter다. dependency-free dispatcher는 `context`, `query`,
+`proposal_validate`, `proposal_commit`, `source_add`, `conflict_list`,
+`ledger_verify` 7개 tool과 6개 고정 resource URI만 노출한다. workspace는
+process 시작 시 고정되고 임의 file/SQLite/SQL resource는 제공하지 않는다.
+프로젝트 `.codex/config.toml`은 이 server를 `required=false`로 등록하며 세
+read-only agent role을 가리킨다.
+
+`exact-token-counter@1`은 pinned tokenizer metadata와 deterministic count를
+주입하는 선택적 Python protocol이다. provider tokenizer 자체는 포함하지 않는다.
+AtomicStrata/Qarinah/SwarmVault import는 core 밖의 `external-adapter-contract@1`
+source-only local bytes protocol이며 live vendor 연결은 제공하지 않는다.
 
 ## 13. 현재 구현 상태
 
 ### 13.1 동기화된 구현 기준선
 
-2026-08-11 현재 write schema는 `1.2.0`, predicate registry는 version
+2026-08-11 현재 write schema는 `1.3.0`, predicate registry는 version
 `1.0.0`과 canonical content hash, conflict rules는 `conflict-rules@1`, guard
 DSL은 `guard-dsl@1`, projection은 `markdown-projection@3`로 고정된다.
-Handoff output은 `handoff-context@2`와 `context-selection@2`를 자체 metadata에
+Handoff output은 `handoff-context@3`와 `context-selection@3`를 자체 metadata에
 표시한다.
 
 다음 흐름이 production code와 자동 시험에 함께 존재한다.
@@ -413,12 +434,22 @@ Handoff output은 `handoff-context@2`와 `context-selection@2`를 자체 metadat
 - fact conflict 보존, resolve/reopen episode, retract/supersede lifecycle
 - DecisionRecord, OpenQuestion, WorkItem lifecycle와 typed reference resolution
 - append-only ledger/receipt/source trigger와 public SQLite write authorizer
-- schema-valid canonical `LedgerEntry`/`DecisionReceipt` document persistence
+- schema-valid canonical `LedgerEntry`/`DecisionReceipt` document persistence와
+  required-nullable receipt proposer provenance
 - ledger/event/document/hash/digest verifier와 empty-target deterministic replay
 - baseline `3c3cdf0` format의 version-dispatched verify/replay migration
 - deterministic JSON/Markdown projection, history link, budgeted handoff context
-- JSON CLI, one-command agent bootstrap, Git projection review workflow
-- registry content drift, malformed input, corruption, concurrency, fault-injection 시험
+- `structured-query@1`, advisory `rebase-hint@1`, JSON CLI, optional MCP v2
+  local adapter, one-command bootstrap, Git projection review workflow
+- optional exact-token protocol과 deterministic offline product-continuity scorer
+- 세 pinned source-only external adapter와 atomic failure/retry boundary
+- two-process client race의 destructive winner/loser, commutative preservation,
+  idempotency audit 및 silent overwrite 0 자동시험
+- deny-by-default remote identity/disclosure/source-scope policy의 순수 local evaluator
+- registry drift, bounded input, path/SQL/security, WAL/process durability,
+  corruption, concurrency, fault-injection 시험
+- Python 3.11~3.13, Linux/macOS/Windows determinism subset, coverage/lint/type/
+  dependency audit/Bandit와 clean base/MCP wheel smoke CI 구성
 
 검증 명령과 현재 결과는 다음과 같다.
 
@@ -428,8 +459,13 @@ python3 contracts/validate_contract.py
 #     + 6 semantic cases + 7 continuity operations
 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
-# Ran 117 tests ... OK
+# Ran 321 tests in 432.757s
+# OK
 ```
+
+이 결과는 frozen implementation commit `47b7f1c`의 schema 1.3 hardening,
+receipt migration atomicity, remote policy, input/TOCTOU, MCP, adapter, 성능
+query-plan 회귀를 모두 포함한다.
 
 ### 13.2 요구사항 추적표
 
@@ -440,21 +476,22 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 | FR-020~026 | 완료 | `test_vertical_slice`, `test_canonical_loop`, `test_integrity_semantics`, 24 attach race |
 | FR-030~033 | 완료 | continuity contract/runtime/kernel lifecycle 및 stale guard 시험 |
 | FR-040~045 | 완료 | replay/corruption/migration/projection/context conformance 시험 |
-| FR-046 | 부분 완료(P1) | Markdown/JSON은 `rg`와 ID/reference 검색 가능; 별도 query command는 미구현 |
-| FR-047, FR-050~052 | 완료 | Git workflow 문서, JSON CLI acceptance, agent bootstrap 시험 |
-| FR-053 | 계획(P1) | local MCP adapter 미구현; CLI/Python 의미론 재사용 예정 |
-| FR-054 | 계획(P2) | 외부 adapter 미구현; core 밖에서만 추가 |
-| NFR-001~007 | 완료 | version/hash pin, append-only receipts, rollback, replay, local-first audit trail |
-| NFR-008 | 목표/미측정 | 100k-entry p95 benchmark는 아직 측정하지 않았으며 성능 주장은 하지 않음 |
-| NFR-009~012 | 완료(아래 제한 포함) | hard byte budget, versioned token estimator, path/SQL boundary, stable CLI codes |
+| FR-046 | 완료 | `structured-query@1`, seven public kinds, stable paging/filtering, read contract |
+| FR-047, FR-050~052 | 완료 | Git workflow 문서, JSON CLI acceptance, agent bootstrap |
+| FR-053 | 로컬 구현 완료/live 검증 대기 | optional MCP v2 server, fixed allowlist, CLI/service parity, Codex project config; paid/network Codex+Claude run은 미수행 |
+| FR-054 | local source-only 완료 | AtomicStrata/Qarinah/SwarmVault bytes adapters와 atomic failure conformance; live vendor connector는 없음 |
+| NFR-001~007 | 완료 | version/hash pin, append-only receipts, rollback, WAL durability, replay, local-first audit trail |
+| NFR-008 | 완료(환경 회귀 주의) | post-index 100k history-heavy p95 2.707 ms, optimized hot-active p95 1.653288 s; exact output/replay parity |
+| NFR-009~012 | 완료(아래 제한 포함) | hard byte/token budget, optional exact-token adapter, path/SQL boundary, stable CLI codes |
 
 ### 13.3 명시적 제한과 호환성 경계
 
 - `canonical_json()`은 현재 계약 값 범위에서 deterministic하게 시험되지만 완전한
   RFC 8785 구현을 표방하지 않는다.
-- `budget_tokens`는 `ceil(utf8_bytes/4)` estimator이며 metadata에
-  `token_estimate_exact=false`를 남긴다. 모델별 hard token 제한은 외부 tokenizer가
-  계산한 byte budget을 사용한다.
+- adapter가 없으면 `budget_tokens`는 `ceil(utf8_bytes/4)` estimator이며 metadata에
+  `token_estimate_exact=false`를 남긴다. exact mode에서는 caller-supplied deterministic
+  counter의 metadata/fingerprint와 validated count를 기록하고 byte/token hard cap을
+  모두 강제한다.
 - local public API는 direct DML/DDL을 거부하지만 DB 파일 소유자가 별도 SQLite
   process로 수행하는 forensic 작업까지 암호학적으로 차단하지 않는다.
 - `3c3cdf0` schema `1.0.0` ledger는 source registration event와 canonical
@@ -464,11 +501,39 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
   `*_CONTRACT_INCOMPLETE`로 명시되며 정상 문서처럼 합성하지 않는다.
 - schema `1.1.0`의 full-event ledger는 hash/state replay가 가능하지만 exact
   persisted contract document 도입 전 row는 동일하게 incomplete로 노출한다.
+- schema `1.2.0`의 정식 exact receipt document에는 `proposer`가 없었고, version
+  수정 직전의 짧은 transitional 1.2 writer는 proposer-bearing 문서를 남겼다. 두
+  1.2 variant의 bytes/marker/proposer를 모두 그대로 보존하며 1.3 형태로 소급
+  변경하지 않는다. current `1.3.0` receipt는 `proposer`를 required-nullable로
+  기록하고 verifier가 document/column/accepted Proposal parity를 검사한다.
+  rejected receipt는 document/column 및 당시 head/state-root 위치를 검증하지만,
+  ledger에 연결된 Proposal이 없으므로 DB 파일 소유자의 coordinated forensic rewrite를
+  암호학적으로 탐지한다고 주장하지 않는다. 1.0/1.1/1.2/1.3 history와 mixed
+  1.2/1.3 replay는 accepted/rejected receipt stream까지 순서대로 보존한다.
 - local mode의 actor ID는 감사용으로 보존되지만 외부 인증 identity가 아니다.
   Remote adapter는 별도의 trusted identity/policy 경계를 제공해야 한다.
+- MCP dispatcher, project-local Codex config, SDK compatibility는 local automatic
+  test로 검증했다. 실제 유료/네트워크 Codex+Claude가 같은 workspace를 사용하는
+  live interoperability 평가는 수행하지 않았다.
+- AtomicStrata/Qarinah/SwarmVault adapter는 caller가 이미 수집한 bytes를 source
+  revision으로 계획·등록할 뿐이다. vendor SDK, login, polling, webhook, credential,
+  network connector는 구현하지 않았다.
+- `exact-token-counter@1`은 dependency-injection protocol이다. 저장소는 provider
+  tokenizer를 번들하거나 특정 provider count의 정확성을 인증하지 않는다.
+- remote policy는 identity/disclosure/source-scope를 평가하는 deny-by-default 순수
+  local 함수다. origin 인증, 네트워크 전송, disclosure transport는 구현하지 않았다.
 - Atlas registry는 범용 ontology가 아니라 현재 kernel semantics의 reference domain이다.
-- MCP, 외부 adapter, exact model tokenizer, 100k-entry 성능 benchmark는 현재 P0
-  완료 주장에 포함하지 않는다.
+- post-index 100k fixture는 history-heavy generation 256.374초와 explicit replay
+  263.630초 full parity를 확인했고 quiet context p95는 2.707 ms/950 bytes였다.
+  hot-active generation은 247.642초였다. 최초 two-scan p95 2.066769초는 RED였고,
+  projection-only single traversal 뒤 byte-identical output SHA를 유지한 채 p95
+  1.653288초/2,936 bytes로 GREEN이 됐다(16 included, 99,984 omitted).
+- hot-active 결과는 2초 목표 대비 약 17.3% 여유라 hardware, SQLite, runtime,
+  concurrent load에 민감한 regression watch point다. frozen commit `47b7f1c`의
+  final clean `verify_ledger`는 476.764초, explicit replay는 255.182초였고 원본/재생
+  ledger와 receipt 각 100,000건, head sequence/hash, state root가 모두 일치했다.
+  이전 471.903초 측정은 full suite와 CPU가 경합한 contaminated timing으로 raw
+  artifact에만 보존하며 성능 주장에는 사용하지 않는다.
 
 ## 14. 개발 로드맵
 
@@ -492,24 +557,31 @@ dogfooding과 제품 연속성 정량 평가는 계속 수행한다.
 
 완료 기준: 사용자가 `source add` 후 DB를 직접 만지지 않고 context를 생성하며, 새 세션이 목적·결정·질문·다음 작업을 복원한다.
 
-### Milestone 3 — 다중 에이전트 통합 (부분 완료)
+### Milestone 3 — 다중 에이전트 통합 (부분 완료: 로컬 인터페이스/멀티프로세스 자동시험 완료, 두 제품 live acceptance 대기)
 
 목표: 서로 다른 에이전트가 동일 인터페이스로 읽고 제안한다.
 
-완료: agent bootstrap, JSON CLI/DecisionReceipt contract, concurrency/fault suite,
-Git projection review workflow. 남음: local MCP adapter와 richer rebase hint/query
-surface.
+로컬 완료: agent bootstrap, JSON CLI/DecisionReceipt contract, structured query,
+advisory rebase hints, local MCP adapter, SDK v1/v2 compatibility, concurrency/fault
+suite, Git projection review workflow. 두 독립 CLI process의 destructive race는
+한 winner와 한 auditable transaction conflict를, commutative race는 양쪽 보존을
+확인해 자동시험 시나리오의 silent overwrite를 0으로 유지한다.
+
+남음: 완료 기준의 “두 종류 이상의 coding agent”를 실제 Codex+Claude 유료/네트워크
+세션으로 실행한 live interoperability 평가는 아직 수행하지 않았다.
 
 완료 기준: 두 종류 이상의 coding agent가 같은 workspace를 사용하며 silent overwrite가 0건이다.
 
-### Milestone 4 — 선택적 adapter와 검색 확장 (계획)
+### Milestone 4 — 선택적 adapter와 검색 확장 (부분 완료)
 
 목표: core 의미론을 바꾸지 않고 기존 생태계의 장점을 흡수한다.
 
-1. AtomicStrata citation import adapter
-2. Qarinah event import adapter
-3. SwarmVault source/context adapter
-4. 필요가 측정된 뒤 semantic search/graph UI 검토
+로컬 완료: AtomicStrata/Qarinah/SwarmVault source-only adapter contract,
+deterministic planner, 128-operation proposal cap, atomic failure rollback,
+deny-by-default remote policy evaluator.
+
+남음: live vendor connector와 인증/disclosure 전송은 제공하지 않는다. 필요가 측정된
+뒤 semantic search/graph UI를 검토하며 환경별 100k performance regression을 감시한다.
 
 ## 15. 구현 작업 백로그
 
@@ -517,12 +589,18 @@ surface.
 |---|---|---|---|
 | 완료 | DEV-001~008 | validator, errors, canonical operations, guards, conflict, replay | contract/kernel/conformance suite |
 | 완료 | DEV-009~016 | projector, workspace/CLI, ingest, continuity, context, concurrency | P0 end-to-end path |
-| 부분 | DEV-017 | agent bootstrap/MCP | bootstrap 완료, local MCP 남음 |
+| 완료 | DEV-017 | agent bootstrap/MCP | bootstrap, local MCP, SDK v1/v2 compatibility |
 | 완료 | DEV-018 | Git projection workflow | 문서 및 parser-checked commands |
-| 계획 | DEV-019 | external adapters | core 외부 adapter와 atomic failure 시험 필요 |
-| 계획 | DEV-020 | structured query/rebase hints | FR-046/다중 agent review surface |
-| 계획 | DEV-021 | 100k-entry benchmark | NFR-008 p95 측정과 병목 profile |
-| 계획 | DEV-022 | exact-token adapter | tokenizer/version을 명시하는 optional integration |
+| 완료(local source-only) | DEV-019 | external adapters | captured bytes adapters와 atomic failure; vendor network connector 없음 |
+| 완료 | DEV-020 | structured query/rebase hints | read schema, CLI/service/MCP read surface |
+| 완료(환경 회귀 주의) | DEV-021 | 100k-entry benchmark | 두 profile 생성, history replay parity, hot-active optimized p95 1.653288 s |
+| 완료(protocol) | DEV-022 | exact-token adapter | deterministic counter injection과 fail-closed cap; provider tokenizer 미번들 |
+| 완료(자동시험) | DEV-023 | multi-process two-client/silent overwrite | independent CLI process race, idempotency, replay parity, silent overwrite 0 |
+| 로컬/offline 완료, live eval 대기 | DEV-024 | product continuity eval | golden scorer와 adversarial traps; live provider 평가는 미수행 |
+| 완료(구성/계약) | DEV-025 | release/portability gate | Python 3.11~3.13, 3-OS determinism subset, clean base/MCP wheel smoke CI |
+| 완료(구성/계약) | DEV-026 | quality/security gate | coverage>=80, lint/type/audit/Bandit와 bounded input/path/SQL security |
+| 완료(local/POSIX 시험) | DEV-027 | process-kill/WAL durability | WAL+FULL synchronous, reader fast path, kill/recovery, corrupt WAL fail-closed |
+| 완료(local policy) | DEV-028 | remote identity/disclosure/source-scope policy | deny-by-default evaluator; live identity/network/disclosure transport 없음 |
 
 ## 16. 시험 전략과 합격 기준
 
@@ -566,6 +644,29 @@ surface.
    - 진행 중/다음 작업
 4. baseline인 수동 설명 방식과 비교해 초기 설명 token과 시간을 최소 50% 줄이되 사실 정확도와 open-conflict 노출률을 낮추지 않는다.
 
+현재 checked-in scorer와 golden/adversarial fixture는 deterministic offline
+평가다. provider 호출은 opt-in protocol로 분리되며, 이번 구현 기준선에서 실제
+Codex+Claude paid/network run은 수행하지 않았다.
+
+### 16.5 통합·릴리스·내구성 시험
+
+1. structured read contract는 일곱 public kind, stable ordering/pagination,
+   summary-only, source/evidence join과 advisory rebase hint를 고정한다.
+2. MCP adapter는 정확히 7개 tool/6개 fixed resource URI만 노출하고 CLI/Python
+   service envelope, fixed workspace, path sandbox, stdout purity를 재사용한다.
+3. 두 독립 CLI process의 destructive/commutative/idempotent race 후 ledger와 replay
+   parity를 검증하고 자동시험에서 silent overwrite 0을 요구한다.
+4. source-only adapters는 deterministic proposal 계획, 128-operation bound,
+   atomic failure와 retry parity를 검증하며 네트워크를 호출하지 않는다.
+5. release workflow는 Python 3.11~3.13, 3-OS determinism subset, coverage/lint/type/
+   audit/Bandit, clean base/MCP wheel 설치 smoke를 선언한다. 이는 workflow 계약과
+   local test evidence이며 이 문서 자체가 hosted CI 실행 성공을 주장하지 않는다.
+6. POSIX process-kill, WAL recovery, reader fast path와 corruption fail-closed 시험이
+   canonical commit의 durable boundary를 검증한다.
+7. 100k post-index run은 history-heavy/hot-active fixture의 count/head/root/output
+   parity와 50-sample quiet p95를 기록한다. hot-active single traversal은 2초 목표를
+   통과하지만 약 17.3% 여유이므로 환경별 재측정을 regression gate로 유지한다.
+
 ## 17. Definition of Done
 
 기능 하나는 다음 조건을 모두 만족해야 완료로 본다.
@@ -590,8 +691,10 @@ surface.
 | projection drift | Markdown과 canonical state가 달라짐 | projection을 stateless/deterministic하게 만들고 replay test 수행 |
 | context 압축 손실 | 다음 AI가 모순이나 blocker를 놓침 | open conflict/active decision/open question/work item을 필수 포함 |
 | 개인정보와 민감 source 노출 | 외부 모델/adapter로 데이터 유출 | local-first 기본값, 명시적 disclosure policy와 source scope |
+| live agent/vendor 통합 미검증 | local adapter 성공을 실제 상호운용 성공으로 오인 | local 자동시험과 paid/network live evidence를 상태·문서에서 분리 |
+| 100k 성능 여유가 작음 | 다른 hardware/SQLite/load에서 context SLA 회귀 | canonical output SHA와 query structure를 고정하고 환경별 p95 재측정 |
 | SQLite 단일 노드 한계 | 향후 대규모/분산 사용 제약 | MVP 범위로 명시하고 ledger contract를 storage interface와 분리 |
-| 기존 구현과 SRS 불일치 | 잘못된 완료 판단 | 섹션 13의 “현재/미구현” 표와 요구사항 추적 유지 |
+| 기존 구현과 SRS 불일치 | 잘못된 완료 판단 | 섹션 13의 현재 상태, 제한, 요구사항 추적 유지 |
 
 ## 19. 확정된 설계 결정
 
@@ -604,7 +707,11 @@ surface.
 7. 결정, 열린 질문, 다음 작업은 factual claim에 억지로 숨기지 않고 continuity record로 다룬다.
 8. 첫 구현은 Python 3.11+, SQLite WAL, JSON, Markdown, CLI 중심이다.
 9. 임베딩, 그래프 UI, 범용 editor, 분산 consensus는 P0가 아니다.
-10. 외부 프로젝트는 전체 포크하지 않고 core 밖의 adapter 또는 검증된 패턴으로만 흡수한다.
+10. structured query는 비권위 projection이며 rebase hint는 검토용이고 자동 적용하지 않는다.
+11. MCP는 optional local stdio surface이며 fixed workspace/tool/resource allowlist를 유지한다.
+12. 외부 프로젝트는 전체 포크하지 않고 core 밖의 source-only adapter 또는 검증된 패턴으로만 흡수한다.
+13. exact token 지원은 pinned metadata를 가진 caller-supplied protocol이며 provider tokenizer를 core에 번들하지 않는다.
+14. remote policy는 local evaluator와 향후 인증/전송 adapter의 경계를 분리한다.
 
 ## 20. 보류 결정
 
@@ -614,7 +721,9 @@ surface.
 - context budget의 기본 token 수와 우선순위 정책
 - continuity record를 kernel schema와 같은 package에 둘지 별도 package로 둘지
 - projection의 디렉터리 구조와 파일 분할 기준
-- 첫 MCP tool surface와 권한 모델
+- 다른 지원 환경에서 100k p95를 반복할 시점과 hot-active index seam 도입 기준
+- 사용자 승인 하에서 실제 Codex+Claude가 같은 workspace를 사용하는 live 평가 시점
+- vendor별 connector, origin 인증, disclosure 전송을 추가할지와 그 credential 경계
 - semantic search 도입 시점과 embedding provider
 
 보류 항목을 구현자가 임의로 확정해야 하는 경우 ADR(Architecture Decision Record)을 먼저 추가하고 제품 우선순위와 불변식을 기준으로 검토한다.
@@ -623,8 +732,17 @@ surface.
 
 - [현재 저장소 README](../README.md)
 - [Atlas Kernel Contract v1](../contracts/README.md)
+- [Structured read contract v1](../contracts/shared-mind-read.schema.v1.json)
 - [Predicate Registry v1](../contracts/atlas-predicate-registry.v1.json)
 - [Conformance Fixtures v1](../contracts/atlas-conformance-fixtures.v1.json)
+- [Coding-agent bootstrap](agent-bootstrap.md)
+- [Local MCP guide](mcp.md)
+- [External source adapters](adapters.md)
+- [Product-continuity dogfooding](dogfooding.md)
+- [Remote policy boundary](remote-policy.md)
+- [Context benchmark runbook](../benchmarks/README.md)
+- [DEV-021 benchmark evidence](../benchmarks/results/dev-021-2026-08-11.md)
+- [Release and portability workflow](../.github/workflows/ci.yml)
 - [현재 Kernel 구현](../src/shared_mind/kernel.py)
 - [현재 vertical-slice tests](../tests/test_vertical_slice.py)
 - [Karpathy LLM Wiki idea file](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)

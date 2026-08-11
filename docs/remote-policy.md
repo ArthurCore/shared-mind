@@ -63,16 +63,17 @@ policy hash, making the exact policy revision auditable.
 Evaluation fails closed in a stable order. A request must pass every applicable
 boundary:
 
-1. an authenticated binding is present and exactly matches a configured trust
+1. `request_version` is exactly `remote-policy-request@1`;
+2. an authenticated binding is present and exactly matches a configured trust
    binding;
-2. the claimed actor matches the authenticated actor;
-3. endpoint ID, protocol version, and remote adapter version match their pins;
-4. the predicate-registry version matches the policy;
-5. the capability exists;
-6. the operation type and actor are allowed by that capability;
-7. the source reference is safe, labeled, and beneath an allowed source root;
-8. the derived sensitivity is allowed;
-9. every requested disclosure field is allowlisted.
+3. the claimed actor matches the authenticated actor;
+4. endpoint ID, protocol version, and remote adapter version match their pins;
+5. the predicate-registry version matches the policy;
+6. the capability exists;
+7. the operation type and actor are allowed by that capability;
+8. the source reference is safe, labeled, and beneath an allowed source root;
+9. the derived sensitivity is allowed;
+10. every requested disclosure field is allowlisted.
 
 Unknown capabilities, operations, actors, sources, sensitivity levels, fields,
 versions, and bindings are denied. Source labels use the most specific matching
@@ -88,6 +89,7 @@ ENDPOINT_PIN_MISMATCH
 MISSING_TRUST_BINDING
 OPERATION_SCOPE_DENIED
 REGISTRY_VERSION_MISMATCH
+REMOTE_REQUEST_VERSION_MISMATCH
 REMOTE_VERSION_PIN_MISMATCH
 SENSITIVITY_DENIED
 SOURCE_SCOPE_DENIED

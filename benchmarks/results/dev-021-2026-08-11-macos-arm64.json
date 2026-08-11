@@ -1,0 +1,560 @@
+{
+  "artifact_version": "dev-021-result@2",
+  "captured_at": "2026-08-11",
+  "status": "post_index_100k_history_certified_and_hot_active_optimized_below_target",
+  "pre_index_diagnostic_source": {
+    "git_head": "9f04dcd0962a88a2f2a530e1783deb21ebd79d1b",
+    "working_tree_clean": false,
+    "reproducibility_note": "The shared worktree contained concurrent uncommitted kernel changes. Treat these measurements as diagnostic evidence, not a release-baseline certification."
+  },
+  "pre_index_diagnostic_environment": {
+    "machine": "Apple M3 Pro",
+    "logical_cpu_count": 11,
+    "memory_bytes": 19327352832,
+    "os": "macOS 15.0.1",
+    "kernel": "Darwin 24.0.0",
+    "architecture": "arm64",
+    "python": "3.10.14",
+    "sqlite": "3.43.2",
+    "conformance_note": "The measurement interpreter is older than the project's Python >=3.11 requirement."
+  },
+  "benchmark_protocol": {
+    "benchmark_version": "dev-021-context-benchmark@1",
+    "metric": "warm-filesystem-library-context",
+    "clock": "time.perf_counter_ns",
+    "percentile_method": "nearest-rank",
+    "context_budget_bytes": 32000,
+    "warmups": 5,
+    "samples": 50,
+    "target_p95_ns": 2000000000,
+    "fixture_creation_excluded_from_timed_samples": true,
+    "concurrent_python_unittest_processes_before_quiet_runs": 0
+  },
+  "pre_index_attempt_100k_history_heavy": {
+    "requested_ledger_entries": 100000,
+    "completed": false,
+    "context_benchmark_run": false,
+    "stop_reason": "10-minute fixture-generation cap",
+    "elapsed_seconds_at_stop": 604,
+    "committed_ledger_entries": 46622,
+    "committed_receipts": 46622,
+    "hot_work_item_status": "DOING",
+    "cache_path": "/tmp/shared-mind-dev021-cache/history-heavy-100000-seed21.sqlite3",
+    "cache_in_repository": false,
+    "database_size_bytes": 243662848,
+    "database_sha256": "07a34dc12b5481f1d30cc442258df0d469bd7db1d299bfbc92061f4d69b59c55",
+    "progress_observations": [
+      {"elapsed_seconds": 250, "ledger_entries": 28248},
+      {"elapsed_seconds": 328, "ledger_entries": 34116},
+      {"elapsed_seconds": 432, "ledger_entries": 39314},
+      {"elapsed_seconds": 501, "ledger_entries": 42434},
+      {"elapsed_seconds": 604, "ledger_entries": 46514},
+      {"elapsed_seconds": 604, "ledger_entries_after_interrupt_cleanup": 46622}
+    ],
+    "receipt_lookup_query_plan_at_measurement": [
+      "SCAN receipts"
+    ],
+    "eta_model": {
+      "model": "least-squares T(n)=a*n+b*n^2 over progress observations",
+      "a_seconds_per_entry": 0.0017904066977737555,
+      "b_seconds_per_entry_squared": 2.3693304944479562e-7,
+      "estimated_total_seconds_for_100k": 2548.371164225332,
+      "estimated_total_minutes_for_100k": 42.472852737088864,
+      "estimated_remaining_seconds_at_cap": 1944.371164225332
+    },
+    "claim": "No 100k p95 result was obtained; NFR-008 is not certified by this run."
+  },
+  "pre_index_completed_profiles_10k": {
+    "history_heavy_10k": {
+      "fixture": {
+        "fixture_version": "dev-021-fixture@1",
+        "generation_api": "Kernel.commit",
+        "profile": "history-heavy",
+        "seed": 21,
+        "ledger_entries": 10000,
+        "manifest_hash": "sha256:f3f233b2dbd1f8c9bac48baf14f010bdb8c4c5a6c5b744393b5a5b90a41955ea",
+        "ledger_head": "sha256:3858ae1bd2c9b887426b890d580204f73b0c4282f57f5806357a4bd0d34d52eb",
+        "state_root": "sha256:9be1852312df64dd9be87175f49ad77302c7744dfc63900744f8fb98e6fd8d54",
+        "schema_version": "1.2.0",
+        "projection_version": "markdown-projection@3",
+        "hot_work_item_id": "workitem_dev021_hot_00000021",
+        "hot_work_item_status": "DONE",
+        "hot_work_item_history_entries": 10000,
+        "row_counts": {
+          "ledger": 10000,
+          "receipts": 10000,
+          "work_items": 1,
+          "sources": 0,
+          "claims": 0,
+          "evidence": 0,
+          "conflicts": 0,
+          "decision_records": 0,
+          "open_questions": 0
+        },
+        "generation_ns": 44372858458,
+        "cache_path": "/tmp/shared-mind-dev021-cache/history-heavy-10000-seed21.sqlite3",
+        "database_size_bytes": 52310016,
+        "database_sha256": "350dbb0ae23217c61ea124a96e1e12ce27f026483b432dd272b81cb240ff92d7"
+      },
+      "verification": {
+        "valid": true,
+        "checked_entries": 10000,
+        "errors": [],
+        "ledger_head": "sha256:3858ae1bd2c9b887426b890d580204f73b0c4282f57f5806357a4bd0d34d52eb",
+        "state_root": "sha256:9be1852312df64dd9be87175f49ad77302c7744dfc63900744f8fb98e6fd8d54",
+        "verify_ns": 64646552042,
+        "verify_includes_replay": true
+      },
+      "explicit_replay": {
+        "replay_ns": 35097596000,
+        "ledger_entries": 10000,
+        "receipts": 10000,
+        "state_root": "sha256:9be1852312df64dd9be87175f49ad77302c7744dfc63900744f8fb98e6fd8d54"
+      },
+      "context": {
+        "bytes": 949,
+        "sha256": "sha256:bf399cc8100cf2dc2bba967e680d0b06ad6e04ecacd6870da0bea52c0f888557",
+        "min_ns": 2076333,
+        "median_ns": 3992812.5,
+        "p95_ns": 8756208,
+        "max_ns": 11514541,
+        "target_met": true,
+        "samples_ns": [
+          4224375, 3813875, 5456250, 2969167, 2707792, 2076333, 2935250, 4007167, 4382083, 3891583,
+          3971500, 2859792, 2587708, 3558084, 2179833, 3294166, 8756208, 10068666, 8086250, 4661292,
+          3612333, 4099542, 3499167, 4381042, 4084083, 4189250, 4206166, 3943083, 3985708, 4008292,
+          2900875, 2692125, 2337916, 3974917, 3574000, 4064042, 3935167, 3302250, 3999917, 4013416,
+          11514541, 4821250, 3914084, 4379834, 4135833, 4067875, 4092333, 4055500, 2888667, 8495125
+        ]
+      }
+    },
+    "hot_active_10k": {
+      "fixture": {
+        "fixture_version": "dev-021-fixture@1",
+        "generation_api": "Kernel.commit",
+        "profile": "hot-active",
+        "seed": 22,
+        "ledger_entries": 10000,
+        "manifest_hash": "sha256:bf5ce25f9d29133f97933f5c3805403f49f4d3ac9ee31fc9a4f8fd86056a5e0b",
+        "ledger_head": "sha256:c3159d41a1ddf6841ac479b863a071118670d2748478186d954a39f360c49750",
+        "state_root": "sha256:82b4966273d737200a6c0f05749c49a24f63b961e3bd909377a87f790576e6d2",
+        "schema_version": "1.2.0",
+        "projection_version": "markdown-projection@3",
+        "hot_work_item_id": "workitem_dev021_hot_00000022",
+        "hot_work_item_status": "DOING",
+        "hot_work_item_history_entries": 10000,
+        "row_counts": {
+          "ledger": 10000,
+          "receipts": 10000,
+          "work_items": 1,
+          "sources": 0,
+          "claims": 0,
+          "evidence": 0,
+          "conflicts": 0,
+          "decision_records": 0,
+          "open_questions": 0
+        },
+        "generation_ns": 42286141625,
+        "cache_path": "/tmp/shared-mind-dev021-cache/hot-active-10000-seed22.sqlite3",
+        "database_size_bytes": 52326400,
+        "database_sha256": "ecb224c1fd175d634603ebedff84f10c21faf1f43055fb4218a75d78b179c461"
+      },
+      "verification": {
+        "valid": true,
+        "checked_entries": 10000,
+        "errors": [],
+        "ledger_head": "sha256:c3159d41a1ddf6841ac479b863a071118670d2748478186d954a39f360c49750",
+        "state_root": "sha256:82b4966273d737200a6c0f05749c49a24f63b961e3bd909377a87f790576e6d2",
+        "verify_ns": 64490521708,
+        "verify_includes_replay": true
+      },
+      "context": {
+        "bytes": 2890,
+        "sha256": "sha256:fb73e1716b23a7646dc0209b2252015b63ec435da3f75eab1c98e3c54222d291",
+        "min_ns": 114195000,
+        "median_ns": 119850229,
+        "p95_ns": 133226667,
+        "max_ns": 178961875,
+        "target_met_at_10k": true,
+        "samples_ns": [
+          120169000, 121261417, 128398000, 118284208, 119585542, 119626792, 117524625, 114195000, 114876291, 118160958,
+          116596291, 122674792, 117721541, 118153042, 121941292, 120527375, 115447209, 122335334, 124053375, 117719333,
+          125419708, 120534042, 119898416, 125265417, 121113459, 120066958, 116930583, 118379500, 133226667, 178961875,
+          118041750, 115811333, 116162917, 118720041, 121462208, 115959250, 115646042, 120343000, 120766791, 123543875,
+          118364166, 119281334, 120460625, 123560917, 127881042, 121862708, 172754541, 117336083, 119014167, 119802042
+        ]
+      }
+    }
+  },
+  "pre_index_hot_active_query_profile_10k": {
+    "single_profiled_context_elapsed_ns": 223696125,
+    "single_profiled_context_bytes": 2869,
+    "history_included": 16,
+    "history_omitted": 9984,
+    "cprofile_total_seconds": 0.224,
+    "build_context_projection_seconds": 0.222,
+    "selected_history_sequences_seconds": 0.217,
+    "sqlite_execute_seconds": 0.214,
+    "sqlite_execute_share_approx_percent": 97,
+    "query_plan": [
+      "CO-ROUTINE referenced",
+      "COMPOUND QUERY",
+      "LEFT-MOST SUBQUERY: SCAN ledger; SCAN node VIRTUAL TABLE INDEX 1; SCAN json_each VIRTUAL TABLE INDEX 1",
+      "UNION USING TEMP B-TREE: SCAN ledger; SCAN node VIRTUAL TABLE INDEX 1; SCAN json_each VIRTUAL TABLE INDEX 1",
+      "SCAN referenced",
+      "USE TEMP B-TREE FOR ORDER BY"
+    ],
+    "risk_assessment": {
+      "linear_p95_extrapolation_100k_ns": 1332266670,
+      "profile_wall_extrapolation_100k_ns": 2236961250,
+      "conclusion": "The observed range crosses the 2-second target. The JSON history scan remains an NFR-008 risk; only an actual completed 100k run can certify it."
+    }
+  },
+  "post_index_release_candidate": {
+    "source": {
+      "fixture_generation_git_head": "4d1d5628c7bdca85e08844689d8e83edbbcd6e1a",
+      "required_durability_index_commit": "cd7754a",
+      "required_commit_is_ancestor": true,
+      "capture_git_head": "73f227cc9de9a539fdfb6178ad927f6067dce271",
+      "production_worktree_clean_at_fixture_start": true,
+      "full_worktree_clean_at_fixture_start": false,
+      "fixture_write_schema": "1.2.0",
+      "current_write_schema_at_optimized_projection": "1.3.0",
+      "final_verifier_commit": "47b7f1c84fd0dd8c6aaaebb07fff80e9cf66e997",
+      "final_kernel_sha256": "911c61cd9cc625d4c934473f6415d5e1185079d9dae134f3fcf96923b9557130",
+      "schema_compatibility_note": "Both 100k databases were generated while 1.2.0 was the write schema. The optimized projection plus final commit 47b7f1c hot-active verify_ledger and explicit replay ran after the current-write transition to 1.3.0 and preserved exact 1.2.0 hashes and counts, proving read/replay compatibility for these fixtures but not certifying a freshly generated 1.3.0 100k fixture.",
+      "untracked_at_fixture_start": [
+        "Shared_Mind_Seminar_2026-08-11.pptx",
+        "benchmarks/results/"
+      ],
+      "capture_note": "Fixture processes loaded the committed 4d1d562 source. Later commits changed tests/docs, while the projection optimization remained uncommitted for its final timing."
+    },
+    "environment": {
+      "machine": "Apple M3 Pro",
+      "logical_cpu_count": 11,
+      "memory_bytes": 19327352832,
+      "os": "macOS 15.0.1",
+      "kernel": "Darwin 24.0.0",
+      "architecture": "arm64",
+      "python": "3.13.2",
+      "sqlite": "3.45.3"
+    },
+    "history_heavy_100k": {
+      "fixture": {
+        "fixture_version": "dev-021-fixture@1",
+        "generation_api": "Kernel.commit",
+        "profile": "history-heavy",
+        "seed": 210811,
+        "ledger_entries": 100000,
+        "manifest_hash": "sha256:bff42b70908cf9dcbc9ca2e4b2ad493144cece51598b3b3ec2003132dc4dffbe",
+        "head_entry_hash": "sha256:f6593c68820493fc162dfe4c7af714a80e1245220707f21e64e93c67bb8e1724",
+        "state_root": "sha256:bc2ff82cf991f81d9495ee9ad7cf28fa87af01c1fb3d2e5016a135a25bdd84d7",
+        "schema_version": "1.2.0",
+        "projection_version": "markdown-projection@3",
+        "hot_object": {
+          "object_type": "WORK_ITEM",
+          "object_id": "workitem_dev021_hot_00210811",
+          "status": "DONE",
+          "history_entries": 100000
+        },
+        "table_counts": {
+          "ledger": 100000,
+          "receipts": 100000,
+          "work_items": 1,
+          "sources": 0,
+          "claims": 0,
+          "evidence": 0,
+          "conflicts": 0,
+          "decision_records": 0,
+          "open_questions": 0
+        },
+        "generation_ns": 256373864291,
+        "generation_throughput_commits_per_second": 390.0553602706315,
+        "generation_cap_ns": 600000000000,
+        "completed_within_cap": true,
+        "cache_path": "/tmp/shared-mind-dev021-cache-post-index/history-heavy-100000-seed210811.sqlite3",
+        "database_size_bytes": 527536128,
+        "database_sha256": "ea0381887f3bfe51b7d12b052b95df01ab67a0ba041a043b72f6fa3532b8e8df"
+      },
+      "verification": {
+        "valid": true,
+        "checked_entries": 100000,
+        "errors": [],
+        "head_hash": "sha256:f6593c68820493fc162dfe4c7af714a80e1245220707f21e64e93c67bb8e1724",
+        "state_root": "sha256:bc2ff82cf991f81d9495ee9ad7cf28fa87af01c1fb3d2e5016a135a25bdd84d7",
+        "elapsed_ns": 471903212959,
+        "includes_memory_replay": true,
+        "timing_contaminated": true,
+        "timing_caveat": "PID 46828 ran a full unittest process for about 294.281 seconds in parallel; validity, hashes, and counts remain authoritative, but elapsed time is not a quiet performance measurement."
+      },
+      "explicit_file_replay": {
+        "elapsed_ns": 263629876833,
+        "source": {
+          "ledger": 100000,
+          "receipts": 100000,
+          "head_sequence": 100000,
+          "head_hash": "sha256:f6593c68820493fc162dfe4c7af714a80e1245220707f21e64e93c67bb8e1724",
+          "state_root": "sha256:bc2ff82cf991f81d9495ee9ad7cf28fa87af01c1fb3d2e5016a135a25bdd84d7"
+        },
+        "replay": {
+          "ledger": 100000,
+          "receipts": 100000,
+          "head_sequence": 100000,
+          "head_hash": "sha256:f6593c68820493fc162dfe4c7af714a80e1245220707f21e64e93c67bb8e1724",
+          "state_root": "sha256:bc2ff82cf991f81d9495ee9ad7cf28fa87af01c1fb3d2e5016a135a25bdd84d7"
+        },
+        "parity": true
+      },
+      "quiet_context": {
+        "query_variant": "pre-projection-optimization",
+        "bytes": 950,
+        "sha256": "sha256:56edff31ef168f4b43c0dceccd9d6eb4bb11c403bbb760e8d5b9598aee1366d2",
+        "min_ns": 1712541,
+        "median_ns": 1927645.5,
+        "p95_ns": 2706916,
+        "max_ns": 2936542,
+        "target_met": true,
+        "samples_ns": [
+          2673209, 2706916, 2243875, 2543959, 2928250, 2002417, 1884584, 1925333, 1872625, 1866000,
+          1719708, 1848125, 2129167, 2038417, 1874958, 1712541, 1988291, 1751709, 1798667, 1769709,
+          1752375, 1765750, 1721625, 1775625, 1962875, 1929958, 2487875, 1913084, 1838333, 1819416,
+          1886709, 1741500, 2281250, 2936542, 1974583, 2380208, 1748625, 1839291, 2318875, 1965292,
+          1743125, 2031459, 1910459, 1792250, 2316292, 2291584, 2483708, 2359750, 2070041, 2205416
+        ]
+      }
+    },
+    "hot_active_100k": {
+      "fixture": {
+        "fixture_version": "dev-021-fixture@1",
+        "generation_api": "Kernel.commit",
+        "profile": "hot-active",
+        "seed": 210812,
+        "ledger_entries": 100000,
+        "manifest_hash": "sha256:5760bd1eabfc75f70cacdefe561a17636623157c7b7a3121c6ed21973e19d23a",
+        "head_entry_hash": "sha256:0f170cdab8c03200461b151041b1e66d18c6bd6da2f7fff90942c217d7325ff9",
+        "state_root": "sha256:a766a6ffe04a367cb828a4c8e3f653e638c2dd898081b9922584dee30febb82c",
+        "schema_version": "1.2.0",
+        "projection_version": "markdown-projection@3",
+        "hot_object": {
+          "object_type": "WORK_ITEM",
+          "object_id": "workitem_dev021_hot_00210812",
+          "status": "DOING",
+          "history_entries": 100000
+        },
+        "table_counts": {
+          "ledger": 100000,
+          "receipts": 100000,
+          "work_items": 1,
+          "sources": 0,
+          "claims": 0,
+          "evidence": 0,
+          "conflicts": 0,
+          "decision_records": 0,
+          "open_questions": 0
+        },
+        "generation_ns": 247641672083,
+        "generation_throughput_commits_per_second": 403.80925859071016,
+        "generation_cap_ns": 600000000000,
+        "completed_within_cap": true,
+        "cache_path": "/tmp/shared-mind-dev021-cache-post-index/hot-active-100000-seed210812.sqlite3",
+        "database_size_bytes": 527536128,
+        "database_sha256": "a0e1725e70ea3a1a6a711704b7d7618baab3ebfdccaf58f380b8941bd7cbc860"
+      },
+      "initial_schema_1_3_verification": {
+        "valid": true,
+        "checked_entries": 100000,
+        "errors": [],
+        "head_hash": "sha256:0f170cdab8c03200461b151041b1e66d18c6bd6da2f7fff90942c217d7325ff9",
+        "state_root": "sha256:a766a6ffe04a367cb828a4c8e3f653e638c2dd898081b9922584dee30febb82c",
+        "elapsed_ns": 465899874958,
+        "includes_memory_replay": true,
+        "timing_contaminated": false,
+        "source_schema": "1.2.0",
+        "current_write_schema": "1.3.0"
+      },
+      "initial_schema_1_3_explicit_file_replay": {
+        "elapsed_ns": 264181373667,
+        "source_schema": "1.2.0",
+        "current_write_schema": "1.3.0",
+        "source": {
+          "ledger": 100000,
+          "receipts": 100000,
+          "head_sequence": 100000,
+          "head_hash": "sha256:0f170cdab8c03200461b151041b1e66d18c6bd6da2f7fff90942c217d7325ff9",
+          "state_root": "sha256:a766a6ffe04a367cb828a4c8e3f653e638c2dd898081b9922584dee30febb82c"
+        },
+        "replay": {
+          "ledger": 100000,
+          "receipts": 100000,
+          "head_sequence": 100000,
+          "head_hash": "sha256:0f170cdab8c03200461b151041b1e66d18c6bd6da2f7fff90942c217d7325ff9",
+          "state_root": "sha256:a766a6ffe04a367cb828a4c8e3f653e638c2dd898081b9922584dee30febb82c"
+        },
+        "parity": true
+      },
+      "final_batch_verifier_certification": {
+        "intermediate_runs": [
+          {
+            "label": "batch-verifier-before-residual-receipt-patch",
+            "kernel_sha256": "c5eab50b9724f3b35f34c6e303cfca9595c795e5bef1c509c2266906033a2a98",
+            "verification_elapsed_ns": 501300645875,
+            "explicit_replay_elapsed_ns": 266097349625,
+            "valid": true,
+            "checked_entries": 100000,
+            "errors": [],
+            "parity": true
+          },
+          {
+            "label": "mixed-legacy-pin-before-final-commit",
+            "kernel_sha256": "911c61cd9cc625d4c934473f6415d5e1185079d9dae134f3fcf96923b9557130",
+            "verification_elapsed_ns": 481068401417,
+            "valid": true,
+            "checked_entries": 100000,
+            "errors": [],
+            "explicit_replay": "not_run_for_intermediate_import"
+          }
+        ],
+        "final": {
+          "commit": "47b7f1c84fd0dd8c6aaaebb07fff80e9cf66e997",
+          "kernel_sha256": "911c61cd9cc625d4c934473f6415d5e1185079d9dae134f3fcf96923b9557130",
+          "source_schema": "1.2.0",
+          "current_write_schema": "1.3.0",
+          "verification": {
+            "elapsed_ns": 476763592541,
+            "valid": true,
+            "checked_entries": 100000,
+            "errors": [],
+            "head_hash": "sha256:0f170cdab8c03200461b151041b1e66d18c6bd6da2f7fff90942c217d7325ff9",
+            "state_root": "sha256:a766a6ffe04a367cb828a4c8e3f653e638c2dd898081b9922584dee30febb82c",
+            "includes_memory_replay": true,
+            "timing_contaminated": false
+          },
+          "explicit_file_replay": {
+            "elapsed_ns": 255181539625,
+            "source": {
+              "ledger": 100000,
+              "receipts": 100000,
+              "head_sequence": 100000,
+              "head_hash": "sha256:0f170cdab8c03200461b151041b1e66d18c6bd6da2f7fff90942c217d7325ff9",
+              "state_root": "sha256:a766a6ffe04a367cb828a4c8e3f653e638c2dd898081b9922584dee30febb82c"
+            },
+            "replay": {
+              "ledger": 100000,
+              "receipts": 100000,
+              "head_sequence": 100000,
+              "head_hash": "sha256:0f170cdab8c03200461b151041b1e66d18c6bd6da2f7fff90942c217d7325ff9",
+              "state_root": "sha256:a766a6ffe04a367cb828a4c8e3f653e638c2dd898081b9922584dee30febb82c"
+            },
+            "parity": true
+          }
+        },
+        "accepted_receipt_coverage": {
+          "implementation": "One GROUP BY ledger_seq query per _verify_accepted_receipt_coverage invocation; verify_ledger invokes it directly and its internal replay invokes it once again. Explicit replay invokes it once.",
+          "query": "SELECT ledger_seq, COUNT(*) AS receipt_count FROM receipts WHERE ledger_seq IS NOT NULL AND outcome IN ('COMMITTED', 'FACT_CONFLICT') GROUP BY ledger_seq",
+          "ledger_entries": 100000,
+          "coverage_groups": 100000,
+          "minimum_receipts_per_ledger_sequence": 1,
+          "maximum_receipts_per_ledger_sequence": 1,
+          "accepted_receipt_count": 100000,
+          "coverage_mismatches": 0,
+          "query_plan": [
+            "SCAN receipts",
+            "USE TEMP B-TREE FOR GROUP BY"
+          ]
+        },
+        "receipt_anchor_semantics": {
+          "receipt_row_batch": "Replay fetches SELECT * FROM receipts ORDER BY id once and reuses those rows for document verification and replay insertion.",
+          "ledger_root_batch": "Receipt document verification fetches ordered ledger entry_hash/pre_state_root/state_root rows once to anchor rejected receipt state roots.",
+          "accepted_receipt_anchor": "Each accepted receipt is additionally anchored to its ledger sequence with an indexed ledger primary-key lookup; this part is per receipt, not a single join batch.",
+          "replay_target_receipts": "All source receipt columns are copied after ledger replay, preserving receipt count and documents without synthesizing a different decision history."
+        }
+      },
+      "quiet_context_baseline_red": {
+        "query_variant": "two-ledger-scan-recursive-json",
+        "bytes": 2936,
+        "sha256": "sha256:58018d8a589159740b513d602aa5c600e0abfd370f6fdadb29f3884d8c00e41d",
+        "history_included": 16,
+        "history_omitted": 99984,
+        "min_ns": 1319796542,
+        "median_ns": 1671873416.5,
+        "p95_ns": 2066768750,
+        "max_ns": 2383668208,
+        "target_met": false,
+        "target_overrun_ns": 66768750,
+        "samples_ns": [
+          1732003459, 1806343375, 1840457208, 1568560042, 1761870083, 1783527167, 1383273500, 1635532958, 1775853292, 1461944458,
+          1668769333, 1774880750, 1715483917, 1674977500, 1820050833, 1550459833, 1685338667, 2066768750, 1556380500, 1543541292,
+          2038699875, 2000408458, 1395925750, 1778755166, 1405543667, 1627758000, 1334688042, 1537237000, 1413818708, 1426310792,
+          2383668208, 1503116708, 1763135000, 1319796542, 1818112417, 1809748584, 1484801375, 1824929292, 1912508500, 1352467375,
+          1780231750, 1425612000, 2070408750, 1591075583, 1505213834, 1526799917, 1677434750, 1538370458, 1903774916, 1360962333
+        ]
+      },
+      "baseline_profile": {
+        "elapsed_ns": 2143018833,
+        "selected_history_sequences_seconds": 2.125,
+        "sqlite_execute_seconds": 2.063,
+        "query_plan": [
+          "SCAN ledger",
+          "SCAN node VIRTUAL TABLE INDEX 1",
+          "SCAN ledger",
+          "SCAN node VIRTUAL TABLE INDEX 1",
+          "UNION USING TEMP B-TREE",
+          "USE TEMP B-TREE FOR ORDER BY"
+        ]
+      },
+      "optimized_profile": {
+        "elapsed_ns": 2105470958,
+        "selected_history_sequences_seconds": 2.089,
+        "sqlite_execute_seconds": 1.975,
+        "query_plan": [
+          "SCAN ledger",
+          "SCAN node VIRTUAL TABLE INDEX 1",
+          "USE TEMP B-TREE FOR DISTINCT"
+        ]
+      },
+      "quiet_context_optimized_green": {
+        "query_variant": "single-ledger-scan-combined-json-tree",
+        "bytes": 2936,
+        "sha256": "sha256:58018d8a589159740b513d602aa5c600e0abfd370f6fdadb29f3884d8c00e41d",
+        "history_included": 16,
+        "history_omitted": 99984,
+        "min_ns": 1206802333,
+        "median_ns": 1474042666.5,
+        "p95_ns": 1653287500,
+        "max_ns": 1791601292,
+        "target_met": true,
+        "p95_improvement_ns": 413481250,
+        "p95_improvement_percent": 20.006169050117485,
+        "samples_ns": [
+          1221170292, 1321179042, 1206802333, 1639791666, 1244056458, 1690418833, 1372222750, 1540384542, 1388914250, 1564253958,
+          1482651917, 1571169000, 1465026042, 1595792958, 1384088500, 1620772708, 1503241708, 1538595041, 1468644708, 1791601292,
+          1448559416, 1531826000, 1315336375, 1360675375, 1419270417, 1411175375, 1286911625, 1344497542, 1392975167, 1473171667,
+          1376174625, 1332109042, 1474913666, 1537589917, 1653287500, 1514602125, 1453505667, 1585930459, 1556171125, 1511039792,
+          1469550500, 1538155167, 1409295500, 1548943959, 1448902250, 1440456042, 1581772333, 1504466167, 1514664291, 1510316833
+        ]
+      },
+      "output_parity": {
+        "canonical_context_sha256_equal": true,
+        "rendered_bytes_equal": true,
+        "history_metadata_equal": true
+      }
+    },
+    "projection_tdd": {
+      "red": "EXPLAIN showed two SCAN ledger operations for the context history query.",
+      "green": "Proposal and event JSON are traversed together in one json_tree query; EXPLAIN shows one SCAN ledger.",
+      "untrusted_derived_refs_red": "A forged and partial ledger_object_refs table changed canonical 48-entry history to [1,48,999], hiding entries and adding a forged reference.",
+      "untrusted_derived_refs_green": "Projection ignores unverified derived history tables and preserves canonical ledger history: recent sequences 33 through 48 with 32 omitted.",
+      "kernel_schema_changed_for_refs": false,
+      "reason_no_kernel_refs_change": "No kernel-generated or kernel-verified derived-ref contract exists; the quiet canonical single-scan 100k hot-active p95 is already below the 2-second target."
+    }
+  },
+  "pre_index_receipt_performance_contract": {
+    "test_file": "tests/test_benchmark_performance_contract.py",
+    "measured_schema_result": "RED",
+    "failures": [
+      "No receipts index definition contained idempotency_key.",
+      "A 5,000-row idempotency lookup planned SCAN RECEIPTS instead of SEARCH RECEIPTS."
+    ],
+    "note": "The contract is structural and intentionally avoids machine-dependent timing assertions. Concurrent production changes may make it GREEN after this capture."
+  }
+}

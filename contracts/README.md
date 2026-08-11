@@ -11,6 +11,9 @@ accepting arbitrary predicates.
 - `shared-mind-kernel.schema.v1.json` — JSON Schema Draft 2020-12 definitions
   for the registry, source revisions, claims, evidence, proposals, conflicts,
   continuity records, ledger entries, and decision receipts.
+- `shared-mind-read.schema.v1.json` — closed Draft 2020-12 contract for
+  `structured-query@1` inputs, deterministic query results, and advisory
+  `rebase-hint@1` values.
 - `atlas-conformance-fixtures.v1.json` — typed objects, negative schema cases,
   and semantic scenarios with expected outcomes.
 - `atlas-runbook.fixture.md` — immutable source bytes referenced by the
@@ -60,7 +63,7 @@ PostgreSQL and MySQL land in the same exclusive-value family.
 
 ## Ledger and receipt documents
 
-Write schema `1.2.0` stores a canonical, schema-valid `LedgerEntry` document
+Write schema `1.3.0` stores a canonical, schema-valid `LedgerEntry` document
 beside normalized SQLite columns. Its `entry_hash` is the SHA-256 digest of
 canonical JSON for exactly this preimage; the hash itself, derived `entry_id`,
 and constant `object_type` are deliberately excluded:
@@ -81,6 +84,16 @@ its stable diagnostic fingerprint occupies `proposal_hash` while invalid or
 missing proposal/idempotency identifiers are represented as JSON `null`, not
 fabricated canonical IDs.
 
+Schema `1.3.0` also requires `DecisionReceipt.proposer`; the value is an
+`ActorRef` when the attempted input supplies a representable proposer and JSON
+`null` otherwise. Required-but-nullable provenance makes the absence explicit
+without inventing an actor. The verifier checks the receipt document,
+normalized proposer column, and linked accepted Proposal together, including
+coordinated document/column tampering. Rejected receipts have no linked ledger
+Proposal; their canonical document/normalized-column parity and historical
+head/state-root position are verified, while database-owner forensic rewrites
+remain outside the local cryptographic trust boundary.
+
 ## Outcome rules
 
 | Situation | Receipt outcome | Mutation ledger append |
@@ -94,6 +107,22 @@ An incoming `ASSERT_CLAIM` is not rejected merely because it contradicts an
 active Claim. Both assertions are preserved and an OPEN conflict episode is
 emitted. A stale `SUPERSEDE_CLAIM`, `RETRACT_CLAIM`, or `RESOLVE_CONFLICT` is
 rejected as a transaction conflict.
+
+## Read contract
+
+The read contract is deliberately separate from the write schema. A
+`StructuredQuery` filters the public projection by object kind, exact ID,
+title substring, predicate, source/source revision, and lifecycle status. Filter
+categories are ANDed, values within a category are ORed, and results have stable
+kind/ID ordering, pagination, projection references, bounded summaries, and an
+optional full record. Queries never become mutation authority.
+
+A `RebaseHint` is returned beside—not inside—the canonical
+`DecisionReceipt` for an interpretable `TRANSACTION_CONFLICT`. It records the
+observed state/head and replacement preconditions, but pins
+`advisory: true`, `safe_to_auto_apply: false`, and
+`recommended_action: REVIEW_AND_REBUILD`. A caller must refresh, review, and
+construct a new Proposal; the hint is not a write operation.
 
 ## Conflict rules in v1
 
@@ -157,8 +186,10 @@ versions so version progression can be verified during replay.
 
 ## Version and migration boundary
 
-The current write schema is `1.2.0` and the current projection is
-`markdown-projection@3`. New proposals must also pin the registry content hash.
+The current write schema is `1.3.0`, the current projection is
+`markdown-projection@3`, and structured reads use `structured-query@1`. Handoff
+contexts use `handoff-context@3` and `context-selection@3`. New proposals must
+also pin the registry content hash.
 Schema `1.0.0` ledgers from baseline commit `3c3cdf0` remain readable through a
 separate legacy envelope/event/state-root reducer. Opening such a database does
 not rewrite its hashed ledger fields. Replay verifies the pre-ledger source
@@ -171,16 +202,22 @@ rows cannot truthfully acquire event-complete `LedgerEntry` or historical
 `DecisionReceipt` documents after the fact. Their document columns therefore
 remain null and public exact-contract access reports
 `LEGACY_*_CONTRACT_INCOMPLETE`; they are never silently presented as current
-contract objects. A current `1.2.0` entry may follow the legacy head, crossing
-from the four-table legacy state-root domain to the continuity-inclusive current
-domain, and the mixed history must replay to the same final root.
+contract objects. Schema `1.2.0` introduced exact receipt documents without the
+new proposer member. A short transitional 1.2 writer also emitted
+proposer-bearing receipt documents before the version was corrected to 1.3.
+Both historical 1.2 shapes are recognized and preserved byte-for-byte rather
+than rewritten. A current `1.3.0` entry may follow 1.0, 1.1, or either 1.2
+receipt variant, crossing from the four-table legacy state-root domain to the
+continuity-inclusive current domain when necessary. All four readable versions
+remain version-dispatched, and mixed 1.2/1.3 receipt history must verify and
+replay to the same final head, receipt stream, counts, and state root.
 
 ## Validation
 
 Run:
 
 ```bash
-python3 validate_contract.py
+python3 contracts/validate_contract.py
 ```
 
 The validator always performs dependency-free registry consistency, canonical
