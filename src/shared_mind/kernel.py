@@ -79,9 +79,41 @@ class _PublicConnection:
         self.__connection.close()
 
 
+def _json_depth_exceeds(value: Any, maximum: int) -> bool:
+    """Return whether a JSON-like value exceeds the container nesting limit.
+
+    Direct Python callers may submit cyclic or otherwise non-JSON values.  The
+    active-container set prevents this preflight from looping; canonical JSON
+    encoding remains responsible for classifying those values as malformed.
+    """
+
+    stack: list[tuple[Any, int, bool]] = [(value, 0, False)]
+    active: set[int] = set()
+    while stack:
+        item, parent_depth, leaving = stack.pop()
+        if leaving:
+            active.discard(id(item))
+            continue
+        if not isinstance(item, (dict, list)):
+            continue
+        identity = id(item)
+        if identity in active:
+            continue
+        depth = parent_depth + 1
+        if depth > maximum:
+            return True
+        active.add(identity)
+        stack.append((item, parent_depth, True))
+        children = item.values() if isinstance(item, dict) else item
+        stack.extend((child, depth, False) for child in children)
+    return False
+
+
 class Kernel:
     """SQLite implementation of the first Atlas vertical slice."""
 
+    MAX_PROPOSAL_BYTES = 1024 * 1024
+    MAX_PROPOSAL_DEPTH = 64
     SUPPORTED_VERSIONS = {
         "schema": "1.2.0",
         "conflict_rules": "conflict-rules@1",
@@ -411,9 +443,17 @@ class Kernel:
         key = proposal.get("idempotency_key", "") if isinstance(proposal, dict) else ""
         receipt_proposer = self._representable_proposer(proposal)
         head_before = self._head_entry_hash()
+        proposal_too_deep = _json_depth_exceeds(
+            proposal, self.MAX_PROPOSAL_DEPTH
+        )
         try:
-            proposal_hash = sha256_json(proposal)
-        except (TypeError, ValueError):
+            encoded_proposal = canonical_json(proposal).encode("utf-8")
+        except (TypeError, ValueError, RecursionError) as exc:
+            reason = (
+                "PROPOSAL_TOO_DEEP"
+                if isinstance(exc, RecursionError) and proposal_too_deep
+                else "MALFORMED_PROPOSAL"
+            )
             proposal_hash = sha256_json(
                 {
                     "malformed_proposal_type": (
@@ -428,13 +468,41 @@ class Kernel:
                 proposal_hash,
                 proposal_id,
                 "VALIDATION_ERROR",
-                ("MALFORMED_PROPOSAL",),
+                (reason,),
                 None,
                 self.state_root(),
                 (),
                 proposer=receipt_proposer,
                 head_before=head_before,
-                decided_at=None,
+                decided_at=(
+                    self._proposal_decided_at(proposal)
+                    if reason == "PROPOSAL_TOO_DEEP"
+                    else None
+                ),
+            )
+        proposal_hash = sha256_bytes(encoded_proposal)
+        preflight_reason = (
+            "PROPOSAL_TOO_DEEP"
+            if proposal_too_deep
+            else (
+                "PROPOSAL_TOO_LARGE"
+                if len(encoded_proposal) > self.MAX_PROPOSAL_BYTES
+                else None
+            )
+        )
+        if preflight_reason is not None:
+            return self._insert_receipt(
+                key,
+                proposal_hash,
+                proposal_id,
+                "VALIDATION_ERROR",
+                (preflight_reason,),
+                None,
+                self.state_root(),
+                (),
+                proposer=receipt_proposer,
+                head_before=head_before,
+                decided_at=self._proposal_decided_at(proposal),
             )
 
         outcome = "COMMITTED"
@@ -1556,9 +1624,16 @@ class Kernel:
         if not isinstance(proposal, dict):
             return None
         candidate = proposal.get("proposer")
-        if next(self.actor_ref_validator.iter_errors(candidate), None) is not None:
+        try:
+            invalid = next(self.actor_ref_validator.iter_errors(candidate), None)
+        except (RecursionError, TypeError):
             return None
-        return copy.deepcopy(candidate)
+        if invalid is not None:
+            return None
+        try:
+            return copy.deepcopy(candidate)
+        except RecursionError:
+            return None
 
     @staticmethod
     def _utc_now() -> str:
