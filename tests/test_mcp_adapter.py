@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -273,6 +274,26 @@ print(shared_mind.__name__, McpApplication.__name__)
             returned = asyncio.run(returned)
         self.assertEqual("PROPOSAL_VALID", returned["code"])
         self.assertTrue(returned["ok"])
+
+    def test_create_server_supports_the_sdk_v2_mcpserver_import(self) -> None:
+        """SDK v2 removed the v1 ``mcp.server.fastmcp`` module entirely."""
+
+        module = self.module()
+        server_module = types.ModuleType("mcp.server")
+        server_module.MCPServer = RecordingFastMCP
+
+        with patch.dict(
+            sys.modules,
+            {
+                "mcp.server": server_module,
+                "mcp.server.fastmcp": None,
+            },
+        ):
+            server = module.create_server(self.workspace)
+
+        self.assertIsInstance(server, RecordingFastMCP)
+        self.assertEqual(TOOL_NAMES, tuple(server.tools))
+        self.assertEqual(RESOURCE_URIS, tuple(server.resources))
 
     def test_installed_sdk_exposes_transport_metadata_and_structured_output(self) -> None:
         try:
