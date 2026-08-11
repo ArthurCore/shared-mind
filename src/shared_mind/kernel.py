@@ -135,9 +135,19 @@ class Kernel:
                 (source["revision_id"], source["content_hash"], document, content),
             )
 
-    def commit(self, proposal: dict[str, Any]) -> Receipt:
-        proposal_hash = sha256_json(proposal)
+    def commit(self, proposal: Any) -> Receipt:
+        proposal_id = proposal.get("proposal_id", "") if isinstance(proposal, dict) else ""
         key = proposal.get("idempotency_key", "") if isinstance(proposal, dict) else ""
+        try:
+            proposal_hash = sha256_json(proposal)
+        except (TypeError, ValueError):
+            return Receipt(
+                proposal_id,
+                "VALIDATION_ERROR",
+                ("MALFORMED_PROPOSAL",),
+                None,
+                self.state_root(),
+            )
 
         outcome = "COMMITTED"
         reasons: tuple[str, ...] = ()
@@ -152,7 +162,7 @@ class Kernel:
                 self.connection.execute("ROLLBACK")
                 if prior["proposal_hash"] != proposal_hash:
                     return Receipt(
-                        proposal.get("proposal_id", ""),
+                        proposal_id,
                         "VALIDATION_ERROR",
                         ("IDEMPOTENCY_KEY_REUSE",),
                         None,
@@ -190,7 +200,7 @@ class Kernel:
             self._rollback_if_needed()
             outcome, reasons = "TRANSACTION_CONFLICT", (exc.code,)
             post_root = self.state_root()
-            self._insert_receipt(key, proposal_hash, proposal.get("proposal_id", ""), outcome, reasons, None, post_root, ())
+            self._insert_receipt(key, proposal_hash, proposal_id, outcome, reasons, None, post_root, ())
         except sqlite3.IntegrityError as exc:
             self._rollback_if_needed()
             outcome, reasons = "VALIDATION_ERROR", (self._integrity_reason(exc),)
@@ -198,7 +208,7 @@ class Kernel:
             self._insert_receipt(
                 key,
                 proposal_hash,
-                proposal.get("proposal_id", ""),
+                proposal_id,
                 outcome,
                 reasons,
                 None,
@@ -210,8 +220,8 @@ class Kernel:
             code = exc.code if isinstance(exc, ValidationFailure) else "MALFORMED_PROPOSAL"
             outcome, reasons = "VALIDATION_ERROR", (code,)
             post_root = self.state_root()
-            self._insert_receipt(key, proposal_hash, proposal.get("proposal_id", ""), outcome, reasons, None, post_root, ())
-        return Receipt(proposal.get("proposal_id", ""), outcome, reasons, ledger_seq, post_root, conflict_ids)
+            self._insert_receipt(key, proposal_hash, proposal_id, outcome, reasons, None, post_root, ())
+        return Receipt(proposal_id, outcome, reasons, ledger_seq, post_root, conflict_ids)
 
     def _insert_receipt(self, key: str, proposal_hash: str, proposal_id: str, outcome: str, reasons: tuple[str, ...], ledger_seq: int | None, root: str, conflicts: tuple[str, ...]) -> None:
         # The caller owns the transaction. On accepted mutations this write must
@@ -235,7 +245,7 @@ class Kernel:
         if versions["projection"] != self.SUPPORTED_VERSIONS["projection"]:
             raise ValidationFailure("UNSUPPORTED_PROJECTION_VERSION")
 
-    def _validate_contract_object(self, value: dict[str, Any]) -> None:
+    def _validate_contract_object(self, value: Any) -> None:
         if next(self.contract_validator.iter_errors(value), None) is not None:
             raise ValidationFailure("SCHEMA_VALIDATION_FAILED")
 
