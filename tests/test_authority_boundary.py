@@ -90,6 +90,10 @@ class PublicKernelAuthorityBoundaryTest(unittest.TestCase):
         ).fetchone()
         self.assertIsNotNone(still_present)
 
+    def test_fr_010_public_connection_cannot_disable_the_sql_authorizer(self) -> None:
+        with self.assertRaises(AttributeError):
+            self.kernel.connection.set_authorizer(None)
+
     def test_fr_004_legacy_register_source_is_ledger_backed_and_verifiable(
         self,
     ) -> None:

@@ -58,6 +58,27 @@ class TransactionConflict(Exception):
         self.code = code
 
 
+class _PublicConnection:
+    """Read surface over SQLite; Kernel authority remains the only write path."""
+
+    __slots__ = ("__connection",)
+
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        self.__connection = connection
+
+    def execute(
+        self, statement: str, parameters: Any = ()
+    ) -> sqlite3.Cursor:
+        return self.__connection.execute(statement, parameters)
+
+    @property
+    def in_transaction(self) -> bool:
+        return self.__connection.in_transaction
+
+    def close(self) -> None:
+        self.__connection.close()
+
+
 class Kernel:
     """SQLite implementation of the first Atlas vertical slice."""
 
@@ -107,6 +128,7 @@ class Kernel:
             raise
         self._write_authorization_depth = 0
         self.connection.set_authorizer(self._authorize_sql)
+        self.connection = _PublicConnection(self.connection)  # type: ignore[assignment]
 
     def close(self) -> None:
         self.connection.close()
@@ -169,7 +191,8 @@ class Kernel:
               ledger_seq INTEGER,
               state_root TEXT NOT NULL,
               conflict_ids TEXT NOT NULL,
-              document TEXT
+              document TEXT,
+              schema_version TEXT
             );
             CREATE TABLE IF NOT EXISTS kernel_metadata (
               name TEXT PRIMARY KEY,
@@ -243,7 +266,8 @@ class Kernel:
                   ledger_seq INTEGER,
                   state_root TEXT NOT NULL,
                   conflict_ids TEXT NOT NULL,
-                  document TEXT
+                  document TEXT,
+                  schema_version TEXT
                 );
                 INSERT INTO receipts(
                   idempotency_key, proposal_hash, proposal_id, outcome,
@@ -260,6 +284,15 @@ class Kernel:
         }
         if "document" not in receipt_columns:
             self.connection.execute("ALTER TABLE receipts ADD COLUMN document TEXT")
+        if "schema_version" not in receipt_columns:
+            self.connection.execute(
+                "ALTER TABLE receipts ADD COLUMN schema_version TEXT"
+            )
+        self.connection.execute(
+            "UPDATE receipts SET schema_version = ? "
+            "WHERE document IS NOT NULL AND schema_version IS NULL",
+            (self.SUPPORTED_VERSIONS["schema"],),
+        )
 
     def _create_immutability_triggers(self) -> None:
         """Reject ordinary DML that violates append-only/immutable records.
@@ -639,8 +672,9 @@ class Kernel:
         cursor = self.connection.execute(
             """INSERT INTO receipts(
                  idempotency_key, proposal_hash, proposal_id, outcome,
-                 reason_codes, ledger_seq, state_root, conflict_ids, document
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 reason_codes, ledger_seq, state_root, conflict_ids, document,
+                 schema_version
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 key,
                 proposal_hash,
@@ -651,6 +685,7 @@ class Kernel:
                 root,
                 canonical_json(conflicts),
                 canonical_json(document),
+                self.SUPPORTED_VERSIONS["schema"],
             ),
         )
         row = self.connection.execute(
@@ -1702,6 +1737,8 @@ class Kernel:
         errors: list[str] = []
         for row in self.connection.execute("SELECT * FROM receipts ORDER BY id"):
             if row["document"] is None:
+                if row["schema_version"] == self.SUPPORTED_VERSIONS["schema"]:
+                    errors.append(f"RECEIPT_DOCUMENT_MISMATCH:{row['id']}")
                 continue
             try:
                 document = json.loads(row["document"])

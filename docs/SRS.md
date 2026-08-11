@@ -391,7 +391,7 @@ version에서는 사용 시 `CONTEXT_FILTER_UNSUPPORTED`를 반환하며 조용�
 ```
 
 `FACT_CONFLICT`는 지식 상태에 기록된 성공 결과다. `TRANSACTION_CONFLICT`와 `VALIDATION_ERROR`는 해당 proposal의 mutation을 ledger에 추가하지 않는다.
-`proposal validate`의 schema 오류는 별도로 `errors[{code, path, message}]`를
+`proposal validate`의 schema 오류는 별도로 `errors[{code, object_path, message}]`를
 제공한다. `decision_receipt`는 versioned JSON 계약과 일치하는 canonical 문서다.
 
 ## 13. 현재 구현 상태
@@ -428,7 +428,7 @@ python3 contracts/validate_contract.py
 #     + 6 semantic cases + 7 continuity operations
 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
-# Ran 114 tests ... OK
+# Ran 116 tests ... OK
 ```
 
 ### 13.2 요구사항 추적표

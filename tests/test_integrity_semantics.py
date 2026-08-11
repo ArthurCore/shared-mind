@@ -204,10 +204,41 @@ class IntegritySemanticsConformanceTest(unittest.TestCase):
             )
             forged_root = kernel.state_root()
             entry_hash = self._entry_hash(row, events, forged_root)
+            ledger_document = json.loads(row["document"])
+            ledger_document.update(
+                {
+                    "entry_hash": entry_hash,
+                    "post_state_root": forged_root,
+                    "events": events,
+                }
+            )
+            receipt = kernel.connection.execute(
+                "SELECT id, document FROM receipts WHERE ledger_seq = ?",
+                (sequence,),
+            ).fetchone()
+            self.assertIsNotNone(receipt)
+            receipt_document = json.loads(receipt["document"])
+            receipt_document["head_after"] = entry_hash
             self._allow_forensic_ledger_rewrite(kernel)
             kernel.connection.execute(
-                "UPDATE ledger SET events = ?, state_root = ?, entry_hash = ? WHERE seq = ?",
-                (canonical_json(events), forged_root, entry_hash, sequence),
+                "UPDATE ledger SET events = ?, state_root = ?, entry_hash = ?, "
+                "document = ? WHERE seq = ?",
+                (
+                    canonical_json(events),
+                    forged_root,
+                    entry_hash,
+                    canonical_json(ledger_document),
+                    sequence,
+                ),
+            )
+            kernel.connection.execute("DROP TRIGGER receipts_no_update")
+            kernel.connection.execute(
+                "UPDATE receipts SET state_root = ?, document = ? WHERE id = ?",
+                (
+                    forged_root,
+                    canonical_json(receipt_document),
+                    receipt["id"],
+                ),
             )
 
     @staticmethod

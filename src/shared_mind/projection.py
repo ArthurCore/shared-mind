@@ -803,7 +803,10 @@ def _find_object_ids(value: Any) -> set[str]:
 @contextmanager
 def _read_connection(source: Any) -> Iterator[sqlite3.Connection]:
     connection = getattr(source, "connection", source)
-    if isinstance(connection, sqlite3.Connection):
+    if isinstance(connection, sqlite3.Connection) or (
+        callable(getattr(connection, "execute", None))
+        and hasattr(connection, "in_transaction")
+    ):
         if connection.in_transaction:
             raise ProjectionError(
                 "cannot project from an active transaction; commit or roll back first"

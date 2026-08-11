@@ -159,7 +159,8 @@ class LegacyMigrationConformanceTest(unittest.TestCase):
                 (canonical_json(proposal), proposal_hash, entry_hash),
             )
             kernel.connection.execute(
-                "UPDATE receipts SET proposal_hash = ?, document = NULL",
+                "UPDATE receipts SET proposal_hash = ?, document = NULL, "
+                "schema_version = '1.1.0'",
                 (proposal_hash,),
             )
         kernel.close()

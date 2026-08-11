@@ -247,6 +247,25 @@ class PersistedContractDocumentTest(unittest.TestCase):
             f"RECEIPT_DOCUMENT_MISMATCH:{row['id']}", result["errors"]
         )
 
+    def test_verifier_rejects_missing_documents_for_current_receipts(self) -> None:
+        rejected = self.kernel.commit(self._invalid_evidence_proposal())
+        self.assertEqual("VALIDATION_ERROR", rejected.outcome)
+        rows = self.kernel.connection.execute(
+            "SELECT id FROM receipts ORDER BY id"
+        ).fetchall()
+        self.assertEqual(2, len(rows))
+        with self.kernel._authorized_writes():
+            self.kernel.connection.execute("DROP TRIGGER receipts_no_update")
+            self.kernel.connection.execute("UPDATE receipts SET document = NULL")
+
+        result = self.kernel.verify_ledger()
+
+        self.assertFalse(result["valid"])
+        for row in rows:
+            self.assertIn(
+                f"RECEIPT_DOCUMENT_MISMATCH:{row['id']}", result["errors"]
+            )
+
     def _exercise_all_outcomes(self) -> set[str]:
         receipts = []
         receipts.append(
