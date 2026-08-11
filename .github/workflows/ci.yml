@@ -1,0 +1,149 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  contract-and-tests:
+    name: Python ${{ matrix.python-version }} contract and coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[mcp,quality]"
+      - name: Validate executable contracts
+        run: python contracts/validate_contract.py
+      - name: Run the full suite with branch coverage
+        run: |
+          python -m coverage run -m unittest discover -s tests -v
+          python -m coverage report --fail-under=80
+
+  os-determinism:
+    name: Determinism on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Python 3.11
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install the base package
+        run: python -m pip install -e .
+      - name: Check deterministic projection bytes
+        run: python -m unittest discover -s tests -p "test_projection.py" -v
+      - name: Check deterministic structured-query ordering
+        run: python -m unittest discover -s tests -p "test_structured_query.py" -v
+
+  quality-and-security:
+    name: Compile, lint, type, and security gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Python 3.11
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install quality dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[mcp,quality]"
+      - name: Compile every shipped Python module
+        run: python -m compileall -q src contracts/validate_contract.py
+      - name: Lint shipped source and contract tooling
+        run: ruff check src contracts/validate_contract.py
+      - name: Type-check deterministic canonical and read surfaces
+        run: >-
+          mypy --follow-imports=skip
+          src/shared_mind/canonical.py
+          src/shared_mind/query.py
+          src/shared_mind/projection.py
+          src/shared_mind/validation.py
+      - name: Audit installed dependencies
+        run: pip-audit --strict
+      - name: Scan source for medium and high severity findings
+        # B608 flags table/column identifiers selected from internal constant maps;
+        # all runtime values in those statements remain bound SQLite parameters.
+        run: bandit -q -r src -ll -s B608
+
+  wheel-smoke:
+    name: Fresh wheel install and entrypoint smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Python 3.11
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Build and inspect wheel metadata
+        run: |
+          python -m pip install "build>=1.2,<2" "twine>=6,<7"
+          python -m build
+          twine check dist/*
+          test -n "$(find dist/ -maxdepth 1 -name '*.whl' -print -quit)"
+      - name: Base no MCP wheel smoke
+        run: |
+          WHEEL_PATH="$(find dist/ -maxdepth 1 -name '*.whl' -print -quit)"
+          python -m venv .venv-base
+          .venv-base/bin/python -m pip install --upgrade pip
+          .venv-base/bin/pip install "$WHEEL_PATH"
+          .venv-base/bin/python -c "import importlib.util; assert importlib.util.find_spec('mcp') is None"
+          .venv-base/bin/shared-mind --help
+          .venv-base/bin/python - <<'PY'
+          from pathlib import Path
+          import sys
+
+          contract_root = Path(sys.prefix) / "share/shared-mind/contracts"
+          expected = {
+              "shared-mind-kernel.schema.v1.json",
+              "shared-mind-read.schema.v1.json",
+              "atlas-predicate-registry.v1.json",
+          }
+          missing = sorted(name for name in expected if not (contract_root / name).is_file())
+          assert not missing, f"missing installed contracts: {missing}"
+          PY
+      - name: Extra MCP wheel smoke
+        run: |
+          WHEEL_PATH="$(find dist/ -maxdepth 1 -name '*.whl' -print -quit)"
+          python -m venv .venv-mcp
+          .venv-mcp/bin/python -m pip install --upgrade pip
+          .venv-mcp/bin/pip install "${WHEEL_PATH}[mcp]"
+          .venv-mcp/bin/python -c "import mcp"
+          .venv-mcp/bin/shared-mind-mcp --help
