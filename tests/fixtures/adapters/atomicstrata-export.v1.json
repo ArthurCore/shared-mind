@@ -1,0 +1,23 @@
+{
+  "format": "atomicstrata-json-export",
+  "version": 1,
+  "pages": [
+    {
+      "page_id": "deployment-database",
+      "markdown": "PostgreSQL is selected for deployment.",
+      "citations": [
+        {
+          "okf_reference": "okf://runbook/deployment#L10-L12",
+          "start_line": 1,
+          "end_line": 1
+        }
+      ]
+    }
+  ],
+  "okf_references": [
+    {
+      "reference": "okf://runbook/deployment#L10-L12",
+      "content_hash": "sha256:5f1e1d393ba92cd6cc5f65ed5357197abade0a87b60b8c98a625374d4df7c0ef"
+    }
+  ]
+}

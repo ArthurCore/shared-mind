@@ -1,0 +1,10 @@
+{
+  "event_id": "evt-0001",
+  "event_type": "memory.created",
+  "created_at": "2026-08-11T00:00:00Z",
+  "payload": {
+    "text": "PostgreSQL remains the deployment database.",
+    "tags": ["deployment", "database"]
+  },
+  "previous_event_hash": null
+}

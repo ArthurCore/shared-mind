@@ -1,0 +1,17 @@
+{
+  "swarmvault_version": "3.21.0",
+  "context": {
+    "purpose": "Preserve deployment knowledge for the next agent.",
+    "sources": [
+      {
+        "source_id": "deployment-runbook",
+        "title": "Deployment runbook",
+        "body": "PostgreSQL is the currently selected database."
+      }
+    ]
+  },
+  "graph": {
+    "status": "not-imported",
+    "reason": "wire-schema-not-stable"
+  }
+}

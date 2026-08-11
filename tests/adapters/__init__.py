@@ -1,0 +1,1 @@
+"""External adapter conformance tests."""

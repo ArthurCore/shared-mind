@@ -1,0 +1,33 @@
+{
+  "contract_version": "external-adapter-contract@1",
+  "adapters": [
+    {
+      "name": "atomicstrata",
+      "upstream_version": "62ef452b92ffd6480140671d5ccd199c6dc4b5aa",
+      "stability": "restricted-citation-import",
+      "allowed_inputs": ["JSON_EXPORT", "OKF_REFERENCE"],
+      "allowed_outputs": ["SOURCE_REVISION"],
+      "source_only_default": true,
+      "semantic_promotion": "REVIEWED_MAPPING_ONLY"
+    },
+    {
+      "name": "qarinah",
+      "upstream_version": "8541db37e0db0373af96fd228f90674272f59979",
+      "stability": "stable-event-json",
+      "allowed_inputs": ["EVENT_JSON"],
+      "allowed_outputs": ["SOURCE_REVISION"],
+      "source_only_default": true,
+      "semantic_promotion": "REVIEWED_MAPPING_ONLY"
+    },
+    {
+      "name": "swarmvault",
+      "upstream_version": "3.21.0",
+      "upstream_pin": "815412d24298e59e5073ded1ddd6c0e6aee9b91b",
+      "stability": "provisional-source-context-only",
+      "allowed_inputs": ["SOURCE", "CONTEXT"],
+      "allowed_outputs": ["SOURCE_REVISION"],
+      "source_only_default": true,
+      "semantic_promotion": "REVIEWED_MAPPING_ONLY"
+    }
+  ]
+}
