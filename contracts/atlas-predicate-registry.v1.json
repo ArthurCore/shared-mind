@@ -1,0 +1,239 @@
+{
+  "object_type": "PREDICATE_REGISTRY",
+  "registry_id": "shared-mind.atlas.predicates",
+  "version": "1.0.0",
+  "canonicalization_version": "proposition-c14n@1",
+  "guard_dsl_version": "guard-dsl@1",
+  "entity_types": [
+    "region",
+    "software",
+    "system",
+    "team",
+    "version"
+  ],
+  "scope_fields": [
+    "component",
+    "environment",
+    "region",
+    "tenant"
+  ],
+  "predicates": [
+    {
+      "key": "deployment.database_engine@1",
+      "description": "Database engine currently used by a system deployment.",
+      "subject_types": ["system"],
+      "object": {
+        "kind": "entity",
+        "entity_types": ["software"]
+      },
+      "scope": {
+        "allowed_fields": ["component", "environment", "region", "tenant"],
+        "required_fields": ["environment"]
+      },
+      "temporal": "REQUIRED",
+      "cardinality": "ONE",
+      "family_key_fields": [
+        "subject.entity_id",
+        "predicate",
+        "scope.environment",
+        "scope.component",
+        "scope.region",
+        "scope.tenant"
+      ],
+      "conflict_rules": [
+        {"kind": "OPPOSITE_POLARITY", "rule_version": "polarity@1"},
+        {"kind": "EXCLUSIVE_OBJECT", "rule_version": "exclusive-object@1"},
+        {"kind": "TEMPORAL_OVERLAP", "rule_version": "interval-overlap@1"}
+      ],
+      "evidence_policy": {
+        "minimum_evidence_links": 1,
+        "allowed_interpretations": ["DIRECT", "REPORTED", "INFERRED"]
+      }
+    },
+    {
+      "key": "migration.target_database_engine@1",
+      "description": "Database engine targeted by an announced or approved migration; not a current-state assertion.",
+      "subject_types": ["system"],
+      "object": {
+        "kind": "entity",
+        "entity_types": ["software"]
+      },
+      "scope": {
+        "allowed_fields": ["component", "environment", "region", "tenant"],
+        "required_fields": ["environment"]
+      },
+      "temporal": "REQUIRED",
+      "cardinality": "ONE",
+      "family_key_fields": [
+        "subject.entity_id",
+        "predicate",
+        "scope.environment",
+        "scope.component",
+        "scope.region",
+        "scope.tenant"
+      ],
+      "conflict_rules": [
+        {"kind": "OPPOSITE_POLARITY", "rule_version": "polarity@1"},
+        {"kind": "EXCLUSIVE_OBJECT", "rule_version": "exclusive-object@1"},
+        {"kind": "TEMPORAL_OVERLAP", "rule_version": "interval-overlap@1"}
+      ],
+      "evidence_policy": {
+        "minimum_evidence_links": 1,
+        "allowed_interpretations": ["DIRECT", "REPORTED"]
+      }
+    },
+    {
+      "key": "deployment.release_version@1",
+      "description": "Release version running in a deployment.",
+      "subject_types": ["system"],
+      "object": {
+        "kind": "entity",
+        "entity_types": ["version"]
+      },
+      "scope": {
+        "allowed_fields": ["component", "environment", "region", "tenant"],
+        "required_fields": ["environment"]
+      },
+      "temporal": "REQUIRED",
+      "cardinality": "ONE",
+      "family_key_fields": [
+        "subject.entity_id",
+        "predicate",
+        "scope.environment",
+        "scope.component",
+        "scope.region",
+        "scope.tenant"
+      ],
+      "conflict_rules": [
+        {"kind": "OPPOSITE_POLARITY", "rule_version": "polarity@1"},
+        {"kind": "EXCLUSIVE_OBJECT", "rule_version": "exclusive-object@1"},
+        {"kind": "TEMPORAL_OVERLAP", "rule_version": "interval-overlap@1"}
+      ],
+      "evidence_policy": {
+        "minimum_evidence_links": 1,
+        "allowed_interpretations": ["DIRECT", "REPORTED"]
+      }
+    },
+    {
+      "key": "deployment.region@1",
+      "description": "Region in which a system deployment is active.",
+      "subject_types": ["system"],
+      "object": {
+        "kind": "entity",
+        "entity_types": ["region"]
+      },
+      "scope": {
+        "allowed_fields": ["component", "environment", "tenant"],
+        "required_fields": ["environment"]
+      },
+      "temporal": "REQUIRED",
+      "cardinality": "MANY",
+      "family_key_fields": [
+        "subject.entity_id",
+        "predicate",
+        "scope.environment",
+        "scope.component",
+        "scope.tenant"
+      ],
+      "conflict_rules": [
+        {"kind": "OPPOSITE_POLARITY", "rule_version": "polarity@1"}
+      ],
+      "evidence_policy": {
+        "minimum_evidence_links": 1,
+        "allowed_interpretations": ["DIRECT", "REPORTED", "INFERRED"]
+      }
+    },
+    {
+      "key": "system.maintainer@1",
+      "description": "Team responsible for maintaining a system.",
+      "subject_types": ["system"],
+      "object": {
+        "kind": "entity",
+        "entity_types": ["team"]
+      },
+      "scope": {
+        "allowed_fields": ["component", "environment", "region", "tenant"],
+        "required_fields": []
+      },
+      "temporal": "OPTIONAL",
+      "cardinality": "MANY",
+      "family_key_fields": [
+        "subject.entity_id",
+        "predicate",
+        "scope.environment",
+        "scope.component",
+        "scope.region",
+        "scope.tenant"
+      ],
+      "conflict_rules": [
+        {"kind": "OPPOSITE_POLARITY", "rule_version": "polarity@1"}
+      ],
+      "evidence_policy": {
+        "minimum_evidence_links": 1,
+        "allowed_interpretations": ["DIRECT", "REPORTED", "INFERRED"]
+      }
+    },
+    {
+      "key": "system.operational_status@1",
+      "description": "Operational lifecycle status of a system in a scoped environment.",
+      "subject_types": ["system"],
+      "object": {
+        "kind": "enum",
+        "enum_values": ["ACTIVE", "DEGRADED", "DECOMMISSIONED", "PLANNED"]
+      },
+      "scope": {
+        "allowed_fields": ["component", "environment", "region", "tenant"],
+        "required_fields": ["environment"]
+      },
+      "temporal": "REQUIRED",
+      "cardinality": "ONE",
+      "family_key_fields": [
+        "subject.entity_id",
+        "predicate",
+        "scope.environment",
+        "scope.component",
+        "scope.region",
+        "scope.tenant"
+      ],
+      "conflict_rules": [
+        {"kind": "OPPOSITE_POLARITY", "rule_version": "polarity@1"},
+        {"kind": "EXCLUSIVE_OBJECT", "rule_version": "exclusive-object@1"},
+        {"kind": "TEMPORAL_OVERLAP", "rule_version": "interval-overlap@1"}
+      ],
+      "evidence_policy": {
+        "minimum_evidence_links": 1,
+        "allowed_interpretations": ["DIRECT", "REPORTED"]
+      }
+    },
+    {
+      "key": "system.depends_on@1",
+      "description": "A runtime or operational dependency between systems or software.",
+      "subject_types": ["system"],
+      "object": {
+        "kind": "entity",
+        "entity_types": ["software", "system"]
+      },
+      "scope": {
+        "allowed_fields": ["component", "environment", "region", "tenant"],
+        "required_fields": ["environment"]
+      },
+      "temporal": "OPTIONAL",
+      "cardinality": "MANY",
+      "family_key_fields": [
+        "subject.entity_id",
+        "predicate",
+        "scope.environment",
+        "scope.component",
+        "scope.region",
+        "scope.tenant"
+      ],
+      "conflict_rules": [
+        {"kind": "OPPOSITE_POLARITY", "rule_version": "polarity@1"}
+      ],
+      "evidence_policy": {
+        "minimum_evidence_links": 1,
+        "allowed_interpretations": ["DIRECT", "REPORTED", "INFERRED"]
+      }
+    }
+  ]
+}
