@@ -459,11 +459,12 @@ python3 contracts/validate_contract.py
 #     + 6 semantic cases + 7 continuity operations
 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
-# Ran 321 tests in 432.757s
-# OK
+# Python 3.13.2: Ran 322 tests in 563.901s
+# OK (skipped=1), branch coverage 86%
 ```
 
-이 결과는 frozen implementation commit `47b7f1c`의 schema 1.3 hardening,
+이 결과는 implementation commit `47b7f1c` 이후의 CI audit/FD-test correction을
+포함한 final HEAD `5edf764`에서 실행됐다. schema 1.3 hardening,
 receipt migration atomicity, remote policy, input/TOCTOU, MCP, adapter, 성능
 query-plan 회귀를 모두 포함한다.
 

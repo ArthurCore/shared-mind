@@ -97,9 +97,9 @@ python3 contracts/validate_contract.py
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-The final schema-1.3 tree passes **321 standard-library tests** in 432.757
-seconds on the recorded local run. Contract validation is a separate mandatory
-gate.
+The final schema-1.3 tree passes **322 standard-library tests** in 563.901
+seconds under Python 3.13.2 (`skipped=1`) with 86% branch coverage. Contract
+validation is a separate mandatory gate.
 
 CI is configured for Python 3.11-3.13, Linux/macOS/Windows determinism subsets,
 80% branch coverage, lint/type/dependency/security gates, and clean base/MCP
