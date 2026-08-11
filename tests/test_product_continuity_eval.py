@@ -66,6 +66,14 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
     def test_sanitized_live_summary_schema_accepts_only_shareable_evidence(
         self,
     ) -> None:
+        settings_pattern = self.live_summary_schema["properties"]["settings"][
+            "propertyNames"
+        ]["not"]["pattern"]
+        self.assertNotIn(
+            "(?i)",
+            settings_pattern,
+            "JSON Schema regexes must remain ECMAScript-compatible",
+        )
         runner = importlib.import_module("evals.product_continuity.runner")
         report = runner.evaluate_scenario(
             self.scenario, self.scenario["expected_response"]

@@ -58,7 +58,7 @@
       "type": "object",
       "propertyNames": {
         "not": {
-          "pattern": "(?i)(account[_-]?id|api[_-]?key|authorization|cookie|credential|password|path|prompt|request[_-]?id|response|secret|token)"
+          "pattern": "([Aa][Cc][Cc][Oo][Uu][Nn][Tt][_-]?[Ii][Dd]|[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]|[Aa][Uu][Tt][Hh][Oo][Rr][Ii][Zz][Aa][Tt][Ii][Oo][Nn]|[Cc][Oo][Oo][Kk][Ii][Ee]|[Cc][Rr][Ee][Dd][Ee][Nn][Tt][Ii][Aa][Ll]|[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd]|[Pp][Aa][Tt][Hh]|[Pp][Rr][Oo][Mm][Pp][Tt]|[Rr][Ee][Qq][Uu][Ee][Ss][Tt][_-]?[Ii][Dd]|[Rr][Ee][Ss][Pp][Oo][Nn][Ss][Ee]|[Ss][Ee][Cc][Rr][Ee][Tt]|[Tt][Oo][Kk][Ee][Nn])"
         }
       },
       "additionalProperties": {
