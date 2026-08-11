@@ -20,14 +20,19 @@ from pathlib import Path
 from typing import Any, Iterator, Mapping
 
 from .canonical import canonical_json, sha256_bytes, sha256_json
+from .tokenization import (
+    ExactTokenCounter,
+    PROTOCOL_VERSION as TOKEN_COUNTER_PROTOCOL_VERSION,
+    validated_token_count,
+)
 
 
 PROJECTION_VERSION = "markdown-projection@3"
-CONTEXT_PACK_VERSION = "handoff-context@2"
+CONTEXT_PACK_VERSION = "handoff-context@3"
 DEFAULT_CONTEXT_BUDGET_BYTES = 32_000
 TOKEN_BYTES_ESTIMATE = 4
 TOKEN_ESTIMATOR_VERSION = "utf8-bytes-token-estimator@1"
-CONTEXT_SELECTION_RULE_VERSION = "context-selection@2"
+CONTEXT_SELECTION_RULE_VERSION = "context-selection@3"
 CONTEXT_SELECTION_RULE = (
     "mandatory-purpose,open-conflicts,active-decisions,open-questions,"
     "actionable-work-items;greedy:current_claims;stable-projection-order"
@@ -42,12 +47,27 @@ class ProjectionError(Exception):
 class ContextBudgetError(ProjectionError):
     """Raised when mandatory context cannot fit without hiding open conflict data."""
 
-    def __init__(self, required_bytes: int, budget_bytes: int) -> None:
+    def __init__(
+        self,
+        required_bytes: int,
+        budget_bytes: int,
+        *,
+        required_tokens: int | None = None,
+        budget_tokens: int | None = None,
+    ) -> None:
         self.required_bytes = required_bytes
         self.budget_bytes = budget_bytes
+        self.required_tokens = required_tokens
+        self.budget_tokens = budget_tokens
+        token_detail = ""
+        if required_tokens is not None and budget_tokens is not None:
+            token_detail = (
+                f", requires {required_tokens} tokens, token budget is {budget_tokens}"
+            )
         super().__init__(
             "context budget cannot expose mandatory purpose, continuity, and open conflicts: "
             f"requires {required_bytes} bytes, budget is {budget_bytes} bytes"
+            + token_detail
         )
 
 
@@ -72,20 +92,28 @@ def build_context_pack(
     budget_bytes: int | None = None,
     budget_tokens: int | None = None,
     purpose: str | None = None,
+    token_counter: ExactTokenCounter | None = None,
 ) -> dict[str, Any]:
     """Build a deterministic handoff object within the requested budget.
 
     Every open conflict and both/all of its member claims are mandatory.  A
     budget too small for that invariant raises :class:`ContextBudgetError`
     instead of returning a misleading partial view.  Token budgets use the
-    declared, dependency-free ``ceil(utf8_bytes/4)`` estimate; callers that
-    need model-exact accounting can pass the resulting byte limit from their
-    tokenizer.
+    declared, dependency-free ``ceil(utf8_bytes/4)`` estimate unless an exact,
+    versioned ``token_counter`` is supplied.  Byte and exact-token limits are
+    independent hard caps.
     """
 
     if purpose is not None and (not isinstance(purpose, str) or not purpose.strip()):
         raise ValueError("purpose must be a non-empty string when supplied")
-    effective_budget = _effective_budget(budget_bytes, budget_tokens)
+    if token_counter is not None:
+        # Validate the adapter before touching canonical state or doing costly
+        # projection work. The final rendered document is checked repeatedly
+        # below as its self-describing size metadata converges.
+        validated_token_count(token_counter, "")
+    effective_budget = _effective_budget(
+        budget_bytes, budget_tokens, exact_tokens=token_counter is not None
+    )
     with _read_connection(source) as connection:
         projection = _build_context_projection(connection)
 
@@ -154,41 +182,88 @@ def build_context_pack(
             omitted={name: len(items) for name, items, _ in sections},
             references=[],
             rendered_bytes=0,
+            token_counter=token_counter,
         ),
     }
 
     included = {name: 0 for name, _, _ in sections}
-    _refresh_truncation(pack, sections, included, effective_budget)
+    _refresh_truncation(
+        pack, sections, included, effective_budget, token_counter=token_counter
+    )
     minimum = _finalize_size(pack)
-    if minimum > effective_budget:
-        raise ContextBudgetError(minimum, effective_budget)
+    minimum_tokens = _finalize_tokens(pack, token_counter)
+    if minimum > effective_budget or _tokens_exceed(minimum_tokens, budget_tokens):
+        raise ContextBudgetError(
+            minimum,
+            effective_budget,
+            required_tokens=minimum_tokens if token_counter is not None else None,
+            budget_tokens=budget_tokens if token_counter is not None else None,
+        )
 
     for name, items, _ in sections:
         for item in items:
             pack[name].append(item)
             included[name] += 1
-            _refresh_truncation(pack, sections, included, effective_budget)
-            if _finalize_size(pack) > effective_budget:
+            _refresh_truncation(
+                pack,
+                sections,
+                included,
+                effective_budget,
+                token_counter=token_counter,
+            )
+            if _context_exceeds_budget(
+                pack, effective_budget, budget_tokens, token_counter
+            ):
                 pack[name].pop()
                 included[name] -= 1
-                _refresh_truncation(pack, sections, included, effective_budget)
+                _refresh_truncation(
+                    pack,
+                    sections,
+                    included,
+                    effective_budget,
+                    token_counter=token_counter,
+                )
                 break
 
-    _refresh_truncation(pack, sections, included, effective_budget)
+    _refresh_truncation(
+        pack, sections, included, effective_budget, token_counter=token_counter
+    )
     rendered_bytes = _finalize_size(pack)
-    if rendered_bytes > effective_budget:
+    rendered_tokens = _finalize_tokens(pack, token_counter)
+    if rendered_bytes > effective_budget or _tokens_exceed(
+        rendered_tokens, budget_tokens
+    ):
         # References and digit growth can make the final metadata larger than
         # the optimistic item check. Remove lowest-priority tail items until it
         # fits, while never touching mandatory open conflicts.
         for name, _, _ in reversed(sections):
-            while pack[name] and rendered_bytes > effective_budget:
+            while pack[name] and (
+                rendered_bytes > effective_budget
+                or _tokens_exceed(rendered_tokens, budget_tokens)
+            ):
                 pack[name].pop()
                 included[name] -= 1
-                _refresh_truncation(pack, sections, included, effective_budget)
+                _refresh_truncation(
+                    pack,
+                    sections,
+                    included,
+                    effective_budget,
+                    token_counter=token_counter,
+                )
                 rendered_bytes = _finalize_size(pack)
-        if rendered_bytes > effective_budget:
-            raise ContextBudgetError(rendered_bytes, effective_budget)
-    _set_stable_rendered_size(pack)
+                rendered_tokens = _finalize_tokens(pack, token_counter)
+        if rendered_bytes > effective_budget or _tokens_exceed(
+            rendered_tokens, budget_tokens
+        ):
+            raise ContextBudgetError(
+                rendered_bytes,
+                effective_budget,
+                required_tokens=(
+                    rendered_tokens if token_counter is not None else None
+                ),
+                budget_tokens=budget_tokens if token_counter is not None else None,
+            )
+    _set_stable_rendered_size(pack, token_counter)
     return pack
 
 
@@ -835,15 +910,20 @@ def _find_status(row: Mapping[str, Any]) -> str | None:
 
 
 def _effective_budget(
-    budget_bytes: int | None, budget_tokens: int | None
+    budget_bytes: int | None,
+    budget_tokens: int | None,
+    *,
+    exact_tokens: bool = False,
 ) -> int:
     for name, value in (("budget_bytes", budget_bytes), ("budget_tokens", budget_tokens)):
-        if value is not None and (isinstance(value, bool) or value <= 0):
+        if value is not None and (
+            isinstance(value, bool) or not isinstance(value, int) or value <= 0
+        ):
             raise ValueError(f"{name} must be a positive integer")
     limits = []
     if budget_bytes is not None:
         limits.append(int(budget_bytes))
-    if budget_tokens is not None:
+    if budget_tokens is not None and not exact_tokens:
         limits.append(int(budget_tokens) * TOKEN_BYTES_ESTIMATE)
     return min(limits) if limits else DEFAULT_CONTEXT_BUDGET_BYTES
 
@@ -857,8 +937,9 @@ def _truncation_metadata(
     omitted: Mapping[str, int],
     references: list[dict[str, Any]],
     rendered_bytes: int,
+    token_counter: ExactTokenCounter | None = None,
 ) -> dict[str, Any]:
-    return {
+    result: dict[str, Any] = {
         "truncated": any(omitted.values()) or bool(references),
         "budget_bytes": effective_budget,
         "requested_budget_bytes": requested_bytes,
@@ -874,6 +955,19 @@ def _truncation_metadata(
         "omitted_counts": dict(omitted),
         "references": references,
     }
+    if token_counter is not None:
+        result.update(
+            {
+                "rendered_tokens": 0,
+                "token_counter_protocol": TOKEN_COUNTER_PROTOCOL_VERSION,
+                "token_count_scope": "canonical-context-json",
+                "tokenizer": token_counter.metadata.to_dict(),
+                "token_estimate_exact": True,
+                "token_estimator": "exact-adapter",
+                "token_estimator_version": TOKEN_COUNTER_PROTOCOL_VERSION,
+            }
+        )
+    return result
 
 
 def _refresh_truncation(
@@ -881,6 +975,8 @@ def _refresh_truncation(
     sections: tuple[tuple[str, list[dict[str, Any]], str], ...],
     included: Mapping[str, int],
     effective_budget: int,
+    *,
+    token_counter: ExactTokenCounter | None = None,
 ) -> None:
     omitted = {name: len(items) - included[name] for name, items, _ in sections}
     references = [
@@ -902,8 +998,9 @@ def _refresh_truncation(
         omitted=omitted,
         references=references,
         rendered_bytes=0,
+        token_counter=token_counter,
     )
-    _set_stable_rendered_size(pack)
+    _set_stable_rendered_size(pack, token_counter)
 
 
 def _history_truncation_references(pack: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -947,22 +1044,64 @@ def _history_truncation_references(pack: Mapping[str, Any]) -> list[dict[str, An
     ]
 
 
-def _set_stable_rendered_size(pack: dict[str, Any]) -> None:
-    previous = -1
-    for _ in range(8):
-        size = _finalize_size(pack)
-        if size == previous and pack["truncation"]["rendered_bytes"] == size:
-            return
-        pack["truncation"]["rendered_bytes"] = size
-        pack["truncation"]["estimated_tokens"] = math.ceil(
-            size / TOKEN_BYTES_ESTIMATE
+def _set_stable_rendered_size(
+    pack: dict[str, Any], token_counter: ExactTokenCounter | None = None
+) -> None:
+    for _ in range(16):
+        rendered = canonical_json(pack)
+        size = len(rendered.encode("utf-8"))
+        token_count = (
+            validated_token_count(token_counter, rendered)
+            if token_counter is not None
+            else math.ceil(size / TOKEN_BYTES_ESTIMATE)
         )
-        previous = size
+        truncation = pack["truncation"]
+        size_matches = truncation["rendered_bytes"] == size
+        token_matches = (
+            truncation.get("rendered_tokens") == token_count
+            if token_counter is not None
+            else truncation["estimated_tokens"] == token_count
+        )
+        if size_matches and token_matches:
+            return
+        truncation["rendered_bytes"] = size
+        truncation["estimated_tokens"] = token_count
+        if token_counter is not None:
+            truncation["rendered_tokens"] = token_count
     raise ProjectionError("context size metadata did not converge")
 
 
 def _finalize_size(pack: Mapping[str, Any]) -> int:
     return len(canonical_json(pack).encode("utf-8"))
+
+
+def _finalize_tokens(
+    pack: Mapping[str, Any], token_counter: ExactTokenCounter | None
+) -> int | None:
+    if token_counter is None:
+        return None
+    return validated_token_count(token_counter, canonical_json(pack))
+
+
+def _tokens_exceed(
+    rendered_tokens: int | None, budget_tokens: int | None
+) -> bool:
+    return (
+        rendered_tokens is not None
+        and budget_tokens is not None
+        and rendered_tokens > budget_tokens
+    )
+
+
+def _context_exceeds_budget(
+    pack: Mapping[str, Any],
+    budget_bytes: int,
+    budget_tokens: int | None,
+    token_counter: ExactTokenCounter | None,
+) -> bool:
+    return _finalize_size(pack) > budget_bytes or _tokens_exceed(
+        _finalize_tokens(pack, token_counter), budget_tokens
+    )
 
 
 def _optional_records(

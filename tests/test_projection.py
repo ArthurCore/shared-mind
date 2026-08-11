@@ -317,7 +317,7 @@ class DeterministicProjectionTest(unittest.TestCase):
             first["truncation"]["references"][0]["projection_ref"],
         )
         self.assertEqual(len(encoded), first["truncation"]["rendered_bytes"])
-        self.assertEqual("context-selection@2", first["truncation"]["selection_rule_version"])
+        self.assertEqual("context-selection@3", first["truncation"]["selection_rule_version"])
         self.assertIn("open-conflicts", first["truncation"]["selection_rule"])
         for reference in first["truncation"]["references"]:
             self._resolve_pointer(
