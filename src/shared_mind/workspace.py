@@ -109,6 +109,7 @@ class Workspace:
             "workspace_version": WORKSPACE_VERSION,
         }
         encoded_config = (canonical_json(config) + "\n").encode("utf-8")
+        cls._reject_control_symlink(config_path, "Workspace config")
         if config_path.exists():
             if not config_path.is_file():
                 raise WorkspaceError(
@@ -133,6 +134,7 @@ class Workspace:
 
         registry_path = control_root / REGISTRY_FILENAME
         registry_bytes = cls._load_registry_bytes(registry_source)
+        cls._reject_control_symlink(registry_path, "Workspace predicate registry")
         if registry_path.exists():
             try:
                 existing_registry = registry_path.read_bytes()
@@ -160,6 +162,7 @@ class Workspace:
         config_path: Path | None = None
         for directory in (candidate, *candidate.parents):
             possible = directory / WORKSPACE_DIRECTORY / CONFIG_FILENAME
+            cls._reject_control_symlink(possible, "Workspace config")
             if possible.is_file():
                 config_path = possible
                 break
@@ -168,10 +171,18 @@ class Workspace:
                 "WORKSPACE_NOT_FOUND",
                 f"No {WORKSPACE_DIRECTORY}/{CONFIG_FILENAME} found from {start_path}",
             )
+        cls._reject_control_symlink(config_path, "Workspace config")
         root = config_path.parent.parent.resolve()
+        workspace_root = root.resolve()
         try:
-            config = json.loads(config_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            config_bytes = cls._read_workspace_json_bytes(config_path, workspace_root)
+            config = json.loads(config_bytes.decode("utf-8"))
+        except (
+            OSError,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+            WorkspaceError,
+        ) as exc:
             raise WorkspaceError(
                 "WORKSPACE_CONFIG_INVALID", f"Cannot read workspace config: {exc}"
             ) from exc
@@ -402,13 +413,7 @@ class Workspace:
             )
         if not resolved.is_file():
             raise WorkspaceError("FILE_NOT_FOUND", f"JSON file not found: {resolved}")
-        try:
-            with resolved.open("rb") as handle:
-                encoded = handle.read(MAX_JSON_BYTES + 1)
-        except OSError as exc:
-            raise WorkspaceError(
-                "FILE_READ_FAILED", f"Cannot read JSON file: {exc}"
-            ) from exc
+        encoded = self._read_workspace_json_bytes(resolved, workspace_root)
         if len(encoded) > MAX_JSON_BYTES:
             raise WorkspaceError(
                 "JSON_TOO_LARGE",
@@ -779,6 +784,55 @@ class Workspace:
             os.close(descriptor)
             raise
 
+    @classmethod
+    def _read_workspace_json_bytes(cls, path: Path, workspace_root: Path) -> bytes:
+        flags = (
+            os.O_RDONLY
+            | getattr(os, "O_BINARY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0)
+        )
+        try:
+            descriptor = os.open(path, flags)
+        except OSError as exc:
+            raise WorkspaceError(
+                "FILE_READ_FAILED", f"Cannot read JSON file: {exc}"
+            ) from exc
+        try:
+            opened = os.fstat(descriptor)
+            if not stat.S_ISREG(opened.st_mode):
+                raise WorkspaceError(
+                    "FILE_READ_FAILED", "JSON file must be a regular file."
+                )
+            try:
+                current_path = path.resolve(strict=True)
+                current = os.stat(current_path)
+            except OSError as exc:
+                raise WorkspaceError(
+                    "FILE_READ_FAILED", f"Cannot verify JSON file identity: {exc}"
+                ) from exc
+            if (
+                current_path != path
+                or not cls._is_within(current_path, workspace_root)
+                or (opened.st_dev, opened.st_ino) != (current.st_dev, current.st_ino)
+            ):
+                raise WorkspaceError(
+                    "FILE_READ_FAILED",
+                    "JSON path identity changed while it was opened.",
+                )
+            with os.fdopen(descriptor, "rb") as handle:
+                descriptor = -1
+                return handle.read(MAX_JSON_BYTES + 1)
+        except WorkspaceError:
+            raise
+        except OSError as exc:
+            raise WorkspaceError(
+                "FILE_READ_FAILED", f"Cannot read JSON file: {exc}"
+            ) from exc
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+
     @staticmethod
     def _proposal_resource_issue(proposal: Any) -> ValidationIssue | None:
         if _json_depth_exceeds(proposal, Kernel.MAX_PROPOSAL_DEPTH):
@@ -856,6 +910,14 @@ class Workspace:
                 "WORKSPACE_CONFIG_INVALID", f"{field} escapes the workspace root."
             )
         return resolved
+
+    @staticmethod
+    def _reject_control_symlink(path: Path, label: str) -> None:
+        if path.is_symlink():
+            raise WorkspaceError(
+                "WORKSPACE_CONFIG_INVALID",
+                f"{label} must be a regular file, not a symbolic link: {path}",
+            )
 
     @staticmethod
     def _write_new_file(path: Path, content: bytes) -> None:

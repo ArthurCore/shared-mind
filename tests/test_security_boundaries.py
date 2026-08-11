@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from shared_mind.cli import EXIT_OK, EXIT_VALIDATION_ERROR, main
+from shared_mind.cli import EXIT_IO_ERROR, EXIT_OK, EXIT_VALIDATION_ERROR, main
 from shared_mind.service import WorkspaceService
 from shared_mind.workspace import Workspace, WorkspaceError
 
@@ -151,7 +151,7 @@ class SecurityBoundaryTest(unittest.TestCase):
             )
 
         self.assertTrue(swapped)
-        self.assertEqual(EXIT_VALIDATION_ERROR, exit_code)
+        self.assertEqual(EXIT_IO_ERROR, exit_code)
         self.assertEqual("FILE_READ_FAILED", result["code"])
         self.assertEqual((0, 0), self._canonical_counts())
 
