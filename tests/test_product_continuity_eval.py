@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import copy
 import json
 import socket
 import unittest
@@ -19,6 +20,9 @@ RESPONSE_SCHEMA_PATH = (
 )
 METRICS_SCHEMA_PATH = EVAL_ROOT / "product-continuity-metrics.schema.v1.json"
 REPORT_SCHEMA_PATH = EVAL_ROOT / "product-continuity-report.schema.v1.json"
+LIVE_SUMMARY_SCHEMA_PATH = (
+    EVAL_ROOT / "product-continuity-live-summary.schema.v1.json"
+)
 
 
 class ProductContinuityEvalContractTest(unittest.TestCase):
@@ -28,9 +32,11 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
         cls.response_schema = cls._load_json(RESPONSE_SCHEMA_PATH)
         cls.metrics_schema = cls._load_json(METRICS_SCHEMA_PATH)
         cls.report_schema = cls._load_json(REPORT_SCHEMA_PATH)
+        cls.live_summary_schema = cls._load_json(LIVE_SUMMARY_SCHEMA_PATH)
         cls.response_validator = cls._validator(cls.response_schema)
         cls.metrics_validator = cls._validator(cls.metrics_schema)
         cls.report_validator = cls._validator(cls.report_schema)
+        cls.live_summary_validator = cls._validator(cls.live_summary_schema)
 
     def test_fixture_schemas_and_every_candidate_response_are_valid(self) -> None:
         self.assertEqual(
@@ -45,6 +51,7 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
             self.response_schema,
             self.metrics_schema,
             self.report_schema,
+            self.live_summary_schema,
         ):
             Draft202012Validator.check_schema(schema)
 
@@ -55,6 +62,94 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
             with self.subTest(response=response):
                 self._assert_valid(self.response_validator, response)
         self._assert_valid(self.metrics_validator, self.scenario["metrics"])
+
+    def test_sanitized_live_summary_schema_accepts_only_shareable_evidence(
+        self,
+    ) -> None:
+        runner = importlib.import_module("evals.product_continuity.runner")
+        report = runner.evaluate_scenario(
+            self.scenario, self.scenario["expected_response"]
+        )
+        response_schema_bytes = RESPONSE_SCHEMA_PATH.read_bytes()
+        summary = {
+            "artifact_version": "product-continuity-live-summary@1",
+            "scenario_id": self.scenario["scenario_id"],
+            "project_snapshot_digest": "sha256:" + "a" * 64,
+            "provider": "OpenAI/Codex",
+            "model_snapshot": "gpt-5.5-codex-2026-08-11",
+            "client": {
+                "name": "openai-python",
+                "version": "2.3.4",
+            },
+            "tokenizer": {
+                "name": "o200k_base",
+                "version": "2026.08.11",
+            },
+            "prompt_template_sha256": "sha256:" + "b" * 64,
+            "response_schema_sha256": runner.sha256_bytes(response_schema_bytes),
+            "settings": {
+                "temperature": 0,
+                "tools": "disabled",
+                "web_search": "disabled",
+            },
+            "arms": {
+                "manual_baseline": {
+                    "input_bytes": 24000,
+                    "input_tokens": 6000,
+                    "elapsed_time_seconds": 120.0,
+                    "schema_validation": "PASS",
+                    "report": report,
+                },
+                "context_only": {
+                    "input_bytes": 9720,
+                    "input_tokens": 2430,
+                    "elapsed_time_seconds": 45.0,
+                    "schema_validation": "PASS",
+                    "report": report,
+                },
+            },
+            "redaction_attestation": {
+                "reviewer": "local-owner-review",
+                "reviewed_at": "2026-08-11T00:00:00Z",
+                "statement": (
+                    "Reviewed sanitized aggregate evidence; no secrets, "
+                    "account identifiers, request IDs, absolute paths, raw "
+                    "private source bytes, or unsanitized prompts/responses remain."
+                ),
+            },
+        }
+        summary["comparison"] = runner.live_summary_comparison(summary)
+
+        self._assert_valid(self.live_summary_validator, summary)
+        self.assertTrue(summary["comparison"]["passed"])
+
+        floating_alias = dict(summary)
+        floating_alias["model_snapshot"] = "latest"
+        self.assertNotEqual(
+            [],
+            list(self.live_summary_validator.iter_errors(floating_alias)),
+        )
+
+        leaked_secret = dict(summary)
+        leaked_secret["api_key"] = "sk-test-not-allowed"
+        self.assertNotEqual(
+            [],
+            list(self.live_summary_validator.iter_errors(leaked_secret)),
+        )
+        nested_secret = copy.deepcopy(summary)
+        nested_secret["settings"]["api_key"] = "sk-test-not-allowed"
+        self.assertNotEqual(
+            [],
+            list(self.live_summary_validator.iter_errors(nested_secret)),
+        )
+        leaked_report = copy.deepcopy(summary)
+        leaked_report["arms"]["context_only"]["report"]["raw_prompt"] = (
+            "private prompt must never be retained in a shareable summary"
+        )
+        self.assertNotEqual(
+            [],
+            list(self.live_summary_validator.iter_errors(leaked_report)),
+        )
 
     def test_golden_response_is_fully_grounded_in_context_only_input(self) -> None:
         context = self.scenario["context"]

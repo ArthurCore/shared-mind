@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shared-mind.local/schemas/product-continuity-live-summary.v1.json",
+  "title": "Shared Mind sanitized live product-continuity summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "artifact_version",
+    "scenario_id",
+    "project_snapshot_digest",
+    "provider",
+    "model_snapshot",
+    "client",
+    "tokenizer",
+    "prompt_template_sha256",
+    "response_schema_sha256",
+    "settings",
+    "arms",
+    "comparison",
+    "redaction_attestation"
+  ],
+  "properties": {
+    "artifact_version": {
+      "const": "product-continuity-live-summary@1"
+    },
+    "scenario_id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{2,127}$"
+    },
+    "project_snapshot_digest": {
+      "$ref": "#/$defs/sha256"
+    },
+    "provider": {
+      "enum": ["OpenAI/Codex", "Anthropic/Claude"]
+    },
+    "model_snapshot": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 128,
+      "pattern": ".*[0-9]{4}.*",
+      "not": {
+        "enum": ["latest", "default", "current", "stable"]
+      }
+    },
+    "client": {
+      "$ref": "#/$defs/component_version"
+    },
+    "tokenizer": {
+      "$ref": "#/$defs/component_version"
+    },
+    "prompt_template_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "response_schema_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "settings": {
+      "type": "object",
+      "additionalProperties": {
+        "type": ["string", "number", "integer", "boolean", "null"]
+      },
+      "maxProperties": 32
+    },
+    "arms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manual_baseline", "context_only"],
+      "properties": {
+        "manual_baseline": {
+          "$ref": "#/$defs/arm"
+        },
+        "context_only": {
+          "$ref": "#/$defs/arm"
+        }
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_version",
+        "reductions",
+        "meets_reduction_target",
+        "quality_preserved",
+        "schema_valid",
+        "passed"
+      ],
+      "properties": {
+        "report_version": {
+          "const": "product-continuity-live-comparison@1"
+        },
+        "reductions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["bytes", "tokens", "time_seconds"],
+          "properties": {
+            "bytes": {
+              "$ref": "#/$defs/fraction"
+            },
+            "tokens": {
+              "$ref": "#/$defs/fraction"
+            },
+            "time_seconds": {
+              "$ref": "#/$defs/fraction"
+            }
+          }
+        },
+        "meets_reduction_target": {
+          "type": "boolean"
+        },
+        "quality_preserved": {
+          "type": "boolean"
+        },
+        "schema_valid": {
+          "type": "boolean"
+        },
+        "passed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "redaction_attestation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewer", "reviewed_at", "statement"],
+      "properties": {
+        "reviewer": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128
+        },
+        "reviewed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 80,
+          "maxLength": 1000
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "fraction": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "component_version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "arm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input_bytes",
+        "input_tokens",
+        "elapsed_time_seconds",
+        "schema_validation",
+        "report"
+      ],
+      "properties": {
+        "input_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "input_tokens": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "elapsed_time_seconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "schema_validation": {
+          "const": "PASS"
+        },
+        "report": {
+          "$ref": "#/$defs/report"
+        }
+      }
+    },
+    "report": {
+      "type": "object",
+      "required": [
+        "report_version",
+        "scenario_id",
+        "score",
+        "maximum_score",
+        "passed",
+        "fact_accuracy",
+        "open_conflict_member_recall",
+        "dimension_scores",
+        "penalty_codes",
+        "metric_comparison"
+      ],
+      "properties": {
+        "report_version": {
+          "const": "product-continuity-report@1"
+        },
+        "scenario_id": {
+          "type": "string"
+        },
+        "score": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maximum_score": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "fact_accuracy": {
+          "$ref": "#/$defs/fraction"
+        },
+        "open_conflict_member_recall": {
+          "$ref": "#/$defs/fraction"
+        },
+        "dimension_scores": {
+          "type": "object"
+        },
+        "penalty_codes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "metric_comparison": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

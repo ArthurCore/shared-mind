@@ -464,9 +464,10 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
 이 결과는 implementation commit `47b7f1c` 이후의 CI audit/FD-test correction을
-포함한 final HEAD `5edf764`에서 실행됐다. schema 1.3 hardening,
-receipt migration atomicity, remote policy, input/TOCTOU, MCP, adapter, 성능
-query-plan 회귀를 모두 포함한다.
+포함한 source/test HEAD `5edf764`에서 실행됐다. 이후 commit은 README/SRS 검증
+기록만 갱신한 문서 전용 변경이다. schema 1.3 hardening, receipt migration
+atomicity, remote policy, input/TOCTOU, MCP, adapter, 성능 query-plan 회귀를
+모두 포함한다.
 
 ### 13.2 요구사항 추적표
 
@@ -597,7 +598,7 @@ deny-by-default remote policy evaluator.
 | 완료(환경 회귀 주의) | DEV-021 | 100k-entry benchmark | 두 profile 생성, history replay parity, hot-active optimized p95 1.653288 s |
 | 완료(protocol) | DEV-022 | exact-token adapter | deterministic counter injection과 fail-closed cap; provider tokenizer 미번들 |
 | 완료(자동시험) | DEV-023 | multi-process two-client/silent overwrite | independent CLI process race, idempotency, replay parity, silent overwrite 0 |
-| 로컬/offline 완료, live eval 대기 | DEV-024 | product continuity eval | golden scorer와 adversarial traps; live provider 평가는 미수행 |
+| 로컬/offline 완료, live eval 대기 | DEV-024 | product continuity eval | golden scorer, adversarial traps, sanitized live-summary schema; live provider 평가는 미수행 |
 | 완료(구성/계약) | DEV-025 | release/portability gate | Python 3.11~3.13, 3-OS determinism subset, clean base/MCP wheel smoke CI |
 | 완료(구성/계약) | DEV-026 | quality/security gate | coverage>=80, lint/type/audit/Bandit와 bounded input/path/SQL security |
 | 완료(local/POSIX 시험) | DEV-027 | process-kill/WAL durability | WAL+FULL synchronous, reader fast path, kill/recovery, corrupt WAL fail-closed |
@@ -647,7 +648,9 @@ deny-by-default remote policy evaluator.
 
 현재 checked-in scorer와 golden/adversarial fixture는 deterministic offline
 평가다. provider 호출은 opt-in protocol로 분리되며, 이번 구현 기준선에서 실제
-Codex+Claude paid/network run은 수행하지 않았다.
+Codex+Claude paid/network run은 수행하지 않았다. 승인된 live run의 공유 가능한
+결과는 sanitized summary schema와 deterministic comparison helper로 aggregate
+증거만 검증하도록 고정했다.
 
 ### 16.5 통합·릴리스·내구성 시험
 

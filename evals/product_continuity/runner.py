@@ -7,6 +7,7 @@ and the scenario's recorded resource metrics are evaluated independently.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping
 from typing import Any
 
@@ -90,6 +91,64 @@ def evaluate_scenario(
         "dimension_scores": dimension_scores,
         "penalty_codes": penalty_codes,
         "metric_comparison": metric_comparison,
+    }
+
+
+def sha256_bytes(value: bytes) -> str:
+    """Return the canonical hash string used by live summary artifacts."""
+
+    return "sha256:" + hashlib.sha256(value).hexdigest()
+
+
+def live_summary_comparison(summary: Mapping[str, Any]) -> dict[str, Any]:
+    """Compare sanitized manual/context live arms without provider coupling."""
+
+    arms = _mapping(summary["arms"], "arms")
+    manual = _mapping(arms["manual_baseline"], "arms.manual_baseline")
+    context = _mapping(arms["context_only"], "arms.context_only")
+
+    reductions = {}
+    for output_name, input_name in (
+        ("bytes", "input_bytes"),
+        ("tokens", "input_tokens"),
+        ("time_seconds", "elapsed_time_seconds"),
+    ):
+        baseline = float(manual[input_name])
+        candidate = float(context[input_name])
+        reduction = 1.0 - candidate / baseline
+        reductions[output_name] = round(max(0.0, min(1.0, reduction)), 12)
+
+    manual_report = _mapping(manual["report"], "arms.manual_baseline.report")
+    context_report = _mapping(context["report"], "arms.context_only.report")
+    quality_preserved = (
+        int(context_report["score"]) >= int(manual_report["score"])
+        and float(context_report["fact_accuracy"])
+        >= float(manual_report["fact_accuracy"])
+        and float(context_report["open_conflict_member_recall"])
+        >= float(manual_report["open_conflict_member_recall"])
+    )
+    schema_valid = (
+        manual.get("schema_validation") == "PASS"
+        and context.get("schema_validation") == "PASS"
+    )
+    meets_reduction_target = all(
+        reduction >= 0.5 for reduction in reductions.values()
+    )
+    passed = (
+        bool(manual_report["passed"])
+        and bool(context_report["passed"])
+        and schema_valid
+        and quality_preserved
+        and meets_reduction_target
+    )
+
+    return {
+        "report_version": "product-continuity-live-comparison@1",
+        "reductions": reductions,
+        "meets_reduction_target": meets_reduction_target,
+        "quality_preserved": quality_preserved,
+        "schema_valid": schema_valid,
+        "passed": passed,
     }
 
 

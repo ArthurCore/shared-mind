@@ -96,6 +96,15 @@ contains per-resource reductions plus `meets_reduction_target` and
 `quality_preserved`. Resource inputs are separately constrained by
 [`product-continuity-metrics.schema.v1.json`](../evals/product_continuity/product-continuity-metrics.schema.v1.json).
 
+If an explicitly approved live run produces a shareable summary, the sanitized
+artifact must validate against
+[`product-continuity-live-summary.schema.v1.json`](../evals/product_continuity/product-continuity-live-summary.schema.v1.json).
+That schema accepts only aggregate evidence: provider, pinned model/client/
+tokenizer versions, prompt and schema hashes, per-arm resource metrics,
+deterministic scorer reports, comparison flags, and a redaction attestation.
+It rejects top-level extra fields, including common secret-bearing keys, and
+forbids floating model aliases such as `latest`.
+
 ## Offline reproduction
 
 Run these commands from the repository root. They make no provider call and do
@@ -213,6 +222,10 @@ Use this protocol for either provider:
    bytes, tokens, and time. A live run is successful only if context-only reduces
    every resource by at least 50%, preserves baseline quality, exposes 100% of
    open conflicts and their members, and has no false-settled or hallucinated ID.
+   Build the shareable summary from aggregate fields only, compute its comparison
+   with `live_summary_comparison`, and validate it against
+   `product-continuity-live-summary.schema.v1.json` before retaining or sharing
+   the artifact.
 8. Remove the opt-in marker immediately after the approved calls:
 
    ```console
