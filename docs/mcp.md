@@ -1,0 +1,126 @@
+# Local MCP adapter
+
+Shared Mind provides an optional, local stdio MCP adapter for Codex, Claude
+Desktop, Claude Code, and other MCP clients. The adapter binds to one workspace
+at startup and reuses the same deterministic service and kernel semantics as the
+Python and CLI interfaces.
+
+## Installation
+
+Shared Mind requires Python 3.11+. The base install does not include the MCP SDK:
+
+```console
+python3 -m pip install .
+```
+
+Install the optional adapter dependencies with:
+
+```console
+python3 -m pip install '.[mcp]'
+```
+
+The optional dependency is pinned to `mcp>=2,<3`. Keep that major-version pin
+when reproducing an environment because MCP transport APIs and generated schemas
+may change across major versions.
+
+## Codex project configuration
+
+The checked-in `.codex/config.toml` enables multi-agent support and declares a
+project-local `shared_mind` stdio server. It launches `shared-mind-mcp` with
+`--workspace .`, uses `cwd = "."`, and starts with `required = false`. No secret,
+environment variable, personal absolute path, or remote endpoint is stored in
+the project configuration.
+
+The `explorer`, `reviewer`, and `docs_researcher` roles load project-local TOML
+layers from `.codex/agents/`. Each layer uses a read-only sandbox and explicitly
+forbids file edits and canonical mutations.
+
+Treat the repository and its workspace content as trusted local input before
+enabling the server. `required = false` makes an unavailable optional adapter a
+non-fatal startup condition; it is not a security control.
+
+## Tools
+
+The adapter exposes exactly this tool allowlist:
+
+| Tool | Behavior |
+|---|---|
+| `context` | Build a deterministic, budgeted handoff context pack. |
+| `query` | Query the deterministic public projection. |
+| `proposal_validate` | Validate an inline Proposal without canonical mutation. |
+| `proposal_commit` | Submit an inline Proposal to the deterministic kernel. |
+| `source_add` | Register a UTF-8 source using a path relative to the source root. |
+| `conflict_list` | List canonical conflicts, optionally by lifecycle status. |
+| `ledger_verify` | Verify the ledger chain and materialized state root. |
+
+`context`, `query`, `proposal_validate`, `conflict_list`, and `ledger_verify` are
+read-only. `proposal_commit` and `source_add` can write local canonical state, so
+obtain explicit user approval for each write-capable call. A `FACT_CONFLICT`
+result is an accepted, history-preserving success; a transaction or validation
+conflict is reported as an MCP tool error without silently applying the change.
+
+Tool annotations are hints; they do not enforce authorization or approval.
+Client policy, project trust, and explicit user approval remain the enforcement
+boundary. Remote publishing, pushing, messaging, credential changes, and other
+external actions remain outside this local adapter and require their own approval.
+
+## Resources
+
+The adapter exposes exactly these six fixed resource URIs:
+
+| Resource URI | Media type |
+|---|---|
+| `shared-mind://workspace/info` | `application/json` |
+| `shared-mind://workspace/context` | `application/json` |
+| `shared-mind://projection/project.json` | `application/json` |
+| `shared-mind://projection/project.md` | `text/markdown` |
+| `shared-mind://contract/schema` | `application/json` |
+| `shared-mind://contract/predicate-registry` | `application/json` |
+
+The resource surface does not expose arbitrary database, SQL, or file resources.
+There are no file URI, SQLite URI, workspace-path, or SQL resource templates.
+For ingestion, `source_add` accepts only a relative path beneath the configured
+source root; absolute paths, parent traversal, and symlink escape are rejected.
+
+## Trust, transport, and logging
+
+The adapter is local-first and does not authenticate a remote identity. Its
+workspace selection is fixed when the stdio process starts. Restart it to bind a
+different workspace rather than accepting a workspace or database path per call.
+
+Stdout is reserved exclusively for JSON-RPC protocol frames; diagnostics go to
+stderr. Do not add ordinary prints, banners, progress bars, or logging handlers
+that write to stdout. A client should treat malformed stdout as a transport
+failure rather than trying to recover a partially framed response.
+
+## Claude Desktop and Claude Code
+
+Claude Desktop and Claude Code both accept an MCP stdio server definition. This
+generic example does not write or modify any external client configuration; copy
+or adapt it only after reviewing that client's current settings and trust model:
+
+```json
+{
+  "mcpServers": {
+    "shared-mind": {
+      "command": "shared-mind-mcp",
+      "args": ["--workspace", "."]
+    }
+  }
+}
+```
+
+Launch the client with the Shared Mind project as its working directory when
+using `.`. Keep the workspace fixed for the lifetime of that server process.
+
+## Troubleshooting
+
+- Confirm the runtime is Python 3.11 or newer and run `shared-mind-mcp --help`.
+- If the `mcp` module is unavailable, install `.[mcp]` and verify that the
+  resolved SDK version satisfies `mcp>=2,<3`.
+- If the workspace cannot be opened, initialize it first and confirm the MCP
+  process working directory is the intended project root.
+- If the client reports malformed protocol output, reserve stdout for JSON-RPC
+  and move every diagnostic or logging message to stderr.
+- If generated tool metadata changes after an upgrade, verify the MCP SDK
+  version pin before changing Shared Mind's seven-tool or six-resource contract.
