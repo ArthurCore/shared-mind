@@ -142,6 +142,18 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
             [],
             list(self.live_summary_validator.iter_errors(nested_secret)),
         )
+        nested_alias_secret = copy.deepcopy(summary)
+        nested_alias_secret["settings"]["API_KEY"] = "case-insensitive-block"
+        self.assertNotEqual(
+            [],
+            list(self.live_summary_validator.iter_errors(nested_alias_secret)),
+        )
+        nested_path = copy.deepcopy(summary)
+        nested_path["settings"]["request_id"] = "req_private_001"
+        self.assertNotEqual(
+            [],
+            list(self.live_summary_validator.iter_errors(nested_path)),
+        )
         leaked_report = copy.deepcopy(summary)
         leaked_report["arms"]["context_only"]["report"]["raw_prompt"] = (
             "private prompt must never be retained in a shareable summary"

@@ -58,7 +58,7 @@
       "type": "object",
       "propertyNames": {
         "not": {
-          "pattern": "(api[_-]?key|authorization|cookie|credential|password|secret|token)"
+          "pattern": "(?i)(account[_-]?id|api[_-]?key|authorization|cookie|credential|password|path|prompt|request[_-]?id|response|secret|token)"
         }
       },
       "additionalProperties": {
