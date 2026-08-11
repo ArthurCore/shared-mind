@@ -146,6 +146,41 @@ class SharedMindCliTest(unittest.TestCase):
         self.assertEqual("SOURCE_REGISTERED", result["code"])
         self.assertEqual(1, self._database_count("ledger"))
 
+    def test_fr_005_changed_source_creates_a_new_immutable_revision(self) -> None:
+        self.initialize()
+        source = self.workspace_root / "sources" / "evolving.md"
+        source.write_text("version one\n", encoding="utf-8")
+        first_code, first, _ = self.invoke(
+            "--workspace",
+            str(self.workspace_root),
+            "source",
+            "add",
+            str(source),
+            "--source-id",
+            "document:evolving",
+        )
+        first_blob = self.workspace_root / first["data"]["blob_path"]
+        source.write_text("version two\n", encoding="utf-8")
+
+        second_code, second, _ = self.invoke(
+            "--workspace",
+            str(self.workspace_root),
+            "source",
+            "add",
+            str(source),
+            "--source-id",
+            "document:evolving",
+        )
+
+        self.assertEqual(EXIT_OK, first_code)
+        self.assertEqual(EXIT_OK, second_code)
+        self.assertNotEqual(
+            first["data"]["revision_id"], second["data"]["revision_id"]
+        )
+        self.assertEqual(b"version one\n", first_blob.read_bytes())
+        self.assertEqual(2, self._database_count("sources"))
+        self.assertEqual(2, self._database_count("ledger"))
+
     def test_fr_002_source_add_rejects_non_utf8_and_unknown_media_type(self) -> None:
         self.initialize()
         binary = self.workspace_root / "sources" / "bytes.txt"
@@ -337,6 +372,20 @@ class SharedMindCliTest(unittest.TestCase):
         context = result["data"]["context"]
         self.assertEqual(purpose, context["purpose"])
         self.assertFalse(context["purpose_missing"])
+
+    def test_fr_050_unimplemented_context_filters_fail_explicitly(self) -> None:
+        self.initialize()
+
+        exit_code, result, _ = self.invoke(
+            "--workspace",
+            str(self.workspace_root),
+            "context",
+            "--subject",
+            "system:atlas",
+        )
+
+        self.assertEqual(EXIT_VALIDATION_ERROR, exit_code)
+        self.assertEqual("CONTEXT_FILTER_UNSUPPORTED", result["code"])
 
     def test_nfr_009_context_budget_error_is_machine_readable(self) -> None:
         self.initialize()

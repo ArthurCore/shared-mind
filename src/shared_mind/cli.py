@@ -276,6 +276,18 @@ def _project_command(
 def _context_command(
     workspace: Workspace, arguments: argparse.Namespace, output: TextIO
 ) -> int:
+    if arguments.project is not None or arguments.subject is not None:
+        return _emit(
+            output,
+            False,
+            "CONTEXT_FILTER_UNSUPPORTED",
+            message=(
+                "Project and subject context filters are reserved but are not "
+                "implemented by this workspace version."
+            ),
+            data={"project": arguments.project, "subject": arguments.subject},
+            exit_code=EXIT_VALIDATION_ERROR,
+        )
     projection = _load_projection()
     if projection is None:
         return _capability_unavailable(output, "context pack")

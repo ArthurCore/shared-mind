@@ -199,7 +199,12 @@ class DeterministicProjectionTest(unittest.TestCase):
                     head["entry_hash"],
                     "sha256:" + "a" * 64,
                     "sha256:" + "b" * 64,
-                    canonical_json({"proposal_id": "proposal_history_1"}),
+                    canonical_json(
+                        {
+                            "proposal_id": "proposal_history_1",
+                            "versions": {"schema": "1.0.0"},
+                        }
+                    ),
                     canonical_json(
                         [{"event_type": "DECISION_RECORDED", "decision": decision}]
                     ),

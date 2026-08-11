@@ -218,6 +218,18 @@ def _build_projection(connection: sqlite3.Connection) -> dict[str, Any]:
     for index, row in enumerate(ledger_rows):
         proposal = _load_json(row.get("proposal"), {})
         events = _load_json(row.get("events"), [])
+        ledger_document = _load_json(row.get("document"), None)
+        schema_version = (
+            proposal.get("versions", {}).get("schema")
+            if isinstance(proposal, Mapping)
+            else None
+        )
+        if schema_version != "1.0.0" and not isinstance(
+            ledger_document, Mapping
+        ):
+            raise ProjectionError(
+                f"ledger sequence {row['seq']} has no canonical LedgerEntry document"
+            )
         sequence = int(row["seq"])
         for identifier in sorted(_find_object_ids(events) | _find_object_ids(proposal)):
             history_by_id.setdefault(identifier, set()).add(sequence)
@@ -229,6 +241,8 @@ def _build_projection(connection: sqlite3.Connection) -> dict[str, Any]:
                 "proposal_hash": row["proposal_hash"],
                 "proposal": proposal,
                 "events": events,
+                "ledger_entry": ledger_document,
+                "legacy_contract_incomplete": schema_version == "1.0.0",
                 "pre_state_root": row.get("pre_state_root"),
                 "state_root": row["state_root"],
                 "committed_at": row.get("committed_at"),

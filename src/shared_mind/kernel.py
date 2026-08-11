@@ -4,6 +4,7 @@ import base64
 import binascii
 import copy
 import json
+import re
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -39,6 +40,12 @@ class Receipt:
     ledger_seq: int | None
     state_root: str
     conflict_ids: tuple[str, ...] = ()
+    document: dict[str, Any] | None = None
+
+    def to_contract_dict(self) -> dict[str, Any]:
+        if self.document is None:
+            raise ValidationFailure("LEGACY_RECEIPT_CONTRACT_INCOMPLETE")
+        return copy.deepcopy(self.document)
 
 
 class ValidationFailure(Exception):
@@ -60,6 +67,10 @@ class Kernel:
         "projection": "markdown-projection@2",
     }
     READABLE_SCHEMA_VERSIONS = frozenset({"1.0.0", "1.1.0"})
+    _RECORD_ID = re.compile(
+        r"^[a-z][a-z0-9_]{1,31}_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+    )
+    _IDEMPOTENCY_KEY = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 
     def __init__(
         self,
@@ -75,6 +86,12 @@ class Kernel:
         self.contract_validator = build_contract_validator(contract)
         self.ledger_event_validator = build_definition_validator(
             "LedgerEvent", contract
+        )
+        self.ledger_entry_validator = build_definition_validator(
+            "LedgerEntry", contract
+        )
+        self.decision_receipt_validator = build_definition_validator(
+            "DecisionReceipt", contract
         )
         registry_errors = list(self.contract_validator.iter_errors(registry))
         if registry_errors:
@@ -139,7 +156,8 @@ class Kernel:
               events TEXT NOT NULL,
               pre_state_root TEXT NOT NULL,
               state_root TEXT NOT NULL,
-              committed_at TEXT NOT NULL
+              committed_at TEXT NOT NULL,
+              document TEXT
             );
             CREATE TABLE IF NOT EXISTS receipts (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -150,7 +168,8 @@ class Kernel:
               reason_codes TEXT NOT NULL,
               ledger_seq INTEGER,
               state_root TEXT NOT NULL,
-              conflict_ids TEXT NOT NULL
+              conflict_ids TEXT NOT NULL,
+              document TEXT
             );
             CREATE TABLE IF NOT EXISTS kernel_metadata (
               name TEXT PRIMARY KEY,
@@ -204,6 +223,8 @@ class Kernel:
             self.connection.execute("ALTER TABLE ledger ADD COLUMN pre_state_root TEXT")
         if "committed_at" not in ledger_columns:
             self.connection.execute("ALTER TABLE ledger ADD COLUMN committed_at TEXT")
+        if "document" not in ledger_columns:
+            self.connection.execute("ALTER TABLE ledger ADD COLUMN document TEXT")
 
         receipt_columns = {
             row["name"] for row in self.connection.execute("PRAGMA table_info(receipts)")
@@ -221,7 +242,8 @@ class Kernel:
                   reason_codes TEXT NOT NULL,
                   ledger_seq INTEGER,
                   state_root TEXT NOT NULL,
-                  conflict_ids TEXT NOT NULL
+                  conflict_ids TEXT NOT NULL,
+                  document TEXT
                 );
                 INSERT INTO receipts(
                   idempotency_key, proposal_hash, proposal_id, outcome,
@@ -233,6 +255,11 @@ class Kernel:
                 DROP TABLE receipts_legacy;
                 """
             )
+        receipt_columns = {
+            row["name"] for row in self.connection.execute("PRAGMA table_info(receipts)")
+        }
+        if "document" not in receipt_columns:
+            self.connection.execute("ALTER TABLE receipts ADD COLUMN document TEXT")
 
     def _create_immutability_triggers(self) -> None:
         """Reject ordinary DML that violates append-only/immutable records.
@@ -344,6 +371,7 @@ class Kernel:
     def _commit(self, proposal: Any) -> Receipt:
         proposal_id = proposal.get("proposal_id", "") if isinstance(proposal, dict) else ""
         key = proposal.get("idempotency_key", "") if isinstance(proposal, dict) else ""
+        head_before = self._head_entry_hash()
         try:
             proposal_hash = sha256_json(proposal)
         except (TypeError, ValueError):
@@ -356,31 +384,27 @@ class Kernel:
                     "idempotency_key": key,
                 }
             )
-            receipt = Receipt(
+            return self._insert_receipt(
+                key,
+                proposal_hash,
                 proposal_id,
                 "VALIDATION_ERROR",
                 ("MALFORMED_PROPOSAL",),
                 None,
                 self.state_root(),
-            )
-            self._insert_receipt(
-                key,
-                proposal_hash,
-                proposal_id,
-                receipt.outcome,
-                receipt.reason_codes,
-                None,
-                receipt.state_root,
                 (),
+                head_before=head_before,
+                decided_at=None,
             )
-            return receipt
 
         outcome = "COMMITTED"
         reasons: tuple[str, ...] = ()
         conflict_ids: tuple[str, ...] = ()
         ledger_seq: int | None = None
+        persisted_receipt: Receipt | None = None
         try:
             self.connection.execute("BEGIN IMMEDIATE")
+            head_before = self._head_entry_hash()
             prior = self.connection.execute(
                 "SELECT * FROM receipts WHERE idempotency_key = ? ORDER BY id LIMIT 1",
                 (key,),
@@ -388,24 +412,18 @@ class Kernel:
             if prior:
                 self.connection.execute("ROLLBACK")
                 if prior["proposal_hash"] != proposal_hash:
-                    receipt = Receipt(
+                    return self._insert_receipt(
+                        key,
+                        proposal_hash,
                         proposal_id,
                         "VALIDATION_ERROR",
                         ("IDEMPOTENCY_KEY_REUSE",),
                         None,
                         self.state_root(),
-                    )
-                    self._insert_receipt(
-                        key,
-                        proposal_hash,
-                        proposal_id,
-                        receipt.outcome,
-                        receipt.reason_codes,
-                        None,
-                        receipt.state_root,
                         (),
+                        head_before=head_before,
+                        decided_at=self._proposal_decided_at(proposal),
                     )
-                    return receipt
                 return self._row_to_receipt(prior)
             self._validate_contract_object(proposal)
             self._validate_versions(proposal)
@@ -437,11 +455,22 @@ class Kernel:
                 committed_at=committed_at,
             )
             entry_hash = sha256_json(envelope)
+            ledger_document = self._ledger_document(
+                seq=next_seq,
+                entry_hash=entry_hash,
+                proposal=proposal,
+                proposal_hash=proposal_hash,
+                prev_hash=envelope["prev_hash"],
+                pre_state_root=pre_root,
+                post_state_root=post_root,
+                events=events,
+                committed_at=committed_at,
+            )
             cursor = self.connection.execute(
                 """INSERT INTO ledger(
                      seq, prev_hash, entry_hash, proposal_hash, proposal, events,
-                     pre_state_root, state_root, committed_at
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                     pre_state_root, state_root, committed_at, document
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     next_seq,
                     envelope["prev_hash"],
@@ -452,21 +481,28 @@ class Kernel:
                     pre_root,
                     post_root,
                     committed_at,
+                    canonical_json(ledger_document),
                 ),
             )
             ledger_seq = int(cursor.lastrowid)
-            self._insert_receipt(key, proposal_hash, proposal["proposal_id"], outcome, (), ledger_seq, post_root, conflict_ids)
+            persisted_receipt = self._insert_receipt(
+                key,
+                proposal_hash,
+                proposal["proposal_id"],
+                outcome,
+                (),
+                ledger_seq,
+                post_root,
+                conflict_ids,
+                head_before=head_before,
+                decided_at=committed_at,
+            )
             self.connection.execute("COMMIT")
         except TransactionConflict as exc:
             self._rollback_if_needed()
             outcome, reasons = "TRANSACTION_CONFLICT", (exc.code,)
             post_root = self.state_root()
-            self._insert_receipt(key, proposal_hash, proposal_id, outcome, reasons, None, post_root, ())
-        except sqlite3.IntegrityError as exc:
-            self._rollback_if_needed()
-            outcome, reasons = "VALIDATION_ERROR", (self._integrity_reason(exc),)
-            post_root = self.state_root()
-            self._insert_receipt(
+            persisted_receipt = self._insert_receipt(
                 key,
                 proposal_hash,
                 proposal_id,
@@ -475,29 +511,154 @@ class Kernel:
                 None,
                 post_root,
                 (),
+                head_before=head_before,
+                decided_at=self._proposal_decided_at(proposal),
+            )
+        except sqlite3.IntegrityError as exc:
+            self._rollback_if_needed()
+            outcome, reasons = "VALIDATION_ERROR", (self._integrity_reason(exc),)
+            post_root = self.state_root()
+            persisted_receipt = self._insert_receipt(
+                key,
+                proposal_hash,
+                proposal_id,
+                outcome,
+                reasons,
+                None,
+                post_root,
+                (),
+                head_before=head_before,
+                decided_at=self._proposal_decided_at(proposal),
             )
         except (ValidationFailure, KeyError, TypeError, ValueError) as exc:
             self._rollback_if_needed()
             code = exc.code if isinstance(exc, ValidationFailure) else "MALFORMED_PROPOSAL"
             outcome, reasons = "VALIDATION_ERROR", (code,)
             post_root = self.state_root()
-            self._insert_receipt(key, proposal_hash, proposal_id, outcome, reasons, None, post_root, ())
+            persisted_receipt = self._insert_receipt(
+                key,
+                proposal_hash,
+                proposal_id,
+                outcome,
+                reasons,
+                None,
+                post_root,
+                (),
+                head_before=head_before,
+                decided_at=self._proposal_decided_at(proposal),
+            )
         except Exception:
             self._rollback_if_needed()
             raise
-        return Receipt(proposal_id, outcome, reasons, ledger_seq, post_root, conflict_ids)
+        if persisted_receipt is None:
+            raise RuntimeError("commit completed without a persisted receipt")
+        return persisted_receipt
 
-    def _insert_receipt(self, key: str, proposal_hash: str, proposal_id: str, outcome: str, reasons: tuple[str, ...], ledger_seq: int | None, root: str, conflicts: tuple[str, ...]) -> None:
+    def _insert_receipt(
+        self,
+        key: str,
+        proposal_hash: str,
+        proposal_id: str,
+        outcome: str,
+        reasons: tuple[str, ...],
+        ledger_seq: int | None,
+        root: str,
+        conflicts: tuple[str, ...],
+        *,
+        head_before: str | None = None,
+        decided_at: str | None = None,
+    ) -> Receipt:
+        if not self.connection.in_transaction:
+            self.connection.execute("BEGIN IMMEDIATE")
+            try:
+                receipt = self._insert_receipt(
+                    key,
+                    proposal_hash,
+                    proposal_id,
+                    outcome,
+                    reasons,
+                    ledger_seq,
+                    root,
+                    conflicts,
+                    head_before=head_before,
+                    decided_at=decided_at,
+                )
+                self.connection.execute("COMMIT")
+                return receipt
+            except Exception:
+                self._rollback_if_needed()
+                raise
         # The caller owns the transaction. On accepted mutations this write must
         # be atomic with ledger and materialized-state updates; rejected writes
         # run in SQLite autocommit mode after the mutation transaction rolls back.
-        self.connection.execute(
+        head_after = head_before
+        ledger_entry_id = None
+        if ledger_seq is not None:
+            ledger = self.connection.execute(
+                "SELECT prev_hash, entry_hash, document FROM ledger WHERE seq = ?",
+                (ledger_seq,),
+            ).fetchone()
+            if ledger is None or ledger["document"] is None:
+                raise ValidationFailure("LEDGER_DOCUMENT_NOT_FOUND")
+            head_before = ledger["prev_hash"]
+            head_after = str(ledger["entry_hash"])
+            ledger_entry_id = json.loads(ledger["document"])["entry_id"]
+        elif head_before is None:
+            head_before = self._head_entry_hash()
+            head_after = head_before
+        ordinal = int(
+            self.connection.execute(
+                "SELECT COALESCE(MAX(id), 0) + 1 FROM receipts"
+            ).fetchone()[0]
+        )
+        document = {
+            "object_type": "DECISION_RECEIPT",
+            "receipt_id": f"receipt_decision_{ordinal:020d}",
+            "proposal_id": (
+                proposal_id
+                if isinstance(proposal_id, str)
+                and self._RECORD_ID.fullmatch(proposal_id)
+                else None
+            ),
+            "proposal_hash": proposal_hash,
+            "idempotency_key": (
+                key
+                if isinstance(key, str) and self._IDEMPOTENCY_KEY.fullmatch(key)
+                else None
+            ),
+            "outcome": outcome,
+            "reason_codes": list(reasons),
+            "head_before": head_before,
+            "head_after": head_after,
+            "ledger_entry_id": ledger_entry_id,
+            "conflict_ids": list(conflicts),
+            "decided_at": decided_at or self._utc_now(),
+        }
+        if next(self.decision_receipt_validator.iter_errors(document), None) is not None:
+            raise ValidationFailure("DECISION_RECEIPT_SCHEMA_INVALID")
+        cursor = self.connection.execute(
             """INSERT INTO receipts(
                  idempotency_key, proposal_hash, proposal_id, outcome,
-                 reason_codes, ledger_seq, state_root, conflict_ids
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (key, proposal_hash, proposal_id, outcome, canonical_json(reasons), ledger_seq, root, canonical_json(conflicts)),
+                 reason_codes, ledger_seq, state_root, conflict_ids, document
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                key,
+                proposal_hash,
+                proposal_id,
+                outcome,
+                canonical_json(reasons),
+                ledger_seq,
+                root,
+                canonical_json(conflicts),
+                canonical_json(document),
+            ),
         )
+        row = self.connection.execute(
+            "SELECT * FROM receipts WHERE id = ?", (cursor.lastrowid,)
+        ).fetchone()
+        if row is None:
+            raise RuntimeError("persisted receipt could not be read back")
+        return self._row_to_receipt(row)
 
     def _validate_versions(self, proposal: dict[str, Any]) -> None:
         versions = proposal["versions"]
@@ -1291,6 +1452,59 @@ class Kernel:
             "committed_at": committed_at,
         }
 
+    def _ledger_document(
+        self,
+        *,
+        seq: int,
+        entry_hash: str,
+        proposal: dict[str, Any],
+        proposal_hash: str,
+        prev_hash: str | None,
+        pre_state_root: str,
+        post_state_root: str,
+        events: list[dict[str, Any]],
+        committed_at: str,
+    ) -> dict[str, Any]:
+        document = {
+            "object_type": "LEDGER_ENTRY",
+            "entry_id": f"ledger_entry_{seq:020d}",
+            "seq": seq,
+            "prev_hash": prev_hash,
+            "entry_hash": entry_hash,
+            "pre_state_root": pre_state_root,
+            "post_state_root": post_state_root,
+            "proposal_id": proposal["proposal_id"],
+            "proposal_hash": proposal_hash,
+            "versions": proposal["versions"],
+            "events": events,
+            "committed_at": committed_at,
+        }
+        if next(self.ledger_entry_validator.iter_errors(document), None) is not None:
+            raise ValidationFailure("LEDGER_ENTRY_SCHEMA_INVALID")
+        return document
+
+    def _head_entry_hash(self) -> str | None:
+        row = self.connection.execute(
+            "SELECT entry_hash FROM ledger ORDER BY seq DESC LIMIT 1"
+        ).fetchone()
+        return None if row is None else str(row["entry_hash"])
+
+    @classmethod
+    def _proposal_decided_at(cls, proposal: Any) -> str:
+        candidate = proposal.get("proposed_at") if isinstance(proposal, dict) else None
+        if isinstance(candidate, str):
+            try:
+                parsed = datetime.fromisoformat(candidate.replace("Z", "+00:00"))
+                if parsed.utcoffset() is not None:
+                    return candidate
+            except ValueError:
+                pass
+        return cls._utc_now()
+
+    @staticmethod
+    def _utc_now() -> str:
+        return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
     @staticmethod
     def _legacy_ledger_envelope(
         *,
@@ -1331,6 +1545,7 @@ class Kernel:
     def verify_ledger(self) -> dict[str, Any]:
         rows = self.connection.execute("SELECT * FROM ledger ORDER BY seq").fetchall()
         errors = self._verify_ledger_rows(rows)
+        errors.extend(self._verify_receipt_documents())
         head_hash = rows[-1]["entry_hash"] if rows else None
         current_root = self.state_root()
         if rows and rows[-1]["state_root"] != current_root:
@@ -1353,6 +1568,30 @@ class Kernel:
             "state_root": current_root,
             "errors": tuple(errors),
         }
+
+    def ledger_entries(self) -> tuple[dict[str, Any], ...]:
+        documents = []
+        for row in self.connection.execute(
+            "SELECT seq, document FROM ledger ORDER BY seq"
+        ):
+            if row["document"] is None:
+                raise ValidationFailure(
+                    f"LEGACY_LEDGER_CONTRACT_INCOMPLETE:{row['seq']}"
+                )
+            documents.append(json.loads(row["document"]))
+        return tuple(documents)
+
+    def decision_receipts(self) -> tuple[dict[str, Any], ...]:
+        documents = []
+        for row in self.connection.execute(
+            "SELECT id, document FROM receipts ORDER BY id"
+        ):
+            if row["document"] is None:
+                raise ValidationFailure(
+                    f"LEGACY_RECEIPT_CONTRACT_INCOMPLETE:{row['id']}"
+                )
+            documents.append(json.loads(row["document"]))
+        return tuple(documents)
 
     def _verify_ledger_rows(self, rows: list[sqlite3.Row]) -> list[str]:
         errors: list[str] = []
@@ -1401,6 +1640,34 @@ class Kernel:
                         )
                     ):
                         errors.append(f"LEDGER_EVENT_SCHEMA_INVALID:{seq}")
+                    try:
+                        document = json.loads(row["document"])
+                        expected_document = {
+                            "object_type": "LEDGER_ENTRY",
+                            "entry_id": f"ledger_entry_{seq:020d}",
+                            "seq": seq,
+                            "prev_hash": row["prev_hash"],
+                            "entry_hash": row["entry_hash"],
+                            "pre_state_root": row["pre_state_root"],
+                            "post_state_root": row["state_root"],
+                            "proposal_id": proposal["proposal_id"],
+                            "proposal_hash": row["proposal_hash"],
+                            "versions": proposal["versions"],
+                            "events": events,
+                            "committed_at": row["committed_at"],
+                        }
+                        if (
+                            next(
+                                self.ledger_entry_validator.iter_errors(document),
+                                None,
+                            )
+                            is not None
+                            or document != expected_document
+                            or row["document"] != canonical_json(document)
+                        ):
+                            errors.append(f"LEDGER_DOCUMENT_MISMATCH:{seq}")
+                    except (TypeError, json.JSONDecodeError):
+                        errors.append(f"LEDGER_DOCUMENT_MISMATCH:{seq}")
                     if not row["pre_state_root"] or not row["committed_at"]:
                         errors.append(f"INCOMPLETE_LEDGER_ENTRY:{seq}")
                         expected_prev = row["entry_hash"]
@@ -1422,6 +1689,74 @@ class Kernel:
             except (KeyError, TypeError, ValueError, json.JSONDecodeError):
                 errors.append(f"MALFORMED_LEDGER_ENTRY:{seq}")
             expected_prev = row["entry_hash"]
+        return errors
+
+    def _verify_receipt_documents(self) -> list[str]:
+        errors: list[str] = []
+        for row in self.connection.execute("SELECT * FROM receipts ORDER BY id"):
+            if row["document"] is None:
+                continue
+            try:
+                document = json.loads(row["document"])
+                proposal_id = row["proposal_id"]
+                key = row["idempotency_key"]
+                expected = {
+                    "object_type": "DECISION_RECEIPT",
+                    "receipt_id": f"receipt_decision_{int(row['id']):020d}",
+                    "proposal_id": (
+                        proposal_id
+                        if isinstance(proposal_id, str)
+                        and self._RECORD_ID.fullmatch(proposal_id)
+                        else None
+                    ),
+                    "proposal_hash": row["proposal_hash"],
+                    "idempotency_key": (
+                        key
+                        if isinstance(key, str)
+                        and self._IDEMPOTENCY_KEY.fullmatch(key)
+                        else None
+                    ),
+                    "outcome": row["outcome"],
+                    "reason_codes": json.loads(row["reason_codes"]),
+                    "conflict_ids": json.loads(row["conflict_ids"]),
+                }
+                if row["ledger_seq"] is None:
+                    expected.update(
+                        {
+                            "head_before": document.get("head_before"),
+                            "head_after": document.get("head_before"),
+                            "ledger_entry_id": None,
+                        }
+                    )
+                else:
+                    ledger = self.connection.execute(
+                        "SELECT prev_hash, entry_hash, document FROM ledger WHERE seq = ?",
+                        (row["ledger_seq"],),
+                    ).fetchone()
+                    if ledger is None or ledger["document"] is None:
+                        continue
+                    expected.update(
+                        {
+                            "head_before": ledger["prev_hash"],
+                            "head_after": ledger["entry_hash"],
+                            "ledger_entry_id": json.loads(ledger["document"])[
+                                "entry_id"
+                            ],
+                        }
+                    )
+                mismatch = (
+                    next(
+                        self.decision_receipt_validator.iter_errors(document),
+                        None,
+                    )
+                    is not None
+                    or row["document"] != canonical_json(document)
+                    or any(document.get(field) != value for field, value in expected.items())
+                )
+                if mismatch:
+                    errors.append(f"RECEIPT_DOCUMENT_MISMATCH:{row['id']}")
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                errors.append(f"RECEIPT_DOCUMENT_MISMATCH:{row['id']}")
         return errors
 
     def replay(self, database: str | Path) -> Kernel:
@@ -1490,8 +1825,8 @@ class Kernel:
             target.connection.execute(
                 """INSERT INTO ledger(
                      seq, prev_hash, entry_hash, proposal_hash, proposal, events,
-                     pre_state_root, state_root, committed_at
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                     pre_state_root, state_root, committed_at, document
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     row["seq"],
                     row["prev_hash"],
@@ -1502,6 +1837,7 @@ class Kernel:
                     stored_pre_root,
                     row["state_root"],
                     stored_committed_at,
+                    row["document"] if schema_version != "1.0.0" else None,
                 ),
             )
             conflict_ids = tuple(
@@ -1518,16 +1854,36 @@ class Kernel:
                     }
                 )
             )
-            target._insert_receipt(
-                proposal["idempotency_key"],
-                row["proposal_hash"],
-                proposal["proposal_id"],
-                "FACT_CONFLICT" if conflict_ids else "COMMITTED",
-                (),
-                row["seq"],
-                row["state_root"],
-                conflict_ids,
-            )
+            if schema_version == "1.0.0":
+                target.connection.execute(
+                    """INSERT INTO receipts(
+                         idempotency_key, proposal_hash, proposal_id, outcome,
+                         reason_codes, ledger_seq, state_root, conflict_ids, document
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)""",
+                    (
+                        proposal["idempotency_key"],
+                        row["proposal_hash"],
+                        proposal["proposal_id"],
+                        "FACT_CONFLICT" if conflict_ids else "COMMITTED",
+                        "[]",
+                        row["seq"],
+                        row["state_root"],
+                        canonical_json(conflict_ids),
+                    ),
+                )
+            else:
+                target._insert_receipt(
+                    proposal["idempotency_key"],
+                    row["proposal_hash"],
+                    proposal["proposal_id"],
+                    "FACT_CONFLICT" if conflict_ids else "COMMITTED",
+                    (),
+                    row["seq"],
+                    row["state_root"],
+                    conflict_ids,
+                    head_before=row["prev_hash"],
+                    decided_at=stored_committed_at,
+                )
             target.connection.execute("COMMIT")
             expected_prev = row["entry_hash"]
             previous_schema = schema_version
@@ -1804,7 +2160,19 @@ class Kernel:
 
     @staticmethod
     def _row_to_receipt(row: sqlite3.Row) -> Receipt:
-        return Receipt(row["proposal_id"], row["outcome"], tuple(json.loads(row["reason_codes"])), row["ledger_seq"], row["state_root"], tuple(json.loads(row["conflict_ids"])))
+        return Receipt(
+            row["proposal_id"],
+            row["outcome"],
+            tuple(json.loads(row["reason_codes"])),
+            row["ledger_seq"],
+            row["state_root"],
+            tuple(json.loads(row["conflict_ids"])),
+            (
+                json.loads(row["document"])
+                if "document" in row.keys() and row["document"] is not None
+                else None
+            ),
+        )
 
     def _rollback_if_needed(self) -> None:
         if self.connection.in_transaction:

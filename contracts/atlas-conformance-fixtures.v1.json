@@ -584,6 +584,63 @@
           }
         ]
       }
+    },
+    {
+      "name": "ledger_entry_source_registered",
+      "object": {
+        "object_type": "LEDGER_ENTRY",
+        "entry_id": "ledger_entry_fixture_00000001",
+        "seq": 1,
+        "prev_hash": null,
+        "entry_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "pre_state_root": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "post_state_root": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "proposal_id": "proposal_register_source_fixture_001",
+        "proposal_hash": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "versions": {
+          "schema": "1.1.0",
+          "predicate_registry": "1.0.0",
+          "predicate_registry_hash": "sha256:61e27ee431c296eb5289bae28d6c4a6fe1426381b5e4eb4e07b1a88b62d43196",
+          "conflict_rules": "conflict-rules@1",
+          "guard_dsl": "guard-dsl@1",
+          "projection": "markdown-projection@2"
+        },
+        "events": [
+          {
+            "event_type": "SOURCE_REVISION_REGISTERED",
+            "source_revision": {
+              "object_type": "SOURCE_REVISION",
+              "source_id": "document:atlas-runbook",
+              "revision_id": "revision_atlas_runbook_20260801",
+              "content_hash": "sha256:002bbcbf991706bc47c7741142b47f3a043f31b2b62f3ecb0572560523959918",
+              "blob_ref": "urn:shared-mind:blob:atlas-runbook:2026-08-01",
+              "source_locator": "https://example.invalid/atlas/runbook",
+              "title": "Atlas production runbook",
+              "media_type": "text/markdown",
+              "captured_at": "2026-08-01T00:00:00Z",
+              "registered_by": {"actor_id": "agent:ingestor-a", "actor_type": "AGENT"}
+            }
+          }
+        ],
+        "committed_at": "2026-08-01T00:00:00Z"
+      }
+    },
+    {
+      "name": "decision_receipt_committed",
+      "object": {
+        "object_type": "DECISION_RECEIPT",
+        "receipt_id": "receipt_fixture_00000001",
+        "proposal_id": "proposal_register_source_fixture_001",
+        "proposal_hash": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "idempotency_key": "fixture-source-register-001",
+        "outcome": "COMMITTED",
+        "reason_codes": [],
+        "head_before": null,
+        "head_after": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "ledger_entry_id": "ledger_entry_fixture_00000001",
+        "conflict_ids": [],
+        "decided_at": "2026-08-01T00:00:00Z"
+      }
     }
   ],
   "negative_schema_cases": [

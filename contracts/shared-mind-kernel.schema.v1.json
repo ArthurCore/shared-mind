@@ -1161,9 +1161,19 @@
       "properties": {
         "object_type": {"const": "DECISION_RECEIPT"},
         "receipt_id": {"$ref": "#/$defs/RecordId"},
-        "proposal_id": {"$ref": "#/$defs/RecordId"},
+        "proposal_id": {
+          "oneOf": [
+            {"$ref": "#/$defs/RecordId"},
+            {"type": "null"}
+          ]
+        },
         "proposal_hash": {"$ref": "#/$defs/Hash"},
-        "idempotency_key": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{8,128}$"},
+        "idempotency_key": {
+          "oneOf": [
+            {"type": "string", "pattern": "^[A-Za-z0-9._:-]{8,128}$"},
+            {"type": "null"}
+          ]
+        },
         "outcome": {"enum": ["COMMITTED", "FACT_CONFLICT", "TRANSACTION_CONFLICT", "VALIDATION_ERROR"]},
         "reason_codes": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,127}$"}},
         "head_before": {"oneOf": [{"$ref": "#/$defs/Hash"}, {"type": "null"}]},
@@ -1173,6 +1183,15 @@
         "decided_at": {"type": "string", "format": "date-time"}
       },
       "allOf": [
+        {
+          "if": {"properties": {"outcome": {"enum": ["COMMITTED", "FACT_CONFLICT"]}}},
+          "then": {
+            "properties": {
+              "proposal_id": {"$ref": "#/$defs/RecordId"},
+              "idempotency_key": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{8,128}$"}
+            }
+          }
+        },
         {
           "if": {"properties": {"outcome": {"enum": ["COMMITTED", "FACT_CONFLICT"]}}},
           "then": {"properties": {"ledger_entry_id": {"$ref": "#/$defs/RecordId"}}}
