@@ -254,6 +254,10 @@ print(shared_mind.__name__, McpApplication.__name__)
 
     def test_create_server_registers_the_same_surface_through_a_fake_sdk(self) -> None:
         module = self.module()
+        try:
+            from mcp.server.fastmcp import FastMCP  # noqa: F401
+        except ImportError:
+            self.skipTest("v1 FastMCP import is unavailable under MCP SDK v2")
 
         with patch("mcp.server.fastmcp.FastMCP", RecordingFastMCP):
             server = module.create_server(self.workspace)
@@ -297,9 +301,12 @@ print(shared_mind.__name__, McpApplication.__name__)
 
     def test_installed_sdk_exposes_transport_metadata_and_structured_output(self) -> None:
         try:
-            from mcp.server.fastmcp import FastMCP
+            from mcp.server import MCPServer as ServerType
         except ImportError:
-            self.skipTest("optional MCP SDK is not installed")
+            try:
+                from mcp.server.fastmcp import FastMCP as ServerType
+            except ImportError:
+                self.skipTest("optional MCP SDK is not installed")
         module = self.module()
         stdout = io.StringIO()
         with redirect_stdout(stdout):
@@ -317,18 +324,28 @@ print(shared_mind.__name__, McpApplication.__name__)
                 )
             )
 
-        self.assertIsInstance(server, FastMCP)
+        self.assertIsInstance(server, ServerType)
         self.assertEqual("", stdout.getvalue())
         self.assertEqual(TOOL_NAMES, tuple(tool.name for tool in tools))
         self.assertEqual(RESOURCE_URIS, tuple(str(resource.uri) for resource in resources))
         for tool in tools:
             with self.subTest(tool=tool.name):
-                self.assertEqual("object", tool.inputSchema["type"])
-                self.assertIsNotNone(tool.outputSchema)
-                self.assertEqual("object", tool.outputSchema["type"])
-                self.assertIn("ok", tool.outputSchema.get("properties", {}))
-                self.assertIn("code", tool.outputSchema.get("properties", {}))
-        content, structured = result
+                input_schema = getattr(tool, "input_schema", None)
+                if input_schema is None:
+                    input_schema = tool.inputSchema
+                output_schema = getattr(tool, "output_schema", None)
+                if output_schema is None:
+                    output_schema = tool.outputSchema
+                self.assertEqual("object", input_schema["type"])
+                self.assertIsNotNone(output_schema)
+                self.assertEqual("object", output_schema["type"])
+                self.assertIn("ok", output_schema.get("properties", {}))
+                self.assertIn("code", output_schema.get("properties", {}))
+        if hasattr(result, "structured_content"):
+            content = result.content
+            structured = result.structured_content
+        else:
+            content, structured = result
         self.assertEqual("PROPOSAL_VALID", structured["code"])
         self.assertTrue(structured["ok"])
         self.assertTrue(content)
