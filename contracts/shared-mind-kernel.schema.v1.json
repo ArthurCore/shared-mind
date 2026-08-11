@@ -1174,6 +1174,12 @@
             {"type": "null"}
           ]
         },
+        "proposer": {
+          "oneOf": [
+            {"$ref": "#/$defs/ActorRef"},
+            {"type": "null"}
+          ]
+        },
         "outcome": {"enum": ["COMMITTED", "FACT_CONFLICT", "TRANSACTION_CONFLICT", "VALIDATION_ERROR"]},
         "reason_codes": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,127}$"}},
         "head_before": {"oneOf": [{"$ref": "#/$defs/Hash"}, {"type": "null"}]},

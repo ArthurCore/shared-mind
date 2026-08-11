@@ -114,6 +114,7 @@ class Kernel:
         self.decision_receipt_validator = build_definition_validator(
             "DecisionReceipt", contract
         )
+        self.actor_ref_validator = build_definition_validator("ActorRef", contract)
         registry_errors = list(self.contract_validator.iter_errors(registry))
         if registry_errors:
             raise ValueError(f"Invalid predicate registry: {registry_errors[0].message}")
@@ -191,6 +192,7 @@ class Kernel:
               ledger_seq INTEGER,
               state_root TEXT NOT NULL,
               conflict_ids TEXT NOT NULL,
+              proposer TEXT,
               document TEXT,
               schema_version TEXT
             );
@@ -266,6 +268,7 @@ class Kernel:
                   ledger_seq INTEGER,
                   state_root TEXT NOT NULL,
                   conflict_ids TEXT NOT NULL,
+                  proposer TEXT,
                   document TEXT,
                   schema_version TEXT
                 );
@@ -288,6 +291,8 @@ class Kernel:
             self.connection.execute(
                 "ALTER TABLE receipts ADD COLUMN schema_version TEXT"
             )
+        if "proposer" not in receipt_columns:
+            self.connection.execute("ALTER TABLE receipts ADD COLUMN proposer TEXT")
         self.connection.execute(
             "UPDATE receipts SET schema_version = ? "
             "WHERE document IS NOT NULL AND schema_version IS NULL",
@@ -404,6 +409,7 @@ class Kernel:
     def _commit(self, proposal: Any) -> Receipt:
         proposal_id = proposal.get("proposal_id", "") if isinstance(proposal, dict) else ""
         key = proposal.get("idempotency_key", "") if isinstance(proposal, dict) else ""
+        receipt_proposer = self._representable_proposer(proposal)
         head_before = self._head_entry_hash()
         try:
             proposal_hash = sha256_json(proposal)
@@ -426,6 +432,7 @@ class Kernel:
                 None,
                 self.state_root(),
                 (),
+                proposer=receipt_proposer,
                 head_before=head_before,
                 decided_at=None,
             )
@@ -454,6 +461,7 @@ class Kernel:
                         None,
                         self.state_root(),
                         (),
+                        proposer=receipt_proposer,
                         head_before=head_before,
                         decided_at=self._proposal_decided_at(proposal),
                     )
@@ -527,6 +535,7 @@ class Kernel:
                 ledger_seq,
                 post_root,
                 conflict_ids,
+                proposer=receipt_proposer,
                 head_before=head_before,
                 decided_at=committed_at,
             )
@@ -544,6 +553,7 @@ class Kernel:
                 None,
                 post_root,
                 (),
+                proposer=receipt_proposer,
                 head_before=head_before,
                 decided_at=self._proposal_decided_at(proposal),
             )
@@ -560,6 +570,7 @@ class Kernel:
                 None,
                 post_root,
                 (),
+                proposer=receipt_proposer,
                 head_before=head_before,
                 decided_at=self._proposal_decided_at(proposal),
             )
@@ -577,6 +588,7 @@ class Kernel:
                 None,
                 post_root,
                 (),
+                proposer=receipt_proposer,
                 head_before=head_before,
                 decided_at=self._proposal_decided_at(proposal),
             )
@@ -598,6 +610,7 @@ class Kernel:
         root: str,
         conflicts: tuple[str, ...],
         *,
+        proposer: dict[str, Any] | None = None,
         head_before: str | None = None,
         decided_at: str | None = None,
     ) -> Receipt:
@@ -613,6 +626,7 @@ class Kernel:
                     ledger_seq,
                     root,
                     conflicts,
+                    proposer=proposer,
                     head_before=head_before,
                     decided_at=decided_at,
                 )
@@ -659,6 +673,7 @@ class Kernel:
                 if isinstance(key, str) and self._IDEMPOTENCY_KEY.fullmatch(key)
                 else None
             ),
+            "proposer": copy.deepcopy(proposer),
             "outcome": outcome,
             "reason_codes": list(reasons),
             "head_before": head_before,
@@ -672,9 +687,9 @@ class Kernel:
         cursor = self.connection.execute(
             """INSERT INTO receipts(
                  idempotency_key, proposal_hash, proposal_id, outcome,
-                 reason_codes, ledger_seq, state_root, conflict_ids, document,
-                 schema_version
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                 reason_codes, ledger_seq, state_root, conflict_ids, proposer,
+                 document, schema_version
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 key,
                 proposal_hash,
@@ -684,6 +699,7 @@ class Kernel:
                 ledger_seq,
                 root,
                 canonical_json(conflicts),
+                None if proposer is None else canonical_json(proposer),
                 canonical_json(document),
                 self.SUPPORTED_VERSIONS["schema"],
             ),
@@ -1536,6 +1552,14 @@ class Kernel:
                 pass
         return cls._utc_now()
 
+    def _representable_proposer(self, proposal: Any) -> dict[str, Any] | None:
+        if not isinstance(proposal, dict):
+            return None
+        candidate = proposal.get("proposer")
+        if next(self.actor_ref_validator.iter_errors(candidate), None) is not None:
+            return None
+        return copy.deepcopy(candidate)
+
     @staticmethod
     def _utc_now() -> str:
         return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -1794,6 +1818,11 @@ class Kernel:
                         and self._IDEMPOTENCY_KEY.fullmatch(key)
                         else None
                     ),
+                    "proposer": (
+                        json.loads(row["proposer"])
+                        if row["proposer"] is not None
+                        else None
+                    ),
                     "outcome": row["outcome"],
                     "reason_codes": json.loads(row["reason_codes"]),
                     "conflict_ids": json.loads(row["conflict_ids"]),
@@ -1966,6 +1995,7 @@ class Kernel:
                     row["seq"],
                     row["state_root"],
                     conflict_ids,
+                    proposer=target._representable_proposer(proposal),
                     head_before=row["prev_hash"],
                     decided_at=stored_committed_at,
                 )

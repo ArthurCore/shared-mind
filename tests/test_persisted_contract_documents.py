@@ -116,7 +116,7 @@ class PersistedContractDocumentTest(unittest.TestCase):
             }.issubset(outcomes)
         )
         self._require_columns("ledger", {"document"})
-        self._require_columns("receipts", {"document"})
+        self._require_columns("receipts", {"document", "proposer"})
 
         rows = self.kernel.connection.execute(
             "SELECT * FROM receipts ORDER BY id"
@@ -136,6 +136,11 @@ class PersistedContractDocumentTest(unittest.TestCase):
                     "proposal_id": row["proposal_id"],
                     "proposal_hash": row["proposal_hash"],
                     "idempotency_key": row["idempotency_key"],
+                    "proposer": (
+                        json.loads(row["proposer"])
+                        if row["proposer"] is not None
+                        else None
+                    ),
                     "outcome": row["outcome"],
                     "reason_codes": json.loads(row["reason_codes"]),
                     "conflict_ids": json.loads(row["conflict_ids"]),
@@ -187,7 +192,7 @@ class PersistedContractDocumentTest(unittest.TestCase):
         receipt = self.kernel.commit({"unsupported": {"set"}})
         self.assertEqual("VALIDATION_ERROR", receipt.outcome)
         self.assertEqual(("MALFORMED_PROPOSAL",), receipt.reason_codes)
-        self._require_columns("receipts", {"document"})
+        self._require_columns("receipts", {"document", "proposer"})
 
         row = self.kernel.connection.execute(
             "SELECT * FROM receipts ORDER BY id DESC LIMIT 1"
@@ -199,6 +204,8 @@ class PersistedContractDocumentTest(unittest.TestCase):
         self.assertEqual(document, receipt.to_contract_dict())
         self.assertIsNone(document["proposal_id"])
         self.assertIsNone(document["idempotency_key"])
+        self.assertIsNone(document["proposer"])
+        self.assertIsNone(row["proposer"])
         self.assertEqual("VALIDATION_ERROR", document["outcome"])
         self.assertEqual(["MALFORMED_PROPOSAL"], document["reason_codes"])
         self.assertIsNone(document["ledger_entry_id"])
@@ -233,6 +240,29 @@ class PersistedContractDocumentTest(unittest.TestCase):
         ).fetchone()
         document = json.loads(row["document"])
         document["proposal_hash"] = "sha256:" + "0" * 64
+        with self.kernel._authorized_writes():
+            self.kernel.connection.execute("DROP TRIGGER receipts_no_update")
+            self.kernel.connection.execute(
+                "UPDATE receipts SET document = ? WHERE id = ?",
+                (canonical_json(document), row["id"]),
+            )
+
+        result = self.kernel.verify_ledger()
+
+        self.assertFalse(result["valid"])
+        self.assertIn(
+            f"RECEIPT_DOCUMENT_MISMATCH:{row['id']}", result["errors"]
+        )
+
+    def test_verifier_rejects_receipt_proposer_column_drift(self) -> None:
+        row = self.kernel.connection.execute(
+            "SELECT id, document, proposer FROM receipts ORDER BY id LIMIT 1"
+        ).fetchone()
+        document = json.loads(row["document"])
+        document["proposer"] = {
+            "actor_id": "agent:forged-receipt-actor",
+            "actor_type": "AGENT",
+        }
         with self.kernel._authorized_writes():
             self.kernel.connection.execute("DROP TRIGGER receipts_no_update")
             self.kernel.connection.execute(

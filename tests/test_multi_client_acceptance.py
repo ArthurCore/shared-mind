@@ -99,6 +99,8 @@ class MultiClientAcceptanceTest(unittest.TestCase):
         self.workspace = Workspace.initialize(
             self.workspace_root, purpose="Exercise two independent JSON clients."
         )
+        self.proposal_root = self.workspace_root / "proposals"
+        self.proposal_root.mkdir()
         fixture_set = json.loads(
             (ROOT / "contracts" / "atlas-conformance-fixtures.v1.json").read_text()
         )
@@ -262,7 +264,7 @@ class MultiClientAcceptanceTest(unittest.TestCase):
         ready_paths: list[Path] = []
         for index, (client, proposal) in enumerate(zip(self.clients, proposals)):
             proposal["base_state_root"] = snapshot_root
-            path = self.root / f"{proposal['proposal_id']}.json"
+            path = self.proposal_root / f"{proposal['proposal_id']}.json"
             path.write_text(json.dumps(proposal), encoding="utf-8")
             ready = self.root / f"ready-{proposal['proposal_id']}-{index}"
             ready_paths.append(ready)
@@ -392,7 +394,7 @@ class MultiClientAcceptanceTest(unittest.TestCase):
         self.assertIn(result["code"], {"COMMITTED", "FACT_CONFLICT"})
 
     def _commit_sync(self, proposal: dict[str, Any]) -> tuple[int, dict[str, Any]]:
-        path = self.root / f"seed-{proposal['proposal_id']}.json"
+        path = self.proposal_root / f"seed-{proposal['proposal_id']}.json"
         path.write_text(json.dumps(proposal), encoding="utf-8")
         return self._invoke("proposal", "commit", str(path), "--json")
 
