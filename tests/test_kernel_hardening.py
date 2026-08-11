@@ -52,6 +52,22 @@ class KernelHardeningTest(unittest.TestCase):
         self.assertEqual(("SCHEMA_VALIDATION_FAILED",), receipt.reason_codes)
         self.assertEqual(0, self._count("ledger"))
 
+    def test_fr_011_non_object_proposal_returns_a_structured_error(self) -> None:
+        receipt = self.kernel.commit([])  # type: ignore[arg-type]
+
+        self.assertEqual("VALIDATION_ERROR", receipt.outcome)
+        self.assertEqual(("SCHEMA_VALIDATION_FAILED",), receipt.reason_codes)
+        self.assertFalse(self.kernel.connection.in_transaction)
+        self.assertEqual(0, self._count("ledger"))
+
+    def test_fr_011_non_json_value_returns_a_structured_error(self) -> None:
+        receipt = self.kernel.commit({"unsupported": {"set"}})
+
+        self.assertEqual("VALIDATION_ERROR", receipt.outcome)
+        self.assertEqual(("MALFORMED_PROPOSAL",), receipt.reason_codes)
+        self.assertFalse(self.kernel.connection.in_transaction)
+        self.assertEqual(0, self._count("ledger"))
+
     def test_fr_011_duplicate_ids_are_normalized_and_rolled_back(self) -> None:
         first = self.kernel.commit(self.objects["assert_postgresql_proposal"])
         self.assertEqual("COMMITTED", first.outcome)
