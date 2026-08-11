@@ -25,7 +25,7 @@ Shared Mind requires Python 3.11 or newer.
 
 ```console
 $ python3 -m pip install -e .
-$ shared-mind init ./memory
+$ shared-mind init ./memory --purpose "Preserve this project's reasoning across AI sessions."
 $ cd ./memory
 $ shared-mind context --budget-tokens 4096
 ```

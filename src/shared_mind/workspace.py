@@ -61,6 +61,7 @@ class Workspace:
     source_root: Path
     projection_root: Path
     blob_root: Path
+    purpose: str | None
 
     @classmethod
     def initialize(
@@ -68,7 +69,13 @@ class Workspace:
         root: str | Path,
         *,
         registry_source: str | Path | None = None,
+        purpose: str | None = None,
     ) -> "Workspace":
+        if purpose is not None and (not isinstance(purpose, str) or not purpose.strip()):
+            raise WorkspaceError(
+                "INVALID_PROJECT_PURPOSE",
+                "Project purpose must be a non-empty string when supplied.",
+            )
         root_path = Path(root).expanduser().resolve()
         if root_path.exists() and not root_path.is_dir():
             raise WorkspaceError(
@@ -87,6 +94,7 @@ class Workspace:
             "blob_root": f"{WORKSPACE_DIRECTORY}/blobs",
             "database": f"{WORKSPACE_DIRECTORY}/{DATABASE_FILENAME}",
             "projection_root": "projections",
+            "purpose": purpose,
             "registry": f"{WORKSPACE_DIRECTORY}/{REGISTRY_FILENAME}",
             "source_root": "sources",
             "workspace_version": WORKSPACE_VERSION,
@@ -104,7 +112,9 @@ class Workspace:
                 raise WorkspaceError(
                     "WORKSPACE_CONFIG_INVALID", f"Cannot read workspace config: {exc}"
                 ) from exc
-            if existing_config != config:
+            normalized_existing = dict(existing_config)
+            normalized_existing.setdefault("purpose", None)
+            if normalized_existing != config:
                 raise WorkspaceError(
                     "WORKSPACE_CONFIG_CONFLICT",
                     "The existing workspace config does not match workspace version 1.",
@@ -161,6 +171,12 @@ class Workspace:
                 "UNSUPPORTED_WORKSPACE_VERSION",
                 f"Unsupported workspace version: {config.get('workspace_version')!r}",
             )
+        purpose = config.get("purpose")
+        if purpose is not None and (not isinstance(purpose, str) or not purpose.strip()):
+            raise WorkspaceError(
+                "WORKSPACE_CONFIG_INVALID",
+                "Workspace purpose must be null or a non-empty string.",
+            )
         required = ("database", "registry", "source_root", "projection_root", "blob_root")
         missing = [name for name in required if not isinstance(config.get(name), str)]
         if missing:
@@ -181,9 +197,10 @@ class Workspace:
             source_root=resolved["source_root"],
             projection_root=resolved["projection_root"],
             blob_root=resolved["blob_root"],
+            purpose=purpose,
         )
 
-    def describe(self) -> dict[str, str | int]:
+    def describe(self) -> dict[str, str | int | None]:
         return {
             "workspace_version": WORKSPACE_VERSION,
             "workspace": str(self.root),
@@ -193,6 +210,7 @@ class Workspace:
             "source_root": self._relative(self.source_root),
             "projection_root": self._relative(self.projection_root),
             "blob_root": self._relative(self.blob_root),
+            "purpose": self.purpose,
         }
 
     def open_kernel(self) -> Kernel:

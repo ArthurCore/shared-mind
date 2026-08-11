@@ -40,6 +40,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     init_parser = commands.add_parser("init")
     init_parser.add_argument("path")
+    init_parser.add_argument("--purpose")
 
     source_parser = commands.add_parser("source")
     source_commands = source_parser.add_subparsers(dest="source_command", required=True)
@@ -93,7 +94,7 @@ def main(
     try:
         arguments = build_parser().parse_args(argv)
         if arguments.command == "init":
-            workspace = Workspace.initialize(arguments.path)
+            workspace = Workspace.initialize(arguments.path, purpose=arguments.purpose)
             return _emit(
                 output,
                 True,
@@ -286,6 +287,8 @@ def _context_command(
         keyword_arguments["budget_tokens"] = arguments.budget_tokens
     if arguments.budget_bytes is not None:
         keyword_arguments["budget_bytes"] = arguments.budget_bytes
+    if workspace.purpose is not None:
+        keyword_arguments["purpose"] = workspace.purpose
     kernel = workspace.open_kernel()
     try:
         try:

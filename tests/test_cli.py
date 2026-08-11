@@ -318,6 +318,26 @@ class SharedMindCliTest(unittest.TestCase):
         self.assertEqual(EXIT_OK, json_code)
         self.assertIsInstance(json.loads(json_project["data"]["content"]), dict)
 
+    def test_fr_044_workspace_purpose_is_reused_by_context(self) -> None:
+        purpose = "Preserve project reasoning so a new AI can continue safely."
+        init_code, initialized, _ = self.invoke(
+            "init", str(self.workspace_root), "--purpose", purpose
+        )
+
+        context_code, result, _ = self.invoke(
+            "--workspace",
+            str(self.workspace_root),
+            "context",
+            "--budget-bytes",
+            "8000",
+        )
+
+        self.assertEqual(EXIT_OK, init_code, initialized)
+        self.assertEqual(EXIT_OK, context_code, result)
+        context = result["data"]["context"]
+        self.assertEqual(purpose, context["purpose"])
+        self.assertFalse(context["purpose_missing"])
+
     def test_nfr_009_context_budget_error_is_machine_readable(self) -> None:
         self.initialize()
 
