@@ -292,6 +292,10 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
         self.assertEqual(set(context_claims), set(response_claims))
         for claim_id, claim in context_claims.items():
             self.assertEqual(
+                claim["proposition"],
+                response_claims[claim_id]["proposition"],
+            )
+            self.assertEqual(
                 claim["proposition_hash"],
                 response_claims[claim_id]["proposition_hash"],
             )
@@ -341,6 +345,7 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
             members = response_conflict_items[conflict["conflict_id"]]
             for member in conflict["members"]:
                 actual = members[member["claim_id"]]
+                self.assertEqual(member["proposition"], actual["proposition"])
                 self.assertEqual(member["proposition_hash"], actual["proposition_hash"])
                 self.assertEqual(member["status"], actual["status"])
         conflict_member_ids = set().union(*context_conflicts.values())

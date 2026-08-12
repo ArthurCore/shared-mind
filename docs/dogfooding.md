@@ -35,8 +35,9 @@ They make the safety boundary executable rather than relying on prose review.
 compares the candidate response with the context-grounded canonical facts. The
 project purpose, current decisions, open questions, and actionable work remain
 exact comparisons. Settled claims and open-conflict members are keyed by exact
-IDs, proposition hashes, statuses, and evidence locator tuples while allowing
-non-empty paraphrased summaries. The six dimensions total 100 points:
+IDs, canonical proposition objects, proposition hashes, statuses, and evidence
+locator tuples. Summaries are explicitly non-authoritative display prose: they
+must be non-empty but may be paraphrased. The six dimensions total 100 points:
 
 | Dimension | Required response field | Points |
 |---|---|---:|
@@ -85,8 +86,8 @@ It is a closed Draft 2020-12 JSON object with these required top-level fields:
 | `scenario_id` | The supplied scenario identifier. |
 | `project_purpose` | A non-empty purpose grounded in context. |
 | `current_decisions` | Decision ID, title, conclusion, and rationale. |
-| `settled_claims` | Claim ID, proposition hash, non-empty summary, and one or more byte/hash evidence locators. |
-| `open_conflicts` | Open conflict ID plus exact status and at least two member claim IDs, proposition hashes, statuses, and non-empty summaries. |
+| `settled_claims` | Claim ID, canonical proposition object, proposition hash, non-empty display summary, and one or more byte/hash evidence locators. |
+| `open_conflicts` | Open conflict ID plus exact status and at least two member claim IDs, canonical proposition objects, proposition hashes, statuses, and non-empty display summaries. |
 | `open_questions` | Question ID and question text. |
 | `actionable_work_items` | Work-item ID, actionable status, and description. |
 

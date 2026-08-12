@@ -235,6 +235,7 @@ def _settled_claims_match(
 ) -> bool:
     expected = {
         claim["claim_id"]: (
+            claim.get("proposition"),
             claim.get("proposition_hash"),
             _evidence_locator_tuples(claim.get("evidence")),
         )
@@ -244,6 +245,7 @@ def _settled_claims_match(
     actual_records = _records(response.get("settled_claims"))
     actual = {
         claim.get("claim_id"): (
+            claim.get("proposition"),
             claim.get("proposition_hash"),
             _evidence_locator_tuples(claim.get("evidence_locators")),
         )
@@ -265,6 +267,7 @@ def _open_conflicts_match(
             conflict.get("status"),
             {
                 member["claim_id"]: (
+                    member.get("proposition"),
                     member.get("proposition_hash"),
                     member.get("status"),
                 )
@@ -295,6 +298,7 @@ def _open_conflicts_match(
             conflict.get("status"),
             {
                 member["claim_id"]: (
+                    member.get("proposition"),
                     member.get("proposition_hash"),
                     member.get("status"),
                 )

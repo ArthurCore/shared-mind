@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://shared-mind.local/evals/product-continuity/response/v2",
-  "title": "Shared Mind product-continuity response v2",
+  "$id": "https://shared-mind.local/evals/product-continuity/response/v3",
+  "title": "Shared Mind product-continuity response v3",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -87,17 +87,37 @@
         "excerpt_hash": {"$ref": "#/$defs/Hash"}
       }
     },
+    "PrimitiveValue": {
+      "type": ["string", "number", "integer", "boolean", "null"]
+    },
+    "PropositionAnswer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subject", "predicate", "object", "scope"],
+      "properties": {
+        "subject": {"type": "string", "minLength": 1, "maxLength": 512},
+        "predicate": {"type": "string", "minLength": 1, "maxLength": 512},
+        "object": {"$ref": "#/$defs/PrimitiveValue"},
+        "scope": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/PrimitiveValue"},
+          "maxProperties": 32
+        }
+      }
+    },
     "SettledClaimAnswer": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "claim_id",
+        "proposition",
         "proposition_hash",
         "summary",
         "evidence_locators"
       ],
       "properties": {
         "claim_id": {"$ref": "#/$defs/RecordId"},
+        "proposition": {"$ref": "#/$defs/PropositionAnswer"},
         "proposition_hash": {"$ref": "#/$defs/Hash"},
         "summary": {"type": "string", "minLength": 1, "maxLength": 4096},
         "evidence_locators": {
@@ -111,9 +131,10 @@
     "ConflictMemberAnswer": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["claim_id", "proposition_hash", "status", "summary"],
+      "required": ["claim_id", "proposition", "proposition_hash", "status", "summary"],
       "properties": {
         "claim_id": {"$ref": "#/$defs/RecordId"},
+        "proposition": {"$ref": "#/$defs/PropositionAnswer"},
         "proposition_hash": {"$ref": "#/$defs/Hash"},
         "status": {"const": "ACTIVE"},
         "summary": {"type": "string", "minLength": 1, "maxLength": 4096}
