@@ -513,6 +513,40 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
             list(self.response_validator.iter_errors(response)),
         )
 
+    def test_response_schema_requires_canonical_propositions(self) -> None:
+        response = copy.deepcopy(self.scenario["expected_response"])
+        response["settled_claims"][0].pop("proposition", None)
+        response["open_conflicts"][0]["member_claims"][0].pop("proposition", None)
+
+        self.assertNotEqual(
+            [],
+            list(self.response_validator.iter_errors(response)),
+        )
+
+    def test_scorer_rejects_wrong_proposition_with_correct_hashes_and_ids(
+        self,
+    ) -> None:
+        runner = importlib.import_module("evals.product_continuity.runner")
+        response = copy.deepcopy(self.scenario["expected_response"])
+        response["settled_claims"][0]["proposition"] = {
+            "subject": "system:atlas",
+            "predicate": "operations.backup_verified@1",
+            "object": False,
+            "scope": {"environment": "production"},
+        }
+        response["open_conflicts"][0]["member_claims"][0]["proposition"] = {
+            "subject": "system:atlas",
+            "predicate": "deployment.database_engine@1",
+            "object": "software:sqlite",
+            "scope": {"environment": "production"},
+        }
+
+        report = runner.evaluate_scenario(self.scenario, response)
+
+        self._assert_valid(self.report_validator, report)
+        self.assertLess(report["score"], 100)
+        self.assertFalse(report["passed"])
+
     def test_scorer_rejects_duplicate_conflict_members(self) -> None:
         runner = importlib.import_module("evals.product_continuity.runner")
         response = copy.deepcopy(self.scenario["expected_response"])
