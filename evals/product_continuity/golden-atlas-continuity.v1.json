@@ -16,6 +16,7 @@
   },
   "context": {
     "context_pack_version": "handoff-context@2",
+    "evaluation_scenario_id": "atlas-continuity-golden-v1",
     "projection_version": "markdown-projection@3",
     "ledger_seq": 9,
     "state_root": "sha256:1111111111111111111111111111111111111111111111111111111111111111",

@@ -18,9 +18,12 @@ It represents an Atlas database-migration handoff with:
 - an open cutover-window question; and
 - an actionable migration work item.
 
-Only `context` is candidate-model input. `expected_response`, `scoring`,
-`metrics`, and `adversarial_cases` are evaluator-side data and must never be
-included in the candidate prompt. Giving them to a model invalidates the run.
+Only `context` is candidate-model input. The context includes
+`evaluation_scenario_id`, which is the scenario identity the candidate must copy
+to response `scenario_id`; it is input metadata, not expected-answer or scoring
+leakage. `expected_response`, `scoring`, `metrics`, and `adversarial_cases` are
+evaluator-side data and must never be included in the candidate prompt. Giving
+them to a model invalidates the run.
 
 The fixture also contains schema-valid adversarial responses. One incorrectly
 puts an unresolved conflict member in `settled_claims`; another invents an ID.
