@@ -3,7 +3,8 @@
 DEV-024 tests whether a new agent can continue work from a Shared Mind context
 pack without silently turning uncertainty into fact. The checked-in evaluation is
 deterministic and offline. It does not call Codex, Claude, or any other remote
-model, and a live provider run is not a pull-request gate.
+model, and a live provider run is not a pull-request gate. Approved live
+evidence is retained separately as sanitized aggregate artifacts.
 
 ## Golden scenario
 
@@ -74,6 +75,23 @@ handoff. Those fixture values represent reductions of 59.5%, 59.5%, and 62.5%
 respectively, with fact accuracy and conflict-member recall held at `1.0` in
 both arms. They are deterministic regression inputs, not claimed Codex or
 Claude live measurements.
+
+## Checked-In Live Evidence
+
+The approved 2026-08-12 live evidence is stored as sanitized aggregate JSON only:
+
+| Artifact | Scope | Result |
+|---|---|---|
+| [`claude-live-summary.v3.json`](../evals/product_continuity/results/claude-live-summary.v3.json) | Claude product-continuity quality and efficiency | schema valid, score 100, fact accuracy 1.0, conflict recall 1.0, bytes/tokens/time reductions all above 50%, comparison passed |
+| [`codex-live-summary.v3.json`](../evals/product_continuity/results/codex-live-summary.v3.json) | Codex product-continuity quality and efficiency | schema valid, score 100, fact accuracy 1.0, conflict recall 1.0; bytes reduction passed, token/time reductions were 0.069944913327 and 0.059438376677, so efficiency comparison failed |
+| [`mcp-interoperability-live-2026-08-12.json`](../evals/product_continuity/results/mcp-interoperability-live-2026-08-12.json) | Codex+Claude local MCP interoperability | Codex sequence 1 and Claude sequence 2 each committed one work item in the same synthetic workspace; verify valid, replay parity true, silent overwrite count 0 |
+
+These artifacts do not retain raw prompts, raw model responses, provider request
+IDs, credentials, account identifiers, absolute local paths, or private source
+bytes. The live-summary files are validated by
+`test_checked_in_v4_live_summaries_are_sanitized_and_reproducible`; the MCP
+artifact is validated by
+`test_checked_in_mcp_interoperability_evidence_is_sanitized`.
 
 ## Response and report schemas
 
@@ -242,7 +260,9 @@ Use this protocol for either provider:
 
 Codex and Claude results are separate runs. Do not combine their resource
 metrics, and do not compare them unless both used equivalent pinned settings and
-the same input snapshot. Model upgrades require a new recorded run.
+the same input snapshot. The checked-in 2026-08-12 results share the same
+scenario digest and prompt-template hash, but their provider-specific token/time
+accounting remains separate. Model upgrades require a new recorded run.
 
 ## Sanitized artifact policy
 

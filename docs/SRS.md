@@ -419,7 +419,7 @@ source-only local bytes protocol이며 live vendor 연결은 제공하지 않는
 
 ### 13.1 동기화된 구현 기준선
 
-2026-08-11 현재 write schema는 `1.3.0`, predicate registry는 version
+2026-08-12 현재 write schema는 `1.3.0`, predicate registry는 version
 `1.0.0`과 canonical content hash, conflict rules는 `conflict-rules@1`, guard
 DSL은 `guard-dsl@1`, projection은 `markdown-projection@3`로 고정된다.
 Handoff output은 `handoff-context@3`와 `context-selection@3`를 자체 metadata에
@@ -450,6 +450,8 @@ Handoff output은 `handoff-context@3`와 `context-selection@3`를 자체 metadat
   corruption, concurrency, fault-injection 시험
 - Python 3.11~3.13, Linux/macOS/Windows determinism subset, coverage/lint/type/
   dependency audit/Bandit와 clean base/MCP wheel smoke CI 구성
+- approved live Codex+Claude MCP interoperability artifact and sanitized
+  product-continuity live-summary artifacts
 
 검증 명령과 현재 결과는 다음과 같다.
 
@@ -459,14 +461,15 @@ python3 contracts/validate_contract.py
 #     + 6 semantic cases + 7 continuity operations
 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
-# Python 3.13.2: Ran 327 tests in 573.553s
-# OK (skipped=1), branch coverage 86%
+# Current discovery: 336 tests
+# Full current-HEAD hosted pass: pending
 ```
 
-이 결과는 implementation commit `47b7f1c` 이후의 CI audit, JSON/path hardening,
-live-summary contract, FD-test correction을 포함한 source/test HEAD `18bd1f2`에서
-실행됐다. schema 1.3 hardening, receipt migration atomicity, remote policy,
-input/TOCTOU, MCP, adapter, 성능 query-plan 회귀를 모두 포함한다.
+이전 Python 3.13.2 local evidence `Ran 327 tests in 573.553s`, `OK
+(skipped=1)`, branch coverage 86%는 live-summary, live-MCP, canonical
+proposition regression 추가 전 결과라 현재 완료 증거로는 superseded 상태다.
+현재 HEAD의 hosted Actions full-suite 결과는 아직 대기 중이며, 문서 자체는
+current-HEAD hosted pass를 주장하지 않는다.
 
 ### 13.2 요구사항 추적표
 
@@ -479,7 +482,7 @@ input/TOCTOU, MCP, adapter, 성능 query-plan 회귀를 모두 포함한다.
 | FR-040~045 | 완료 | replay/corruption/migration/projection/context conformance 시험 |
 | FR-046 | 완료 | `structured-query@1`, seven public kinds, stable paging/filtering, read contract |
 | FR-047, FR-050~052 | 완료 | Git workflow 문서, JSON CLI acceptance, agent bootstrap |
-| FR-053 | 로컬 구현 완료/live 검증 대기 | optional MCP v2 server, fixed allowlist, CLI/service parity, Codex project config; paid/network Codex+Claude run은 미수행 |
+| FR-053 | 완료 | optional MCP v2 server, fixed allowlist, CLI/service parity, Codex project config, approved live Codex seq1/Claude seq2 MCP artifact with verify/replay parity and silent overwrite 0 |
 | FR-054 | local source-only 완료 | AtomicStrata/Qarinah/SwarmVault bytes adapters와 atomic failure conformance; live vendor connector는 없음 |
 | NFR-001~007 | 완료 | version/hash pin, append-only receipts, rollback, WAL durability, replay, local-first audit trail |
 | NFR-008 | 완료(환경 회귀 주의) | post-index 100k history-heavy p95 2.707 ms, optimized hot-active p95 1.653288 s; exact output/replay parity |
@@ -514,8 +517,10 @@ input/TOCTOU, MCP, adapter, 성능 query-plan 회귀를 모두 포함한다.
 - local mode의 actor ID는 감사용으로 보존되지만 외부 인증 identity가 아니다.
   Remote adapter는 별도의 trusted identity/policy 경계를 제공해야 한다.
 - MCP dispatcher, project-local Codex config, SDK compatibility는 local automatic
-  test로 검증했다. 실제 유료/네트워크 Codex+Claude가 같은 workspace를 사용하는
-  live interoperability 평가는 수행하지 않았다.
+  test로 검증했다. 승인된 2026-08-12 live MCP interoperability artifact는 같은
+  synthetic workspace에서 Codex CLI 0.147.0/gpt-5.5가 sequence 1,
+  Claude Code 2.1.227/claude-sonnet-4-5가 sequence 2로 각각 work item을
+  commit했고, ledger verify/replay parity와 silent overwrite 0을 기록한다.
 - AtomicStrata/Qarinah/SwarmVault adapter는 caller가 이미 수집한 bytes를 source
   revision으로 계획·등록할 뿐이다. vendor SDK, login, polling, webhook, credential,
   network connector는 구현하지 않았다.
@@ -558,19 +563,22 @@ dogfooding과 제품 연속성 정량 평가는 계속 수행한다.
 
 완료 기준: 사용자가 `source add` 후 DB를 직접 만지지 않고 context를 생성하며, 새 세션이 목적·결정·질문·다음 작업을 복원한다.
 
-### Milestone 3 — 다중 에이전트 통합 (부분 완료: 로컬 인터페이스/멀티프로세스 자동시험 완료, 두 제품 live acceptance 대기)
+### Milestone 3 — 다중 에이전트 통합 (완료)
 
 목표: 서로 다른 에이전트가 동일 인터페이스로 읽고 제안한다.
 
-로컬 완료: agent bootstrap, JSON CLI/DecisionReceipt contract, structured query,
+완료 범위: agent bootstrap, JSON CLI/DecisionReceipt contract, structured query,
 advisory rebase hints, local MCP adapter, installed MCP SDK v2 integration,
 simulated SDK v1 import/registration fallback contract, concurrency/fault suite,
 Git projection review workflow. 두 독립 CLI process의 destructive race는
 한 winner와 한 auditable transaction conflict를, commutative race는 양쪽 보존을
 확인해 자동시험 시나리오의 silent overwrite를 0으로 유지한다.
 
-남음: 완료 기준의 “두 종류 이상의 coding agent”를 실제 Codex+Claude 유료/네트워크
-세션으로 실행한 live interoperability 평가는 아직 수행하지 않았다.
+승인된 live MCP artifact
+`evals/product_continuity/results/mcp-interoperability-live-2026-08-12.json`는
+Codex와 Claude가 같은 synthetic workspace에서 같은 local MCP surface를 사용해
+각각 하나의 work item을 append했고, final ledger count 2, receipt count 2,
+verify valid, replay parity true, silent overwrite 0을 기록한다.
 
 완료 기준: 두 종류 이상의 coding agent가 같은 workspace를 사용하며 silent overwrite가 0건이다.
 
@@ -598,7 +606,7 @@ deny-by-default remote policy evaluator.
 | 완료(환경 회귀 주의) | DEV-021 | 100k-entry benchmark | 두 profile 생성, history replay parity, hot-active optimized p95 1.653288 s |
 | 완료(protocol) | DEV-022 | exact-token adapter | deterministic counter injection과 fail-closed cap; provider tokenizer 미번들 |
 | 완료(자동시험) | DEV-023 | multi-process two-client/silent overwrite | independent CLI process race, idempotency, replay parity, silent overwrite 0 |
-| 로컬/offline 완료, live eval 대기 | DEV-024 | product continuity eval | golden scorer, adversarial traps, sanitized live-summary schema; live provider 평가는 미수행 |
+| 품질 완료, 효율 부분 미달 | DEV-024 | product continuity eval | golden scorer, adversarial traps, sanitized live-summary schema; Claude live comparison pass, Codex quality pass but token/time reduction below 50% |
 | 완료(구성/계약) | DEV-025 | release/portability gate | Python 3.11~3.13, 3-OS determinism subset, clean base/MCP wheel smoke CI |
 | 완료(구성/계약) | DEV-026 | quality/security gate | coverage>=80, lint/type/audit/Bandit와 bounded input/path/SQL security |
 | 완료(local/POSIX 시험) | DEV-027 | process-kill/WAL durability | WAL+FULL synchronous, reader fast path, kill/recovery, corrupt WAL fail-closed |
@@ -647,10 +655,12 @@ deny-by-default remote policy evaluator.
 4. baseline인 수동 설명 방식과 비교해 초기 설명 token과 시간을 최소 50% 줄이되 사실 정확도와 open-conflict 노출률을 낮추지 않는다.
 
 현재 checked-in scorer와 golden/adversarial fixture는 deterministic offline
-평가다. provider 호출은 opt-in protocol로 분리되며, 이번 구현 기준선에서 실제
-Codex+Claude paid/network run은 수행하지 않았다. 승인된 live run의 공유 가능한
-결과는 sanitized summary schema와 deterministic comparison helper로 aggregate
-증거만 검증하도록 고정했다.
+평가다. 승인된 live summary artifacts도 checked in 되어 있으며 aggregate-only
+schema와 deterministic comparison helper로 검증한다. Claude artifact는 schema
+valid, score 100, fact accuracy 1.0, open-conflict recall 1.0, bytes/tokens/time
+모두 50% 이상 감소로 pass다. Codex artifact도 schema valid, score 100, fact
+accuracy 1.0, open-conflict recall 1.0이지만 token reduction 0.069944913327과
+time reduction 0.059438376677이 50% 미만이라 efficiency acceptance는 fail이다.
 
 ### 16.5 통합·릴리스·내구성 시험
 
@@ -663,8 +673,9 @@ Codex+Claude paid/network run은 수행하지 않았다. 승인된 live run의 �
 4. source-only adapters는 deterministic proposal 계획, 128-operation bound,
    atomic failure와 retry parity를 검증하며 네트워크를 호출하지 않는다.
 5. release workflow는 Python 3.11~3.13, 3-OS determinism subset, coverage/lint/type/
-   audit/Bandit, clean base/MCP wheel 설치 smoke를 선언한다. 이는 workflow 계약과
-   local test evidence이며 이 문서 자체가 hosted CI 실행 성공을 주장하지 않는다.
+   audit/Bandit, clean base/MCP wheel 설치 smoke를 선언한다. 현재 HEAD의 hosted
+   full-suite pass는 아직 pending이며, 이 문서 자체가 current-HEAD hosted CI 실행
+   성공을 주장하지 않는다.
 6. POSIX process-kill, WAL recovery, reader fast path와 corruption fail-closed 시험이
    canonical commit의 durable boundary를 검증한다.
 7. 100k post-index run은 history-heavy/hot-active fixture의 count/head/root/output
@@ -695,7 +706,7 @@ Codex+Claude paid/network run은 수행하지 않았다. 승인된 live run의 �
 | projection drift | Markdown과 canonical state가 달라짐 | projection을 stateless/deterministic하게 만들고 replay test 수행 |
 | context 압축 손실 | 다음 AI가 모순이나 blocker를 놓침 | open conflict/active decision/open question/work item을 필수 포함 |
 | 개인정보와 민감 source 노출 | 외부 모델/adapter로 데이터 유출 | local-first 기본값, 명시적 disclosure policy와 source scope |
-| live agent/vendor 통합 미검증 | local adapter 성공을 실제 상호운용 성공으로 오인 | local 자동시험과 paid/network live evidence를 상태·문서에서 분리 |
+| live 효율 지표 미달 | 품질 통과를 비용/시간 acceptance까지 통과한 것으로 오인 | provider별 quality와 bytes/tokens/time comparison을 분리해 문서화 |
 | 100k 성능 여유가 작음 | 다른 hardware/SQLite/load에서 context SLA 회귀 | canonical output SHA와 query structure를 고정하고 환경별 p95 재측정 |
 | SQLite 단일 노드 한계 | 향후 대규모/분산 사용 제약 | MVP 범위로 명시하고 ledger contract를 storage interface와 분리 |
 | 기존 구현과 SRS 불일치 | 잘못된 완료 판단 | 섹션 13의 현재 상태, 제한, 요구사항 추적 유지 |
@@ -726,7 +737,8 @@ Codex+Claude paid/network run은 수행하지 않았다. 승인된 live run의 �
 - continuity record를 kernel schema와 같은 package에 둘지 별도 package로 둘지
 - projection의 디렉터리 구조와 파일 분할 기준
 - 다른 지원 환경에서 100k p95를 반복할 시점과 hot-active index seam 도입 기준
-- 사용자 승인 하에서 실제 Codex+Claude가 같은 workspace를 사용하는 live 평가 시점
+- Codex product-continuity efficiency가 50% reduction acceptance를 만족하도록
+  prompt/input accounting을 조정할지 여부
 - vendor별 connector, origin 인증, disclosure 전송을 추가할지와 그 credential 경계
 - semantic search 도입 시점과 embedding provider
 

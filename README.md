@@ -52,7 +52,7 @@ the projection review workflow.
 
 For other integration surfaces, see the [local MCP guide](docs/mcp.md),
 [external source adapters](docs/adapters.md), [remote policy boundary](docs/remote-policy.md),
-and [offline product-continuity evaluation](docs/dogfooding.md).
+and [product-continuity evaluation](docs/dogfooding.md).
 
 ## Authority model
 
@@ -97,16 +97,17 @@ python3 contracts/validate_contract.py
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-The final schema-1.3 tree passes **327 standard-library tests** in 573.553
-seconds under Python 3.13.2 (`skipped=1`) with 86% branch coverage. Contract
-validation is a separate mandatory gate.
+Current test discovery is **336 standard-library tests**. The earlier
+Python 3.13.2 local evidence of 327 tests in 573.553 seconds is superseded by
+the live-summary, live-MCP, and canonical-proposition regression tests added
+after that run. Contract validation is a separate mandatory gate.
 
 CI is configured for Python 3.11-3.13, Linux/macOS/Windows determinism subsets,
 80% branch coverage, lint/type/dependency/security gates, and clean base/MCP
-wheel smokes. Locally, SQLite uses WAL with `synchronous=FULL`; process-kill and
-WAL recovery tests cover the durable commit boundary.
-These are configured and locally reproduced gates. The local commits have not
-yet produced a hosted GitHub Actions result because no push was authorized.
+wheel smokes. The current-HEAD hosted full-suite result is still pending; do
+not treat this README as a hosted Actions pass claim. Locally, SQLite uses WAL
+with `synchronous=FULL`; process-kill and WAL recovery tests cover the durable
+commit boundary.
 
 The checked-in [DEV-021 benchmark evidence](benchmarks/results/dev-021-2026-08-11.md)
 records completed 100k-entry history-heavy and hot-active fixtures. The final
