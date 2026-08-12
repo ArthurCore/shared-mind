@@ -192,8 +192,8 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
         expected_response_schema_digest = runner.sha256_bytes(
             RESPONSE_SCHEMA_PATH.read_bytes()
         )
-        expected_derived_schema_digest = (
-            "sha256:4367b90c7fd0a08d32eb97b2984e7e0574e7012965c01392538fad8c6b0ba0d1"
+        expected_prompt_template_digest = (
+            "sha256:32c647e276fcd244d16ddfd797d667f5a46ce2424ba3f15a0817632a058721e8"
         )
         expected_providers = {"Anthropic/Claude", "OpenAI/Codex"}
 
@@ -218,9 +218,31 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
                     summary["response_schema_sha256"],
                 )
                 self.assertEqual(
-                    expected_derived_schema_digest,
-                    summary["settings"]["derived_schema_digest"],
+                    expected_prompt_template_digest,
+                    summary["prompt_template_sha256"],
                 )
+                self.assertNotIn("temperature", summary["settings"])
+                self.assertEqual("medium", summary["settings"]["effort"])
+                if summary["provider"] == "OpenAI/Codex":
+                    self.assertEqual(
+                        "raw-json-whole-message-local-validation",
+                        summary["settings"]["structured_json_mode"],
+                    )
+                    self.assertEqual("none", summary["settings"]["schema_adapter"])
+                    self.assertNotIn("derived_schema_digest", summary["settings"])
+                elif summary["provider"] == "Anthropic/Claude":
+                    self.assertEqual(
+                        "provider-structured-output-derived-schema",
+                        summary["settings"]["structured_json_mode"],
+                    )
+                    self.assertEqual(
+                        "removed only $schema and $id for structured JSON compatibility",
+                        summary["settings"]["schema_adapter"],
+                    )
+                    self.assertEqual(
+                        "sha256:4367b90c7fd0a08d32eb97b2984e7e0574e7012965c01392538fad8c6b0ba0d1",
+                        summary["settings"]["derived_schema_digest"],
+                    )
 
                 expected_providers.remove(summary["provider"])
                 self._assert_no_sensitive_live_summary_fields(summary)
