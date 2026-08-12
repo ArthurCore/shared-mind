@@ -1,0 +1,114 @@
+{
+  "artifact_version": "product-continuity-live-summary@1",
+  "scenario_id": "atlas-continuity-golden-v1",
+  "project_snapshot_digest": "sha256:5624f8ae0f348d25edd7b4a2c9d62ca6ef89cf349caa47635e0ac5297fa535b2",
+  "provider": "OpenAI/Codex",
+  "model_snapshot": "gpt-5.5 service snapshot 2026-08-12",
+  "client": {
+    "name": "codex-cli",
+    "version": "0.147.0"
+  },
+  "tokenizer": {
+    "name": "provider-reported-input-accounting",
+    "version": "2026-08-12 codex-cli 0.147.0"
+  },
+  "prompt_template_sha256": "sha256:29fd6b905ca609b9c76c30350b7acf6187bca010e71742d1199b40ab61898d94",
+  "response_schema_sha256": "sha256:15c4033f690c7dab255fa01420a8741eb23eab01c4c507cfaee183d39f21bea2",
+  "settings": {
+    "temperature": 0,
+    "tools": "disabled",
+    "web_search": "disabled",
+    "file_search": "disabled",
+    "memory": "disabled",
+    "retrieval": "disabled",
+    "structured_json_mode": "provider-native-json-object",
+    "schema_adapter": "none",
+    "derived_schema_digest": "sha256:4367b90c7fd0a08d32eb97b2984e7e0574e7012965c01392538fad8c6b0ba0d1",
+    "service_snapshot_date": "2026-08-12"
+  },
+  "arms": {
+    "manual_baseline": {
+      "input_bytes": 11034,
+      "input_tokens": 22684,
+      "elapsed_time_seconds": 15.7734890000429,
+      "schema_validation": "PASS",
+      "report": {
+        "report_version": "product-continuity-report@1",
+        "scenario_id": "atlas-continuity-golden-v1",
+        "score": 100,
+        "maximum_score": 100,
+        "passed": true,
+        "fact_accuracy": 1.0,
+        "open_conflict_member_recall": 1.0,
+        "dimension_scores": {
+          "project_purpose": 10,
+          "decision_and_rationale": 20,
+          "settled_claim_and_evidence_locator": 20,
+          "open_conflict_and_all_members": 25,
+          "open_question": 10,
+          "actionable_work": 15
+        },
+        "penalty_codes": [],
+        "metric_comparison": {
+          "reductions": {
+            "bytes": 0.595,
+            "tokens": 0.595,
+            "time_seconds": 0.625
+          },
+          "meets_reduction_target": true,
+          "quality_preserved": true
+        }
+      }
+    },
+    "context_only": {
+      "input_bytes": 4456,
+      "input_tokens": 21031,
+      "elapsed_time_seconds": 16.342112125013955,
+      "schema_validation": "PASS",
+      "report": {
+        "report_version": "product-continuity-report@1",
+        "scenario_id": "atlas-continuity-golden-v1",
+        "score": 100,
+        "maximum_score": 100,
+        "passed": true,
+        "fact_accuracy": 1.0,
+        "open_conflict_member_recall": 1.0,
+        "dimension_scores": {
+          "project_purpose": 10,
+          "decision_and_rationale": 20,
+          "settled_claim_and_evidence_locator": 20,
+          "open_conflict_and_all_members": 25,
+          "open_question": 10,
+          "actionable_work": 15
+        },
+        "penalty_codes": [],
+        "metric_comparison": {
+          "reductions": {
+            "bytes": 0.595,
+            "tokens": 0.595,
+            "time_seconds": 0.625
+          },
+          "meets_reduction_target": true,
+          "quality_preserved": true
+        }
+      }
+    }
+  },
+  "comparison": {
+    "report_version": "product-continuity-live-comparison@1",
+    "reductions": {
+      "bytes": 0.596157331883,
+      "tokens": 0.0728707459,
+      "time_seconds": 0.0
+    },
+    "meets_reduction_target": false,
+    "quality_preserved": true,
+    "schema_valid": true,
+    "passed": false
+  },
+  "redaction_attestation": {
+    "reviewer": "local-owner-review",
+    "reviewed_at": "2026-08-12T00:00:00Z",
+    "statement": "Reviewed aggregate-only live summary evidence. Artifact retains metrics, hashes, versions, deterministic reports, comparison flags, and model/provider labels only; unredacted model input or output content is excluded."
+  }
+}
