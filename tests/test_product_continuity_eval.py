@@ -375,6 +375,46 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
         self.assertEqual(1.0, report["open_conflict_member_recall"])
         self.assertEqual([], report["penalty_codes"])
 
+    def test_scorer_rejects_wrong_scenario_id(self) -> None:
+        runner = importlib.import_module("evals.product_continuity.runner")
+        response = copy.deepcopy(self.scenario["expected_response"])
+        response["scenario_id"] = "atlas-continuity-wrong-v1"
+
+        report = runner.evaluate_scenario(self.scenario, response)
+
+        self._assert_valid(self.report_validator, report)
+        self.assertLess(report["score"], 100)
+        self.assertFalse(report["passed"])
+
+    def test_response_schema_requires_canonical_claim_hashes_not_summary_only(
+        self,
+    ) -> None:
+        response = copy.deepcopy(self.scenario["expected_response"])
+        response["settled_claims"][0]["summary"] = (
+            "Some unrelated prose that still should not carry canonical meaning."
+        )
+        response["open_conflicts"][0]["member_claims"][0]["summary"] = (
+            "Another unrelated sentence."
+        )
+
+        self.assertNotEqual(
+            [],
+            list(self.response_validator.iter_errors(response)),
+        )
+
+    def test_scorer_rejects_duplicate_conflict_members(self) -> None:
+        runner = importlib.import_module("evals.product_continuity.runner")
+        response = copy.deepcopy(self.scenario["expected_response"])
+        duplicate = copy.deepcopy(response["open_conflicts"][0]["member_claims"][0])
+        duplicate["summary"] = "Duplicate member with different prose."
+        response["open_conflicts"][0]["member_claims"].append(duplicate)
+
+        report = runner.evaluate_scenario(self.scenario, response)
+
+        self._assert_valid(self.report_validator, report)
+        self.assertLess(report["score"], 100)
+        self.assertFalse(report["passed"])
+
     @staticmethod
     def _load_json(path: Path) -> dict[str, Any]:
         with path.open("r", encoding="utf-8") as handle:
