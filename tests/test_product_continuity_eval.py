@@ -174,6 +174,12 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
     def test_golden_response_is_fully_grounded_in_context_only_input(self) -> None:
         context = self.scenario["context"]
         response = self.scenario["expected_response"]
+        self.assertIn("evaluation_scenario_id", context)
+        self.assertEqual(
+            self.scenario["scenario_id"],
+            context["evaluation_scenario_id"],
+        )
+        self.assertEqual(context["evaluation_scenario_id"], response["scenario_id"])
         self.assertEqual(context["purpose"], response["project_purpose"])
         self.assertFalse(context["purpose_missing"])
 
