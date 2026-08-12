@@ -9,13 +9,14 @@
     "version": "0.147.0"
   },
   "tokenizer": {
-    "name": "provider-reported-input-accounting",
+    "name": "provider-reported-total-input-accounting",
     "version": "2026-08-12 codex-cli 0.147.0"
   },
   "prompt_template_sha256": "sha256:32c647e276fcd244d16ddfd797d667f5a46ce2424ba3f15a0817632a058721e8",
-  "response_schema_sha256": "sha256:15c4033f690c7dab255fa01420a8741eb23eab01c4c507cfaee183d39f21bea2",
+  "response_schema_sha256": "sha256:cfb356e6c755071083d1993ff984e45ecf195b0c624f216d9b73ccc46cba12e5",
   "settings": {
     "effort": "medium",
+    "canonical_proposition_contract": "response-v3-canonical-proposition-required",
     "tools": "disabled",
     "web_search": "disabled",
     "file_search": "disabled",
@@ -28,8 +29,8 @@
   "arms": {
     "manual_baseline": {
       "input_bytes": 11034,
-      "input_tokens": 22684,
-      "elapsed_time_seconds": 15.7734890000429,
+      "input_tokens": 19787,
+      "elapsed_time_seconds": 21.27466062491294,
       "schema_validation": "PASS",
       "report": {
         "report_version": "product-continuity-report@1",
@@ -61,8 +62,8 @@
     },
     "context_only": {
       "input_bytes": 4456,
-      "input_tokens": 21031,
-      "elapsed_time_seconds": 16.342112125013955,
+      "input_tokens": 18403,
+      "elapsed_time_seconds": 20.01012933300808,
       "schema_validation": "PASS",
       "report": {
         "report_version": "product-continuity-report@1",
@@ -97,8 +98,8 @@
     "report_version": "product-continuity-live-comparison@1",
     "reductions": {
       "bytes": 0.596157331883,
-      "tokens": 0.0728707459,
-      "time_seconds": 0.0
+      "tokens": 0.069944913327,
+      "time_seconds": 0.059438376677
     },
     "meets_reduction_target": false,
     "quality_preserved": true,

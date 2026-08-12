@@ -9,13 +9,14 @@
     "version": "2.1.227"
   },
   "tokenizer": {
-    "name": "provider-reported-input-accounting",
+    "name": "provider-reported-total-input-accounting",
     "version": "2026-08-12 Claude Code 2.1.227"
   },
   "prompt_template_sha256": "sha256:32c647e276fcd244d16ddfd797d667f5a46ce2424ba3f15a0817632a058721e8",
-  "response_schema_sha256": "sha256:15c4033f690c7dab255fa01420a8741eb23eab01c4c507cfaee183d39f21bea2",
+  "response_schema_sha256": "sha256:cfb356e6c755071083d1993ff984e45ecf195b0c624f216d9b73ccc46cba12e5",
   "settings": {
     "effort": "medium",
+    "canonical_proposition_contract": "response-v3-canonical-proposition-required",
     "tools": "disabled",
     "web_search": "disabled",
     "file_search": "disabled",
@@ -23,14 +24,14 @@
     "retrieval": "disabled",
     "structured_json_mode": "provider-structured-output-derived-schema",
     "schema_adapter": "removed only $schema and $id for structured JSON compatibility",
-    "derived_schema_digest": "sha256:4367b90c7fd0a08d32eb97b2984e7e0574e7012965c01392538fad8c6b0ba0d1",
+    "derived_schema_digest": "sha256:42cb631df125e482df0d463c1f772a4b79174f6e333dab1d4e7279675d9649b3",
     "service_snapshot_date": "2026-08-12"
   },
   "arms": {
     "manual_baseline": {
       "input_bytes": 11034,
-      "input_tokens": 5368,
-      "elapsed_time_seconds": 13.767486833,
+      "input_tokens": 14280,
+      "elapsed_time_seconds": 45.7520905,
       "schema_validation": "PASS",
       "report": {
         "report_version": "product-continuity-report@1",
@@ -62,8 +63,8 @@
     },
     "context_only": {
       "input_bytes": 4456,
-      "input_tokens": 3409,
-      "elapsed_time_seconds": 17.0229445,
+      "input_tokens": 3622,
+      "elapsed_time_seconds": 17.98052525,
       "schema_validation": "PASS",
       "report": {
         "report_version": "product-continuity-report@1",
@@ -98,13 +99,13 @@
     "report_version": "product-continuity-live-comparison@1",
     "reductions": {
       "bytes": 0.596157331883,
-      "tokens": 0.364940387481,
-      "time_seconds": 0.0
+      "tokens": 0.746358543417,
+      "time_seconds": 0.607001012336
     },
-    "meets_reduction_target": false,
+    "meets_reduction_target": true,
     "quality_preserved": true,
     "schema_valid": true,
-    "passed": false
+    "passed": true
   },
   "redaction_attestation": {
     "reviewer": "local-owner-review",
