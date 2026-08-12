@@ -1,7 +1,7 @@
 {
   "artifact_version": "shared-mind-live-mcp-interoperability@1",
   "date": "2026-08-12",
-  "shared_workspace_digest": "sha256:6323ff122ba9c533a997b2b4e7382c3969daecb65020dc57d3da2d6b72be9f8a",
+  "shared_workspace_digest": "sha256:c6916b268049a5dc7f93e481958b49f3d184c1bc54714f2947fa7e7d8c1e8f67",
   "workspace_basis": {
     "scenario": "live-mcp-interoperability-2026-08-12",
     "synthetic_config": {
@@ -22,12 +22,12 @@
       "planned_mutations": [
         {
           "actor": "agent:codex-live",
-          "work_item_id": "workitem_codex_live_mcp_001",
+          "work_item_id": "workitem_codex_live_acceptance_001",
           "work_item_status": "TODO"
         },
         {
           "actor": "agent:claude-live",
-          "work_item_id": "workitem_claude_live_mcp_001",
+          "work_item_id": "workitem_claude_live_acceptance_001",
           "work_item_status": "TODO"
         }
       ]
@@ -66,14 +66,14 @@
       "sequence": 1,
       "outcome": "COMMITTED",
       "actor": "agent:codex-live",
-      "work_item_id": "workitem_codex_live_mcp_001",
+      "work_item_id": "workitem_codex_live_acceptance_001",
       "work_item_status": "TODO"
     },
     {
       "sequence": 2,
       "outcome": "COMMITTED",
       "actor": "agent:claude-live",
-      "work_item_id": "workitem_claude_live_mcp_001",
+      "work_item_id": "workitem_claude_live_acceptance_001",
       "work_item_status": "TODO"
     }
   ],
