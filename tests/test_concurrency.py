@@ -282,7 +282,11 @@ class KernelConcurrencyConformanceTest(unittest.TestCase):
         def commit_one(proposal: dict[str, Any]) -> Receipt:
             kernel = Kernel(self.database, self.registry)
             try:
-                barrier.wait(timeout=10)
+                # Kernel initialization performs schema and integrity checks on
+                # every independent connection.  Under hosted branch coverage,
+                # starting 24 such connections can legitimately take longer
+                # than ten seconds before the last worker reaches the barrier.
+                barrier.wait(timeout=180)
                 return kernel.commit(proposal)
             finally:
                 kernel.close()
