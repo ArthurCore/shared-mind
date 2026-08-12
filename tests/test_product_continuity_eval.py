@@ -23,6 +23,7 @@ REPORT_SCHEMA_PATH = EVAL_ROOT / "product-continuity-report.schema.v1.json"
 LIVE_SUMMARY_SCHEMA_PATH = (
     EVAL_ROOT / "product-continuity-live-summary.schema.v1.json"
 )
+LIVE_RESULTS_ROOT = EVAL_ROOT / "results"
 
 
 class ProductContinuityEvalContractTest(unittest.TestCase):
@@ -170,6 +171,69 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
             [],
             list(self.live_summary_validator.iter_errors(leaked_report)),
         )
+
+    def test_checked_in_v3_live_summaries_are_sanitized_and_reproducible(
+        self,
+    ) -> None:
+        runner = importlib.import_module("evals.product_continuity.runner")
+        summary_paths = sorted(LIVE_RESULTS_ROOT.glob("*.v3.json"))
+        self.assertEqual(
+            [
+                LIVE_RESULTS_ROOT / "claude-live-summary.v3.json",
+                LIVE_RESULTS_ROOT / "codex-live-summary.v3.json",
+            ],
+            summary_paths,
+        )
+
+        context_bytes = json.dumps(
+            self.scenario["context"], sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        expected_project_digest = runner.sha256_bytes(context_bytes)
+        expected_response_schema_digest = runner.sha256_bytes(
+            RESPONSE_SCHEMA_PATH.read_bytes()
+        )
+        expected_derived_schema_digest = (
+            "sha256:4367b90c7fd0a08d32eb97b2984e7e0574e7012965c01392538fad8c6b0ba0d1"
+        )
+        expected_providers = {"Anthropic/Claude", "OpenAI/Codex"}
+
+        for path in summary_paths:
+            with self.subTest(path=path.name):
+                summary = self._load_json(path)
+                self._assert_valid(self.live_summary_validator, summary)
+                self.assertEqual(
+                    runner.live_summary_comparison(summary),
+                    summary["comparison"],
+                )
+                self.assertFalse(summary["comparison"]["passed"])
+                self.assertFalse(summary["comparison"]["meets_reduction_target"])
+                self.assertTrue(summary["comparison"]["quality_preserved"])
+                self.assertTrue(summary["comparison"]["schema_valid"])
+                self.assertEqual(
+                    expected_project_digest,
+                    summary["project_snapshot_digest"],
+                )
+                self.assertEqual(
+                    expected_response_schema_digest,
+                    summary["response_schema_sha256"],
+                )
+                self.assertEqual(
+                    expected_derived_schema_digest,
+                    summary["settings"]["derived_schema_digest"],
+                )
+
+                expected_providers.remove(summary["provider"])
+                self._assert_no_sensitive_live_summary_fields(summary)
+                for arm_name in ("manual_baseline", "context_only"):
+                    report = summary["arms"][arm_name]["report"]
+                    self._assert_valid(self.report_validator, report)
+                    self.assertEqual(100, report["score"])
+                    self.assertTrue(report["passed"])
+                    self.assertEqual(1.0, report["fact_accuracy"])
+                    self.assertEqual(1.0, report["open_conflict_member_recall"])
+                    self.assertEqual([], report["penalty_codes"])
+
+        self.assertEqual(set(), expected_providers)
 
     def test_golden_response_is_fully_grounded_in_context_only_input(self) -> None:
         context = self.scenario["context"]
@@ -461,6 +525,30 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
             key=lambda error: tuple(str(item) for item in error.absolute_path),
         )
         self.assertEqual([], [error.message for error in errors])
+
+    def _assert_no_sensitive_live_summary_fields(self, value: Any) -> None:
+        forbidden_exact_keys = {
+            "api_key",
+            "authorization",
+            "cookie",
+            "credentials",
+            "password",
+            "raw_prompt",
+            "raw_response",
+            "request_id",
+            "account_id",
+        }
+        forbidden_key_fragments = ("secret",)
+        if isinstance(value, Mapping):
+            for key, item in value.items():
+                normalized = str(key).lower().replace("-", "_")
+                self.assertNotIn(normalized, forbidden_exact_keys)
+                for fragment in forbidden_key_fragments:
+                    self.assertNotIn(fragment, normalized)
+                self._assert_no_sensitive_live_summary_fields(item)
+        elif isinstance(value, list):
+            for item in value:
+                self._assert_no_sensitive_live_summary_fields(item)
 
     @classmethod
     def _object_ids(cls, value: Any) -> set[str]:
