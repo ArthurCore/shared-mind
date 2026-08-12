@@ -12,16 +12,16 @@
     "name": "provider-reported-input-accounting",
     "version": "2026-08-12 Claude Code 2.1.227"
   },
-  "prompt_template_sha256": "sha256:29fd6b905ca609b9c76c30350b7acf6187bca010e71742d1199b40ab61898d94",
+  "prompt_template_sha256": "sha256:32c647e276fcd244d16ddfd797d667f5a46ce2424ba3f15a0817632a058721e8",
   "response_schema_sha256": "sha256:15c4033f690c7dab255fa01420a8741eb23eab01c4c507cfaee183d39f21bea2",
   "settings": {
-    "temperature": 0,
+    "effort": "medium",
     "tools": "disabled",
     "web_search": "disabled",
     "file_search": "disabled",
     "memory": "disabled",
     "retrieval": "disabled",
-    "structured_json_mode": "provider-native-json-object",
+    "structured_json_mode": "provider-structured-output-derived-schema",
     "schema_adapter": "removed only $schema and $id for structured JSON compatibility",
     "derived_schema_digest": "sha256:4367b90c7fd0a08d32eb97b2984e7e0574e7012965c01392538fad8c6b0ba0d1",
     "service_snapshot_date": "2026-08-12"
