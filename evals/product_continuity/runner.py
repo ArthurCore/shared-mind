@@ -31,6 +31,7 @@ def evaluate_scenario(
     context = _mapping(scenario["context"], "context")
     scoring = _mapping(scenario["scoring"], "scoring")
     weights = _mapping(scoring["dimensions"], "scoring.dimensions")
+    scenario_id_matches = response.get("scenario_id") == scenario.get("scenario_id")
 
     dimension_matches = {
         "project_purpose": response.get("project_purpose")
@@ -75,7 +76,11 @@ def evaluate_scenario(
     earned_score = sum(dimension_scores.values())
     penalty_score = sum(int(penalties[code]) for code in penalty_codes)
     maximum_score = int(scoring["maximum_score"])
-    score = max(0, min(maximum_score, earned_score - penalty_score))
+    score = (
+        max(0, min(maximum_score, earned_score - penalty_score))
+        if scenario_id_matches
+        else 0
+    )
 
     fact_accuracy = sum(dimension_matches.values()) / len(dimension_matches)
     fact_accuracy = round(fact_accuracy, 12)
@@ -88,6 +93,7 @@ def evaluate_scenario(
         and metric_comparison["meets_reduction_target"]
         and metric_comparison["quality_preserved"]
         and not penalty_codes
+        and scenario_id_matches
     )
 
     return {
@@ -228,14 +234,18 @@ def _settled_claims_match(
     context: Mapping[str, Any], response: Mapping[str, Any]
 ) -> bool:
     expected = {
-        claim["claim_id"]: _evidence_locator_tuples(claim.get("evidence"))
+        claim["claim_id"]: (
+            claim.get("proposition_hash"),
+            _evidence_locator_tuples(claim.get("evidence")),
+        )
         for claim in _records(context.get("current_claims"))
         if isinstance(claim.get("claim_id"), str)
     }
     actual_records = _records(response.get("settled_claims"))
     actual = {
-        claim.get("claim_id"): _evidence_locator_tuples(
-            claim.get("evidence_locators")
+        claim.get("claim_id"): (
+            claim.get("proposition_hash"),
+            _evidence_locator_tuples(claim.get("evidence_locators")),
         )
         for claim in actual_records
         if isinstance(claim.get("claim_id"), str)
@@ -254,7 +264,10 @@ def _open_conflicts_match(
         conflict["conflict_id"]: (
             conflict.get("status"),
             {
-                member["claim_id"]
+                member["claim_id"]: (
+                    member.get("proposition_hash"),
+                    member.get("status"),
+                )
                 for member in _records(conflict.get("members"))
                 if isinstance(member.get("claim_id"), str)
             },
@@ -271,10 +284,20 @@ def _open_conflicts_match(
         members = _records(conflict.get("member_claims"))
         if not all(_has_grounded_summary(member) for member in members):
             return False
+        member_ids = [
+            member.get("claim_id")
+            for member in members
+            if isinstance(member.get("claim_id"), str)
+        ]
+        if len(member_ids) != len(members) or len(set(member_ids)) != len(member_ids):
+            return False
         actual[conflict_id] = (
             conflict.get("status"),
             {
-                member["claim_id"]
+                member["claim_id"]: (
+                    member.get("proposition_hash"),
+                    member.get("status"),
+                )
                 for member in members
                 if isinstance(member.get("claim_id"), str)
             },

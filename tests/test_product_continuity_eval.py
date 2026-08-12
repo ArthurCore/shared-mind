@@ -199,6 +199,10 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
         }
         self.assertEqual(set(context_claims), set(response_claims))
         for claim_id, claim in context_claims.items():
+            self.assertEqual(
+                claim["proposition_hash"],
+                response_claims[claim_id]["proposition_hash"],
+            )
             expected_locators = {
                 (
                     evidence["evidence_link_id"],
@@ -234,6 +238,19 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
             for conflict in response["open_conflicts"]
         }
         self.assertEqual(context_conflicts, response_conflicts)
+        response_conflict_items = {
+            conflict["conflict_id"]: {
+                member["claim_id"]: member
+                for member in conflict["member_claims"]
+            }
+            for conflict in response["open_conflicts"]
+        }
+        for conflict in context["open_conflicts"]:
+            members = response_conflict_items[conflict["conflict_id"]]
+            for member in conflict["members"]:
+                actual = members[member["claim_id"]]
+                self.assertEqual(member["proposition_hash"], actual["proposition_hash"])
+                self.assertEqual(member["status"], actual["status"])
         conflict_member_ids = set().union(*context_conflicts.values())
         self.assertTrue(conflict_member_ids.isdisjoint(response_claims))
 
@@ -393,9 +410,11 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
         response["settled_claims"][0]["summary"] = (
             "Some unrelated prose that still should not carry canonical meaning."
         )
+        del response["settled_claims"][0]["proposition_hash"]
         response["open_conflicts"][0]["member_claims"][0]["summary"] = (
             "Another unrelated sentence."
         )
+        del response["open_conflicts"][0]["member_claims"][0]["proposition_hash"]
 
         self.assertNotEqual(
             [],

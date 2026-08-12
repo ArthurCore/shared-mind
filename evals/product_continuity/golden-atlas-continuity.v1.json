@@ -192,6 +192,7 @@
     "settled_claims": [
       {
         "claim_id": "claim_atlas_backup_verified_001",
+        "proposition_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
         "summary": "The Atlas production backup is verified.",
         "evidence_locators": [
           {
@@ -211,10 +212,14 @@
         "member_claims": [
           {
             "claim_id": "claim_atlas_mysql_0000001",
+            "proposition_hash": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+            "status": "ACTIVE",
             "summary": "Atlas production uses MySQL."
           },
           {
             "claim_id": "claim_atlas_postgresql_001",
+            "proposition_hash": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+            "status": "ACTIVE",
             "summary": "Atlas production uses PostgreSQL."
           }
         ]
@@ -252,6 +257,7 @@
         "settled_claims": [
           {
             "claim_id": "claim_atlas_backup_verified_001",
+            "proposition_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
             "summary": "The Atlas production backup is verified.",
             "evidence_locators": [
               {
@@ -265,6 +271,7 @@
           },
           {
             "claim_id": "claim_atlas_mysql_0000001",
+            "proposition_hash": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
             "summary": "Atlas production definitively uses MySQL.",
             "evidence_locators": [
               {
@@ -284,10 +291,14 @@
             "member_claims": [
               {
                 "claim_id": "claim_atlas_mysql_0000001",
+                "proposition_hash": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+                "status": "ACTIVE",
                 "summary": "Atlas production uses MySQL."
               },
               {
                 "claim_id": "claim_atlas_postgresql_001",
+                "proposition_hash": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+                "status": "ACTIVE",
                 "summary": "Atlas production uses PostgreSQL."
               }
             ]
@@ -325,6 +336,7 @@
         "settled_claims": [
           {
             "claim_id": "claim_atlas_backup_verified_001",
+            "proposition_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
             "summary": "The Atlas production backup is verified.",
             "evidence_locators": [
               {
@@ -344,10 +356,14 @@
             "member_claims": [
               {
                 "claim_id": "claim_atlas_mysql_0000001",
+                "proposition_hash": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+                "status": "ACTIVE",
                 "summary": "Atlas production uses MySQL."
               },
               {
                 "claim_id": "claim_atlas_postgresql_001",
+                "proposition_hash": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+                "status": "ACTIVE",
                 "summary": "Atlas production uses PostgreSQL."
               }
             ]

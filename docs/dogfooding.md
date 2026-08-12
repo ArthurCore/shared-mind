@@ -29,8 +29,11 @@ They make the safety boundary executable rather than relying on prose review.
 ## Deterministic scoring contract
 
 [`evals/product_continuity/runner.py`](../evals/product_continuity/runner.py)
-compares the candidate response with the golden response using exact structured
-equality. The six dimensions total 100 points:
+compares the candidate response with the context-grounded canonical facts. The
+project purpose, current decisions, open questions, and actionable work remain
+exact comparisons. Settled claims and open-conflict members are keyed by exact
+IDs, proposition hashes, statuses, and evidence locator tuples while allowing
+non-empty paraphrased summaries. The six dimensions total 100 points:
 
 | Dimension | Required response field | Points |
 |---|---|---:|
@@ -44,6 +47,7 @@ equality. The six dimensions total 100 points:
 A passing report requires all of the following:
 
 - score `100/100` and fact accuracy `1.0`;
+- response `scenario_id` exactly matches the supplied scenario;
 - open-conflict member recall `1.0` (every member of every open conflict is
   exposed under the correct conflict);
 - no open-conflict member presented as a settled claim;
@@ -78,8 +82,8 @@ It is a closed Draft 2020-12 JSON object with these required top-level fields:
 | `scenario_id` | The supplied scenario identifier. |
 | `project_purpose` | A non-empty purpose grounded in context. |
 | `current_decisions` | Decision ID, title, conclusion, and rationale. |
-| `settled_claims` | Claim ID, summary, and one or more byte/hash evidence locators. |
-| `open_conflicts` | Open conflict ID and at least two member claim IDs/summaries. |
+| `settled_claims` | Claim ID, proposition hash, non-empty summary, and one or more byte/hash evidence locators. |
+| `open_conflicts` | Open conflict ID plus exact status and at least two member claim IDs, proposition hashes, statuses, and non-empty summaries. |
 | `open_questions` | Question ID and question text. |
 | `actionable_work_items` | Work-item ID, actionable status, and description. |
 
