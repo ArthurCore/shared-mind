@@ -351,6 +351,30 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
                 self.assertFalse(report["passed"])
                 self.assertIn(expected_penalty, report["penalty_codes"])
 
+    def test_live_like_paraphrase_preserves_canonical_facts_without_exact_prose(
+        self,
+    ) -> None:
+        runner = importlib.import_module("evals.product_continuity.runner")
+        paraphrase = copy.deepcopy(self.scenario["expected_response"])
+        paraphrase["settled_claims"][0]["summary"] = (
+            "Backups for the Atlas production system have already been checked."
+        )
+        paraphrase["open_conflicts"][0]["member_claims"][0]["summary"] = (
+            "One active claim says production is on MySQL."
+        )
+        paraphrase["open_conflicts"][0]["member_claims"][1]["summary"] = (
+            "The competing active claim says production is on PostgreSQL."
+        )
+
+        report = runner.evaluate_scenario(self.scenario, paraphrase)
+
+        self._assert_valid(self.report_validator, report)
+        self.assertEqual(100, report["score"])
+        self.assertTrue(report["passed"])
+        self.assertEqual(1.0, report["fact_accuracy"])
+        self.assertEqual(1.0, report["open_conflict_member_recall"])
+        self.assertEqual([], report["penalty_codes"])
+
     @staticmethod
     def _load_json(path: Path) -> dict[str, Any]:
         with path.open("r", encoding="utf-8") as handle:
