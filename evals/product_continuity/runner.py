@@ -33,8 +33,18 @@ def evaluate_scenario(
     weights = _mapping(scoring["dimensions"], "scoring.dimensions")
 
     dimension_matches = {
-        dimension: response.get(field) == expected.get(field)
-        for dimension, field in _DIMENSION_FIELDS.items()
+        "project_purpose": response.get("project_purpose")
+        == expected.get("project_purpose"),
+        "decision_and_rationale": response.get("current_decisions")
+        == expected.get("current_decisions"),
+        "settled_claim_and_evidence_locator": _settled_claims_match(
+            context, response
+        ),
+        "open_conflict_and_all_members": _open_conflicts_match(context, response),
+        "open_question": response.get("open_questions")
+        == expected.get("open_questions"),
+        "actionable_work": response.get("actionable_work_items")
+        == expected.get("actionable_work_items"),
     }
     dimension_scores = {
         dimension: int(weights[dimension]) if dimension_matches[dimension] else 0
@@ -212,6 +222,104 @@ def _open_conflict_member_recall(
     recalled = len(expected_members & actual_members)
     recall = round(recalled / len(expected_members), 12)
     return recall, recalled != len(expected_members)
+
+
+def _settled_claims_match(
+    context: Mapping[str, Any], response: Mapping[str, Any]
+) -> bool:
+    expected = {
+        claim["claim_id"]: _evidence_locator_tuples(claim.get("evidence"))
+        for claim in _records(context.get("current_claims"))
+        if isinstance(claim.get("claim_id"), str)
+    }
+    actual_records = _records(response.get("settled_claims"))
+    actual = {
+        claim.get("claim_id"): _evidence_locator_tuples(
+            claim.get("evidence_locators")
+        )
+        for claim in actual_records
+        if isinstance(claim.get("claim_id"), str)
+    }
+    return (
+        actual == expected
+        and len(actual_records) == len(expected)
+        and all(_has_grounded_summary(claim) for claim in actual_records)
+    )
+
+
+def _open_conflicts_match(
+    context: Mapping[str, Any], response: Mapping[str, Any]
+) -> bool:
+    expected = {
+        conflict["conflict_id"]: (
+            conflict.get("status"),
+            {
+                member["claim_id"]
+                for member in _records(conflict.get("members"))
+                if isinstance(member.get("claim_id"), str)
+            },
+        )
+        for conflict in _records(context.get("open_conflicts"))
+        if isinstance(conflict.get("conflict_id"), str)
+    }
+    actual_records = _records(response.get("open_conflicts"))
+    actual = {}
+    for conflict in actual_records:
+        conflict_id = conflict.get("conflict_id")
+        if not isinstance(conflict_id, str):
+            continue
+        members = _records(conflict.get("member_claims"))
+        if not all(_has_grounded_summary(member) for member in members):
+            return False
+        actual[conflict_id] = (
+            conflict.get("status"),
+            {
+                member["claim_id"]
+                for member in members
+                if isinstance(member.get("claim_id"), str)
+            },
+        )
+    return actual == expected and len(actual_records) == len(expected)
+
+
+def _evidence_locator_tuples(value: Any) -> set[tuple[str, str, int, int, str]]:
+    locators: set[tuple[str, str, int, int, str]] = set()
+    for locator in _records(value):
+        evidence_link_id = locator.get("evidence_link_id")
+        source_revision_id = locator.get("source_revision_id")
+        selector = (
+            _mapping(locator.get("selector"), "selector")
+            if isinstance(locator.get("selector"), Mapping)
+            else locator
+        )
+        start_byte = selector.get("start_byte")
+        end_byte = selector.get("end_byte")
+        excerpt_hash = selector.get("excerpt_hash")
+        if (
+            isinstance(evidence_link_id, str)
+            and isinstance(source_revision_id, str)
+            and isinstance(start_byte, int)
+            and isinstance(end_byte, int)
+            and isinstance(excerpt_hash, str)
+        ):
+            locators.add(
+                (
+                    evidence_link_id,
+                    source_revision_id,
+                    start_byte,
+                    end_byte,
+                    excerpt_hash,
+                )
+            )
+    return locators
+
+
+def _has_grounded_summary(record: Mapping[str, Any]) -> bool:
+    summary = record.get("summary")
+    if not isinstance(summary, str) or not summary.strip():
+        return False
+    identifier = record.get("claim_id")
+    return isinstance(identifier, str) and summary.strip() != identifier
 
 
 def _context_conflict_member_ids(context: Mapping[str, Any]) -> set[str]:
