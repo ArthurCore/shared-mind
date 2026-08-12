@@ -69,6 +69,24 @@ Client policy, project trust, and explicit user approval remain the enforcement
 boundary. Remote publishing, pushing, messaging, credential changes, and other
 external actions remain outside this local adapter and require their own approval.
 
+## Live interoperability evidence
+
+The sanitized live MCP interoperability artifact is checked in at
+`evals/product_continuity/results/mcp-interoperability-live-2026-08-12.json`.
+It records aggregate evidence only: pinned client/model versions, allowed tool
+counts, accepted ledger outcomes, final ledger verification, replay parity, and a
+digest over synthetic config/context. It does not retain raw model text, provider
+usage or cost data, request identifiers, credentials, account identifiers, or
+absolute local paths.
+
+The 2026-08-12 run used the supported MCP SDK v2 surface. Codex CLI 0.147.0 with
+the gpt-5.5 service snapshot required destructive MCP approval to be
+preauthorized for the single `proposal_commit` call while leaving the allowlist
+limited to `proposal_commit` and `ledger_verify`. Claude Code 2.1.227 with
+claude-sonnet-4-5 safe mode removes explicit MCP approval prompts, so the run
+used the same strict allowlist plus the client-side built-in denylist. Each
+client committed exactly one `TODO` work item and then verified the ledger.
+
 ## Resources
 
 The adapter exposes exactly these six fixed resource URIs:
