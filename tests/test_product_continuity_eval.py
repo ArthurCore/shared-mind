@@ -172,7 +172,7 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
             list(self.live_summary_validator.iter_errors(leaked_report)),
         )
 
-    def test_checked_in_v3_live_summaries_are_sanitized_and_reproducible(
+    def test_checked_in_v4_live_summaries_are_sanitized_and_reproducible(
         self,
     ) -> None:
         runner = importlib.import_module("evals.product_continuity.runner")
@@ -195,20 +195,82 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
         expected_prompt_template_digest = (
             "sha256:32c647e276fcd244d16ddfd797d667f5a46ce2424ba3f15a0817632a058721e8"
         )
+        expected_by_provider = {
+            "OpenAI/Codex": {
+                "metrics": {
+                    "manual_baseline": {
+                        "input_bytes": 11034,
+                        "input_tokens": 19787,
+                        "elapsed_time_seconds": 21.27466062491294,
+                    },
+                    "context_only": {
+                        "input_bytes": 4456,
+                        "input_tokens": 18403,
+                        "elapsed_time_seconds": 20.01012933300808,
+                    },
+                },
+                "comparison": {
+                    "report_version": "product-continuity-live-comparison@1",
+                    "reductions": {
+                        "bytes": 0.596157331883,
+                        "tokens": 0.069944913327,
+                        "time_seconds": 0.059438376677,
+                    },
+                    "meets_reduction_target": False,
+                    "quality_preserved": True,
+                    "schema_valid": True,
+                    "passed": False,
+                },
+                "structured_json_mode": "raw-json-whole-message-local-validation",
+                "schema_adapter": "none",
+                "derived_schema_digest": None,
+            },
+            "Anthropic/Claude": {
+                "metrics": {
+                    "manual_baseline": {
+                        "input_bytes": 11034,
+                        "input_tokens": 14280,
+                        "elapsed_time_seconds": 45.7520905,
+                    },
+                    "context_only": {
+                        "input_bytes": 4456,
+                        "input_tokens": 3622,
+                        "elapsed_time_seconds": 17.98052525,
+                    },
+                },
+                "comparison": {
+                    "report_version": "product-continuity-live-comparison@1",
+                    "reductions": {
+                        "bytes": 0.596157331883,
+                        "tokens": 0.746358543417,
+                        "time_seconds": 0.607001012336,
+                    },
+                    "meets_reduction_target": True,
+                    "quality_preserved": True,
+                    "schema_valid": True,
+                    "passed": True,
+                },
+                "structured_json_mode": "provider-structured-output-derived-schema",
+                "schema_adapter": (
+                    "removed only $schema and $id for structured JSON compatibility"
+                ),
+                "derived_schema_digest": (
+                    "sha256:42cb631df125e482df0d463c1f772a4b79174f6e333dab1d4e7279675d9649b3"
+                ),
+            },
+        }
         expected_providers = {"Anthropic/Claude", "OpenAI/Codex"}
 
         for path in summary_paths:
             with self.subTest(path=path.name):
                 summary = self._load_json(path)
+                expected = expected_by_provider[summary["provider"]]
                 self._assert_valid(self.live_summary_validator, summary)
                 self.assertEqual(
                     runner.live_summary_comparison(summary),
                     summary["comparison"],
                 )
-                self.assertFalse(summary["comparison"]["passed"])
-                self.assertFalse(summary["comparison"]["meets_reduction_target"])
-                self.assertTrue(summary["comparison"]["quality_preserved"])
-                self.assertTrue(summary["comparison"]["schema_valid"])
+                self.assertEqual(expected["comparison"], summary["comparison"])
                 self.assertEqual(
                     expected_project_digest,
                     summary["project_snapshot_digest"],
@@ -223,30 +285,48 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
                 )
                 self.assertNotIn("temperature", summary["settings"])
                 self.assertEqual("medium", summary["settings"]["effort"])
+                self.assertEqual(
+                    "response-v3-canonical-proposition-required",
+                    summary["settings"]["canonical_proposition_contract"],
+                )
+                self.assertEqual(
+                    "provider-reported-total-input-accounting",
+                    summary["tokenizer"]["name"],
+                )
                 if summary["provider"] == "OpenAI/Codex":
                     self.assertEqual(
-                        "raw-json-whole-message-local-validation",
+                        expected["structured_json_mode"],
                         summary["settings"]["structured_json_mode"],
                     )
-                    self.assertEqual("none", summary["settings"]["schema_adapter"])
+                    self.assertEqual(
+                        expected["schema_adapter"],
+                        summary["settings"]["schema_adapter"],
+                    )
                     self.assertNotIn("derived_schema_digest", summary["settings"])
                 elif summary["provider"] == "Anthropic/Claude":
                     self.assertEqual(
-                        "provider-structured-output-derived-schema",
+                        expected["structured_json_mode"],
                         summary["settings"]["structured_json_mode"],
                     )
                     self.assertEqual(
-                        "removed only $schema and $id for structured JSON compatibility",
+                        expected["schema_adapter"],
                         summary["settings"]["schema_adapter"],
                     )
                     self.assertEqual(
-                        "sha256:4367b90c7fd0a08d32eb97b2984e7e0574e7012965c01392538fad8c6b0ba0d1",
+                        expected["derived_schema_digest"],
                         summary["settings"]["derived_schema_digest"],
                     )
 
                 expected_providers.remove(summary["provider"])
                 self._assert_no_sensitive_live_summary_fields(summary)
                 for arm_name in ("manual_baseline", "context_only"):
+                    for metric_name, metric_value in expected["metrics"][
+                        arm_name
+                    ].items():
+                        self.assertEqual(
+                            metric_value,
+                            summary["arms"][arm_name][metric_name],
+                        )
                     report = summary["arms"][arm_name]["report"]
                     self._assert_valid(self.report_validator, report)
                     self.assertEqual(100, report["score"])
