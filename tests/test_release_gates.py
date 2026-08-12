@@ -13,6 +13,7 @@ except ImportError:  # pragma: no cover - Python 3.10 compatibility
 ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT = ROOT / "pyproject.toml"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
+GIT_ATTRIBUTES = ROOT / ".gitattributes"
 
 
 def _distribution_name(requirement: str) -> str:
@@ -52,6 +53,18 @@ class ReleaseGatePresenceTest(unittest.TestCase):
             CI_WORKFLOW.is_file(),
             "DEV-025/026 requires .github/workflows/ci.yml",
         )
+
+    def test_cross_platform_fixtures_pin_lf_checkout_bytes(self) -> None:
+        self.assertTrue(
+            GIT_ATTRIBUTES.is_file(),
+            "content-addressed fixtures need a repository line-ending policy",
+        )
+        rules = {
+            line.strip()
+            for line in GIT_ATTRIBUTES.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        }
+        self.assertIn("* text=auto eol=lf", rules)
 
 
 @unittest.skipUnless(

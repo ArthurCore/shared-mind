@@ -1,0 +1,2 @@
+# Canonical fixture hashes and projection bytes must not depend on checkout OS.
+* text=auto eol=lf
