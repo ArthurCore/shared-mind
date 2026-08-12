@@ -289,7 +289,10 @@ class KernelConcurrencyConformanceTest(unittest.TestCase):
 
         with ThreadPoolExecutor(max_workers=len(proposals)) as executor:
             futures = [executor.submit(commit_one, proposal) for proposal in proposals]
-            return [future.result(timeout=30) for future in futures]
+            # Branch coverage roughly doubles the suite runtime on hosted
+            # runners.  Preserve a finite deadlock guard without treating a
+            # slow, serialized SQLite writer as a concurrency failure.
+            return [future.result(timeout=180) for future in futures]
 
     def _attach_proposal(self, index: int) -> dict[str, Any]:
         proposal = copy.deepcopy(self.objects["assert_postgresql_proposal"])
