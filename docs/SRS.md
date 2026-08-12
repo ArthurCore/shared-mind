@@ -461,15 +461,15 @@ python3 contracts/validate_contract.py
 #     + 6 semantic cases + 7 continuity operations
 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
-# Current discovery: 336 tests
-# Full current-HEAD hosted pass: pending
+# Hosted Python 3.13: Ran 336 tests in 1689.180s
+# OK (skipped=1), branch-enabled coverage total 86%
 ```
 
-이전 Python 3.13.2 local evidence `Ran 327 tests in 573.553s`, `OK
-(skipped=1)`, branch coverage 86%는 live-summary, live-MCP, canonical
-proposition regression 추가 전 결과라 현재 완료 증거로는 superseded 상태다.
-현재 HEAD의 hosted Actions full-suite 결과는 아직 대기 중이며, 문서 자체는
-current-HEAD hosted pass를 주장하지 않는다.
+GitHub Actions run
+[`31555504041`](https://github.com/ArthurCore/shared-mind/actions/runs/31555504041)은
+source/test HEAD `b214453`에서 Python 3.11, 3.12, 3.13 full coverage, Linux/
+macOS/Windows determinism, quality/security, fresh base/MCP wheel의 8개 job을
+모두 통과했다. Python 3.13 보존 artifact의 정확한 결과는 위와 같다.
 
 ### 13.2 요구사항 추적표
 
@@ -673,9 +673,9 @@ time reduction 0.059438376677이 50% 미만이라 efficiency acceptance는 fail�
 4. source-only adapters는 deterministic proposal 계획, 128-operation bound,
    atomic failure와 retry parity를 검증하며 네트워크를 호출하지 않는다.
 5. release workflow는 Python 3.11~3.13, 3-OS determinism subset, coverage/lint/type/
-   audit/Bandit, clean base/MCP wheel 설치 smoke를 선언한다. 현재 HEAD의 hosted
-   full-suite pass는 아직 pending이며, 이 문서 자체가 current-HEAD hosted CI 실행
-   성공을 주장하지 않는다.
+   audit/Bandit, clean base/MCP wheel 설치 smoke를 선언한다. Hosted run
+   `31555504041`에서 8개 job이 모두 통과했으며 Python 3.13 evidence는 336 tests,
+   86% branch-enabled coverage total을 기록한다.
 6. POSIX process-kill, WAL recovery, reader fast path와 corruption fail-closed 시험이
    canonical commit의 durable boundary를 검증한다.
 7. 100k post-index run은 history-heavy/hot-active fixture의 count/head/root/output

@@ -97,17 +97,18 @@ python3 contracts/validate_contract.py
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-Current test discovery is **336 standard-library tests**. The earlier
-Python 3.13.2 local evidence of 327 tests in 573.553 seconds is superseded by
-the live-summary, live-MCP, and canonical-proposition regression tests added
-after that run. Contract validation is a separate mandatory gate.
+The final hosted Python 3.13 run completed **336 standard-library tests** in
+1689.180 seconds (`skipped=1`) with 86% branch-enabled coverage. Contract
+validation is a separate mandatory gate. The retained evidence belongs to
+[GitHub Actions run 31555504041](https://github.com/ArthurCore/shared-mind/actions/runs/31555504041)
+at source/test HEAD `b214453`.
 
 CI is configured for Python 3.11-3.13, Linux/macOS/Windows determinism subsets,
 80% branch coverage, lint/type/dependency/security gates, and clean base/MCP
-wheel smokes. The current-HEAD hosted full-suite result is still pending; do
-not treat this README as a hosted Actions pass claim. Locally, SQLite uses WAL
-with `synchronous=FULL`; process-kill and WAL recovery tests cover the durable
-commit boundary.
+wheel smokes. All eight jobs in run `31555504041` passed, including full
+coverage on Python 3.11, 3.12, and 3.13. Locally, SQLite uses WAL with
+`synchronous=FULL`; process-kill and WAL recovery tests cover the durable commit
+boundary.
 
 The checked-in [DEV-021 benchmark evidence](benchmarks/results/dev-021-2026-08-11.md)
 records completed 100k-entry history-heavy and hot-active fixtures. The final
