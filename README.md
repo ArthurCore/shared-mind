@@ -26,6 +26,9 @@ protocols: the repository contains no live vendor connector, credential flow,
 or remote write transport.
 
 The product boundary and acceptance criteria are defined in the [SRS](docs/SRS.md).
+The next productization goals—trusted automatic ingest, layered memory,
+versioned Skills, agent loadouts, cold start, retrieval, governance, and the
+continuous compounding loop—are tracked in the [Product Roadmap](ROADMAP.md).
 
 ## Quick start
 
@@ -81,6 +84,7 @@ performing external forensic SQL remains outside this local trust boundary.
 ## Repository layout
 
 ```text
+ROADMAP.md              Next productization goals and ordered implementation work
 contracts/              Versioned JSON Schema, predicate registry, fixtures
 docs/                    SRS, agent bootstrap, and verification notes
 src/shared_mind/         Kernel, continuity, workspace, CLI, and projections
