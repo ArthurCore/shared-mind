@@ -16,7 +16,7 @@ Context(task A) != Context(task B)    # allowed
 
 ## What it provides
 
-The kernel provides the trusted state boundary:
+The kernel provides the trusted factual and project-state boundary:
 
 - immutable, content-hashed source revisions;
 - factual Claims with byte-range EvidenceLinks;
@@ -28,14 +28,15 @@ The kernel provides the trusted state boundary:
 - deterministic Markdown/JSON projections and structured query; and
 - JSON CLI plus an optional local stdio MCP adapter.
 
-The product layer builds on that boundary without becoming a second source of
-truth:
+The product layer builds on that boundary without becoming a competing source
+of factual truth:
 
 - bulk file, repository, code, and JSONL conversation ingest;
 - deterministic and policy-gated model extraction into reviewable DraftProposals;
 - Scenario, Core Context, Wiki/link, retrieval, and code views that can be deleted
   and rebuilt from canonical state;
-- shared, versioned Skills with testing, approval, revision, export, and replay;
+- shared, versioned Skills with a separate idempotent product
+  proposal/receipt/audit boundary, testing, approval, revision, export, and replay;
 - deterministic Task-aware Context with selection trace and hard budgets;
 - FTS5/BM25 retrieval, optional vector/RRF fusion, Python symbol/reference/call
   indexing, and impact paths;
@@ -58,27 +59,35 @@ Files / conversations / code / task traces
              Proposal commit
                   |
                   v
-      ONE canonical Shared Mind ledger
-        |          |          |
-        |          |          +-- shared versioned Skills
-        |          +------------- Decisions / Questions / Work
-        +------------------------ Claims / Evidence / Conflicts
+      ONE canonical Shared Mind kernel ledger
+        |                 |                 |
+        |                 |                 +-- Decisions / Questions / Work
+        |                 +-------------------- Claims / Evidence / Conflicts
+        +-------------------------------------- immutable Sources
                   |
-                  v
-  disposable Scenario / Core / retrieval / code views
-                  |
-                  v
-          ContextRequest(task/query/ref/budget)
-                  |
-                  v
-        deterministic context for any client
+                  +------------------------------+
+                  |                              |
+                  v                              v
+  disposable Scenario / Core /        ProductMutationProposal
+       retrieval / code views                    |
+                  |                              v
+                  |                   shared versioned Skills
+                  +---------------+--------------+
+                                  |
+                                  v
+             ContextRequest(task/query/ref/budget)
+                                  |
+                                  v
+                deterministic context for any client
 ```
 
-The canonical kernel database owns project truth and change history. The
-product database owns staging, disposable indexes/views, Skill workflow, and
-telemetry. Factual or work-state changes still cross the kernel Proposal
-boundary. See [Product architecture](docs/product-architecture.md) for the full
-trust model.
+The kernel database owns factual/project truth and its append-only change
+history. The product database owns staging, disposable indexes/views,
+telemetry, and shared procedural Skill state. Skill changes use a versioned,
+idempotent product proposal with receipts, an audit hash chain, and replay
+verification; they do not create Agent-specific memory stores and they do not
+rewrite the kernel's factual ledger. See
+[Product architecture](docs/product-architecture.md) for the full trust model.
 
 ## Quick start
 
@@ -139,22 +148,23 @@ See the [Product guide](docs/product-guide.md) for the complete workflow.
 ## Authority and safety model
 
 - Source bytes and their hashes are evidence authority.
-- The append-only kernel ledger is canonical change authority.
-- Materialized kernel tables are replayable current state.
+- The append-only kernel ledger is factual/project change authority.
+- Materialized kernel tables are replayable current factual/project state.
 - Product Drafts do not mutate canonical state.
 - Scenario, Core Context, Wiki, retrieval, and CodeGraph data are disposable
   views, not truth.
 - LLM output cannot write canonical memory directly.
 - An active factual Claim requires verified EvidenceLink bytes.
 - Contradictory Claims remain visible in an open `FACT_CONFLICT`.
-- A stale non-commutative Proposal is rejected without advancing the ledger.
-- Skills are shared by identity and version; they are not copied into
+- A stale non-commutative kernel Proposal is rejected without advancing the ledger.
+- Skills are shared procedural state governed by product proposals, receipts,
+  audit hashes, version guards, and replay; they are not copied into
   Agent-specific memory stores.
 - A Skill must have explicit passing test evidence before approval.
 - Local mode is provider-neutral; embeddings and model extractors are optional.
 - The product web server rejects non-loopback bindings.
 
-Current kernel writes use schema `1.4.0`; frozen 1.0–1.3 history remains
+Current kernel writes use schema `1.3.0`; frozen 1.0–1.2 history remains
 readable and replay-verifiable. The separate product API and product contract
 use `shared-mind-product@1`; package version `0.3.0` introduces the product
 layer without rewriting frozen kernel history.
@@ -204,8 +214,11 @@ Scenario and retrieval determinism are included in the cross-platform subset.
 
 The earlier kernel baseline is retained in
 [GitHub Actions run 31555504041](https://github.com/ArthurCore/shared-mind/actions/runs/31555504041).
-Current product-layer evidence is recorded in the branch/PR CI run referenced by
-`ROADMAP.md` after all jobs pass.
+The product implementation branch has local contract, regression, coverage,
+packaging, and product-evaluation evidence. Hosted branch CI is currently
+unable to allocate runners because the repository account's Actions billing or
+spending limit blocks jobs before checkout; this is an external execution
+blocker rather than a test result.
 
 The checked-in [DEV-021 benchmark evidence](benchmarks/results/dev-021-2026-08-11.md)
 continues to cover the 100k-entry kernel context path. Product-level cold-start,
