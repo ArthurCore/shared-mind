@@ -8,7 +8,11 @@ from pathlib import Path
 from unittest import mock
 
 from shared_mind.product import ProductError
-from shared_mind.product_ingest import ExtractionLimits, ProductIngestError
+from shared_mind.product_ingest import (
+    DETERMINISTIC_EXTRACTOR_VERSION,
+    ExtractionLimits,
+    ProductIngestError,
+)
 
 from tests.product_support import DIRECTIVES, ProductTestCase
 
@@ -71,6 +75,9 @@ class _SlowModelExtractor:
 
 
 class ProductIngestTest(ProductTestCase):
+    def test_deterministic_extractor_version_marks_fenced_source_semantics(self) -> None:
+        self.assertEqual("deterministic-directives@2", DETERMINISTIC_EXTRACTOR_VERSION)
+
     def test_end_to_end_extraction_has_exact_evidence_and_review_boundary(self) -> None:
         source = self.write_source()
         batch = self.service.ingest([source])
@@ -131,6 +138,78 @@ class ProductIngestTest(ProductTestCase):
         draft = self.service.get_draft(extraction["draft_ids"][0])
         operation = draft["document"]["operations"][0]
         self.assertEqual("2026-01-02T03:04:05Z", operation["work_item"]["created_at"])
+
+    def test_markdown_fenced_directive_examples_are_not_extracted(self) -> None:
+        source = self.write_source(
+            content="""\
+# Contributor example
+
+```text
+WORK: P0 | Example work must not become canonical
+DECISION: <title> | <conclusion> | <rationale>
+```
+
+~~~python
+QUESTION: Mapping[str, Any],
+~~~
+
+WORK: P0 | Implement the real self-dogfooding blocker
+""",
+        )
+        batch = self.service.ingest([source])
+        extraction = self.service.extract(batch["batch_id"])
+
+        self.assertEqual(1, extraction["created"])
+        draft = self.service.get_draft(extraction["draft_ids"][0])
+        operations = draft["document"]["operations"]
+        self.assertEqual(1, len(operations))
+        self.assertEqual("CREATE_WORK_ITEM", operations[0]["op"])
+        self.assertEqual(
+            "Implement the real self-dogfooding blocker",
+            operations[0]["work_item"]["description"],
+        )
+
+    def test_conversation_fenced_directive_examples_are_not_extracted(self) -> None:
+        conversation = self.write_source(
+            "session.jsonl",
+            json.dumps(
+                {
+                    "timestamp": "2026-01-02T03:04:05Z",
+                    "content": (
+                        "```text\nWORK: P0 | Example only\n```\n"
+                        "QUESTION: Which real task is next? | Restore state first"
+                    ),
+                }
+            )
+            + "\n",
+        )
+        batch = self.service.ingest([], conversation_paths=[conversation])
+        extraction = self.service.extract(batch["batch_id"])
+
+        self.assertEqual(1, extraction["created"])
+        draft = self.service.get_draft(extraction["draft_ids"][0])
+        operations = draft["document"]["operations"]
+        self.assertEqual(1, len(operations))
+        self.assertEqual("OPEN_QUESTION", operations[0]["op"])
+        self.assertEqual(
+            "Which real task is next?",
+            operations[0]["question"]["question"],
+        )
+
+    def test_code_sources_are_indexed_but_not_directive_extracted(self) -> None:
+        source = self.write_source(
+            "module.py",
+            """\
+DECISION: Mapping[str, Any],
+WORK: P0 | This invalid Python example must stay source-only
+""",
+        )
+        batch = self.service.ingest([source], include_code=True)
+        extraction = self.service.extract(batch["batch_id"])
+
+        self.assertEqual(0, extraction["created"])
+        self.assertEqual([], extraction["draft_ids"])
+        self.assertEqual([], self.service.list_drafts(batch_id=batch["batch_id"]))
 
     def test_policy_and_resource_limits_fail_closed(self) -> None:
         source = self.write_source()
