@@ -22,16 +22,24 @@ jobs:
       - name: Apply verified payload and publish commit
         env:
           EXPECTED_SHA256: 8b297b8d1642370a086010de09f1d6c54b329b057106339aece7e50cc2b65270
+          EXPECTED_PARTS: "6"
         run: |
           set -euo pipefail
-          PAYLOAD=.github/product-implementation-payload.b64
-          if [ ! -f "$PAYLOAD" ]; then
-            echo "No implementation payload is present; nothing to apply."
+          READY=.github/product-implementation-payload.ready
+          if [ ! -f "$READY" ]; then
+            echo "Implementation payload is not marked ready; nothing to apply."
             exit 0
           fi
+          mapfile -t PARTS < <(find .github -maxdepth 1 -type f -name 'product-implementation-payload.part-*' | sort)
+          if [ "${#PARTS[@]}" -ne "$EXPECTED_PARTS" ]; then
+            echo "Expected $EXPECTED_PARTS payload parts, found ${#PARTS[@]}." >&2
+            exit 1
+          fi
+          ENCODED="$RUNNER_TEMP/product-implementation.tar.gz.b64"
           ARCHIVE="$RUNNER_TEMP/product-implementation.tar.gz"
           STAGING="$RUNNER_TEMP/product-implementation"
-          base64 --decode "$PAYLOAD" > "$ARCHIVE"
+          cat "${PARTS[@]}" > "$ENCODED"
+          base64 --decode "$ENCODED" > "$ARCHIVE"
           printf '%s  %s\n' "$EXPECTED_SHA256" "$ARCHIVE" | sha256sum --check --strict
           mkdir -p "$STAGING"
           python - "$ARCHIVE" "$STAGING" "$GITHUB_WORKSPACE" <<'PY'
@@ -101,7 +109,7 @@ jobs:
               elif destination.exists():
                   destination.unlink()
           PY
-          rm -f "$PAYLOAD"
+          rm -f "$READY" "${PARTS[@]}"
           git diff --check
           git config user.name "Shared Mind automation"
           git config user.email "40878218+ArthurCore@users.noreply.github.com"
