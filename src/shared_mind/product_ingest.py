@@ -22,7 +22,7 @@ from .workspace import Workspace, WorkspaceError
 
 
 INGEST_MANIFEST_VERSION = "ingest-manifest@1"
-DETERMINISTIC_EXTRACTOR_VERSION = "deterministic-directives@1"
+DETERMINISTIC_EXTRACTOR_VERSION = "deterministic-directives@2"
 MAX_INGEST_FILES = 10_000
 MAX_INGEST_FILE_BYTES = 1024 * 1024
 MAX_INGEST_TOTAL_BYTES = 256 * 1024 * 1024
@@ -57,6 +57,7 @@ _SKIP_DIRECTORIES = {
 }
 _SEMANTIC_UNSAFE = re.compile(r"[^a-z0-9._-]+")
 _DIRECTIVE = re.compile(r"^\s*(FACT|DECISION|QUESTION|WORK|SKILL)\s*:\s*(.+?)\s*$", re.I)
+_MARKDOWN_FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
 
 
 class ProductIngestError(Exception):
@@ -302,7 +303,7 @@ class IngestManager:
                         extractor_version=DETERMINISTIC_EXTRACTOR_VERSION,
                         mode="DETERMINISTIC",
                         model=None,
-                        prompt_version="directive-parser@1",
+                        prompt_version="directive-parser@2",
                         parameters=parameters or {},
                         disclosure_policy=None,
                     )
@@ -607,11 +608,14 @@ class IngestManager:
         operations: list[dict[str, Any]] = []
         skills: list[dict[str, Any]] = []
         diagnostics: list[dict[str, Any]] = []
+        if str(source.get("source_id", "")).startswith("code:"):
+            return {"operations": operations, "skills": skills, "diagnostics": diagnostics}
         conversation = (
             source.get("media_type") == "application/x-ndjson"
             or str(source.get("source_id", "")).startswith("conversation:")
         )
-        for directive in _iter_directives(content, conversation):
+        markdown = conversation or source.get("media_type") == "text/markdown"
+        for directive in _iter_directives(content, conversation, markdown=markdown):
             if deadline is not None and time.monotonic() > deadline:
                 raise ProductIngestError(
                     "EXTRACTION_TIMEOUT",
@@ -826,29 +830,57 @@ class IngestManager:
 # Deterministic directive parsing
 
 
-def _iter_directives(content: str, conversation: bool) -> Iterable[dict[str, Any]]:
+def _iter_directives(
+    content: str, conversation: bool, *, markdown: bool = False
+) -> Iterable[dict[str, Any]]:
     encoded = content.encode("utf-8")
     offset = 0
+    fence: tuple[str, int] | None = None
     for raw_line in encoded.splitlines(keepends=True):
         line_without_newline = raw_line.rstrip(b"\r\n")
         if not line_without_newline:
             offset += len(raw_line)
             continue
         text = line_without_newline.decode("utf-8")
-        candidates = [text]
-        if conversation:
-            try:
-                value = json.loads(text)
-            except json.JSONDecodeError:
-                value = None
-            extracted = _message_texts(value)
-            if extracted:
-                candidates = extracted
-        for candidate in candidates:
-            for candidate_line in candidate.splitlines():
-                match = _DIRECTIVE.match(candidate_line)
-                if not match:
+        if not conversation:
+            if markdown:
+                marker = _MARKDOWN_FENCE.match(text)
+                if marker:
+                    run = marker.group(1)
+                    if fence is None:
+                        fence = (run[0], len(run))
+                    elif (
+                        run[0] == fence[0]
+                        and len(run) >= fence[1]
+                        and not marker.group(2).strip()
+                    ):
+                        fence = None
+                    offset += len(raw_line)
                     continue
+                if fence is not None or text.startswith((" ", "\t")):
+                    offset += len(raw_line)
+                    continue
+            match = _DIRECTIVE.match(text)
+            if match:
+                yield {
+                    "kind": match.group(1).upper(),
+                    "payload": match.group(2).strip(),
+                    "start_byte": offset,
+                    "end_byte": offset + len(line_without_newline),
+                    "excerpt": text,
+                }
+            offset += len(raw_line)
+            continue
+        candidates = [text]
+        try:
+            value = json.loads(text)
+        except json.JSONDecodeError:
+            value = None
+        extracted = _message_texts(value)
+        if extracted:
+            candidates = extracted
+        for candidate in candidates:
+            for match in _iter_candidate_directives(candidate, markdown=markdown):
                 yield {
                     "kind": match.group(1).upper(),
                     "payload": match.group(2).strip(),
@@ -857,6 +889,31 @@ def _iter_directives(content: str, conversation: bool) -> Iterable[dict[str, Any
                     "excerpt": text,
                 }
         offset += len(raw_line)
+
+
+def _iter_candidate_directives(
+    candidate: str, *, markdown: bool
+) -> Iterable[re.Match[str]]:
+    fence: tuple[str, int] | None = None
+    for candidate_line in candidate.splitlines():
+        if markdown:
+            marker = _MARKDOWN_FENCE.match(candidate_line)
+            if marker:
+                run = marker.group(1)
+                if fence is None:
+                    fence = (run[0], len(run))
+                elif (
+                    run[0] == fence[0]
+                    and len(run) >= fence[1]
+                    and not marker.group(2).strip()
+                ):
+                    fence = None
+                continue
+            if fence is not None or candidate_line.startswith((" ", "\t")):
+                continue
+        match = _DIRECTIVE.match(candidate_line)
+        if match:
+            yield match
 
 
 def _message_texts(value: Any) -> list[str]:
