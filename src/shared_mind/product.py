@@ -32,6 +32,7 @@ from .retrieval import RetrievalError, RetrievalService, VectorRanker
 from .service import WorkspaceService
 from .skills import (
     SkillError,
+    StepExecutor,
     approve_skill,
     create_skill,
     execute_skill,
@@ -618,7 +619,7 @@ class ProductService:
         skill_id: str,
         version: int,
         *,
-        executor: Callable[[str, Mapping[str, Any]], Any],
+        executor: StepExecutor,
         context: Mapping[str, Any] | None = None,
         validators: Mapping[str, Callable[[Any, Mapping[str, Any]], bool]] | None = None,
     ) -> dict[str, Any]:
@@ -1155,7 +1156,7 @@ class ProductService:
         skill_id: str,
         version: int,
         *,
-        executor: Callable[[str, Mapping[str, Any]], Any],
+        executor: StepExecutor,
         baseline: Callable[[], Mapping[str, Any]],
         context: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:

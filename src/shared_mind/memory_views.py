@@ -357,16 +357,23 @@ class MemoryViewBuilder:
         # truth; it can be discarded and rebuilt from the canonical records.
         decisions = [record for record in records if record["kind"] == "DECISION_RECORD"]
         for decision in decisions:
-            member_ids = {str(decision["object_id"]), *map(str, decision["related_ids"])}
+            decision_member_ids: set[str] = {
+                str(decision["object_id"]),
+                *map(str, decision["related_ids"]),
+            }
             replacement = decision["document"].get("replaced_by_decision_id")
             if isinstance(replacement, str):
-                member_ids.add(replacement)
+                decision_member_ids.add(replacement)
             # Preserve the reverse edge so a replacement decision can show the
             # superseded record without relying on a global project scenario.
             for other in decisions:
                 if other["document"].get("replaced_by_decision_id") == decision["object_id"]:
-                    member_ids.add(str(other["object_id"]))
-            member_records = [record_by_id[item] for item in sorted(member_ids) if item in record_by_id]
+                    decision_member_ids.add(str(other["object_id"]))
+            member_records = [
+                record_by_id[item]
+                for item in sorted(decision_member_ids)
+                if item in record_by_id
+            ]
             conflict_ids = sorted(
                 item["object_id"]
                 for item in member_records
@@ -382,7 +389,7 @@ class MemoryViewBuilder:
                     "scenario_kind": "DECISION_THREAD",
                     "decision_id": decision["object_id"],
                     "summary": _scenario_summary(member_records),
-                    "member_object_ids": sorted(member_ids),
+                    "member_object_ids": sorted(decision_member_ids),
                     "open_conflict_ids": conflict_ids,
                 },
             )
@@ -394,12 +401,19 @@ class MemoryViewBuilder:
             (record for record in records if record["kind"] == "CONFLICT" and record["status"] == "OPEN"),
             key=lambda item: str(item["object_id"]),
         ):
-            member_ids = {str(conflict["object_id"]), *map(str, conflict["related_ids"])}
+            conflict_member_ids: set[str] = {
+                str(conflict["object_id"]),
+                *map(str, conflict["related_ids"]),
+            }
             for claim_id in conflict["related_ids"]:
                 claim = record_by_id.get(str(claim_id))
                 if claim:
-                    member_ids.update(map(str, claim["source_revision_ids"]))
-            member_records = [record_by_id[item] for item in sorted(member_ids) if item in record_by_id]
+                    conflict_member_ids.update(map(str, claim["source_revision_ids"]))
+            member_records = [
+                record_by_id[item]
+                for item in sorted(conflict_member_ids)
+                if item in record_by_id
+            ]
             digest = sha256_json(str(conflict["object_id"])).split(":", 1)[1][:16]
             add_scenario(
                 artifact_id=f"artifact_scenario-incident-{digest}",
@@ -410,7 +424,7 @@ class MemoryViewBuilder:
                     "scenario_kind": "INCIDENT",
                     "conflict_id": conflict["object_id"],
                     "summary": _scenario_summary(member_records),
-                    "member_object_ids": sorted(member_ids),
+                    "member_object_ids": sorted(conflict_member_ids),
                     "open_conflict_ids": [conflict["object_id"]],
                 },
             )
@@ -427,8 +441,15 @@ class MemoryViewBuilder:
             ),
             key=lambda item: str(item["object_id"]),
         ):
-            member_ids = {str(work_item["object_id"]), *map(str, work_item["related_ids"])}
-            member_records = [record_by_id[item] for item in sorted(member_ids) if item in record_by_id]
+            work_member_ids: set[str] = {
+                str(work_item["object_id"]),
+                *map(str, work_item["related_ids"]),
+            }
+            member_records = [
+                record_by_id[item]
+                for item in sorted(work_member_ids)
+                if item in record_by_id
+            ]
             conflict_ids = sorted(
                 item["object_id"]
                 for item in member_records
@@ -444,7 +465,7 @@ class MemoryViewBuilder:
                     "scenario_kind": "WORKSTREAM",
                     "work_item_id": work_item["object_id"],
                     "summary": _scenario_summary(member_records),
-                    "member_object_ids": sorted(member_ids),
+                    "member_object_ids": sorted(work_member_ids),
                     "open_conflict_ids": conflict_ids,
                 },
             )

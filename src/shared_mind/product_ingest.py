@@ -155,7 +155,7 @@ class IngestManager:
             item["item_id"]: item for item in self.store.list_ingest_items(batch_id)
         } if existing else {}
         now = utc_now()
-        batch = {
+        batch: dict[str, Any] = {
             "object_type": "INGEST_BATCH",
             "batch_id": batch_id,
             "manifest_hash": manifest_hash,
@@ -863,19 +863,19 @@ def _message_texts(value: Any) -> list[str]:
     if isinstance(value, str):
         return [value]
     if isinstance(value, Mapping):
-        result: list[str] = []
+        mapping_result: list[str] = []
         for key in ("content", "text", "message", "output", "input"):
             item = value.get(key)
             if isinstance(item, str):
-                result.append(item)
+                mapping_result.append(item)
             elif isinstance(item, list):
-                result.extend(_message_texts(item))
-        return result
+                mapping_result.extend(_message_texts(item))
+        return mapping_result
     if isinstance(value, list):
-        result: list[str] = []
+        list_result: list[str] = []
         for item in value:
-            result.extend(_message_texts(item))
-        return result
+            list_result.extend(_message_texts(item))
+        return list_result
     return []
 
 
