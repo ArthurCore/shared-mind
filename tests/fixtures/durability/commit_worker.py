@@ -19,8 +19,12 @@ from shared_mind.canonical import canonical_json
 
 
 def _barrier(ready: Path, release: Path, payload: dict[str, Any]) -> None:
-    ready.write_text(canonical_json(payload) + "\n", encoding="utf-8")
-    deadline = time.monotonic() + 8
+    # Publish the barrier atomically. A polling parent must never observe the
+    # ready path between file creation and the JSON payload being fully written.
+    temporary = ready.with_name(f".{ready.name}.{os.getpid()}.tmp")
+    temporary.write_text(canonical_json(payload) + "\n", encoding="utf-8")
+    os.replace(temporary, ready)
+    deadline = time.monotonic() + 30
     while not release.exists():
         if time.monotonic() >= deadline:
             raise TimeoutError(f"durability barrier timed out: {ready.name}")
