@@ -1,5 +1,21 @@
 # Shared Mind contributor guide
 
+## Current dogfooding entrypoint
+
+For DEV-080 and later self-dogfooding work, read these files before changing code:
+
+1. [`docs/DEV-080-self-dogfooding.md`](docs/DEV-080-self-dogfooding.md)
+2. [`docs/self-dogfooding-bootstrap.md`](docs/self-dogfooding-bootstrap.md)
+3. [`ROADMAP.md`](ROADMAP.md)
+
+A fresh Codex/Claude/GPT session should recover project state from the local Shared Mind workspace instead of relying on a long explanatory prompt from the user. The recommended local workspace is `../shared-mind-memory`, outside this Git repository.
+
+The first self-dogfooding invariant is:
+
+> **Use Shared Mind to understand and continue Shared Mind.**
+
+After a real development task, capture the task trace back into the same Shared State before ending the session. Never create client-specific project memories.
+
 ## Product boundary
 
 Shared Mind preserves sources, assertions, evidence, conflicts, decisions,
