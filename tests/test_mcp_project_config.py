@@ -33,9 +33,9 @@ RESOURCE_URIS = (
     "shared-mind://contract/predicate-registry",
 )
 ROLE_FILES = {
-    "explorer": ".codex/agents/explorer.toml",
-    "reviewer": ".codex/agents/reviewer.toml",
-    "docs_researcher": ".codex/agents/docs-researcher.toml",
+    "explorer": "explorer.toml",
+    "reviewer": "reviewer.toml",
+    "docs_researcher": "docs-researcher.toml",
 }
 
 
@@ -56,15 +56,21 @@ class McpProjectConfigurationContractTest(unittest.TestCase):
 
     def test_three_codex_roles_use_project_local_read_only_layers(self) -> None:
         config = self.load_toml(CONFIG_PATH)
-        agents = config["agents"]
+        agents = config.get("agents", {})
 
-        for role, relative_path in ROLE_FILES.items():
+        for role, filename in ROLE_FILES.items():
             with self.subTest(role=role):
-                self.assertIn(role, agents)
-                self.assertEqual(relative_path, agents[role]["config_file"])
-                role_path = ROOT / relative_path
+                # Standalone project roles are auto-discovered below
+                # .codex/agents. Duplicating them as config_file overlays is
+                # error-prone because those paths resolve relative to
+                # .codex/config.toml, not the repository root.
+                self.assertNotIn(role, agents)
+                role_path = CONFIG_PATH.parent / "agents" / filename
                 self.assertTrue(role_path.is_file(), role_path)
                 layer = self.load_toml(role_path)
+                self.assertEqual(role, layer["name"])
+                self.assertTrue(str(layer["description"]).strip())
+                self.assertTrue(str(layer["developer_instructions"]).strip())
                 self.assertEqual("read-only", layer["sandbox_mode"])
                 instructions = str(layer.get("developer_instructions", "")).lower()
                 self.assertIn("read-only", instructions)
