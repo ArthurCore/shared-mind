@@ -80,8 +80,8 @@ jobs:
           python -m compileall -q src
           python -m unittest discover -s tests -p 'test_memory_views_product.py' -v
           python -m unittest discover -s tests -p 'test_product_ingest.py' -v
-          python -m unittest discover -s tests -p 'test_skills.py' -v
-          python -m unittest discover -s tests -p 'test_product_surface.py' -v
+          python -m unittest discover -s tests -p 'test_shared_skills.py' -v
+          python -m unittest discover -s tests -p 'test_product_interfaces.py' -v
           git diff --check
           git config user.name "Shared Mind automation"
           git config user.email "40878218+ArthurCore@users.noreply.github.com"
