@@ -45,9 +45,6 @@ class MemoryViewBuilder:
     def atomic_records(self, projection: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
         state = dict(projection or self.projection())
         records: list[dict[str, Any]] = []
-        source_by_revision = {
-            item["source_revision"]["revision_id"]: item for item in state["sources"]
-        }
         evidence_by_claim: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for item in state["evidence"]:
             evidence_by_claim[item["claim_id"]].append(item)

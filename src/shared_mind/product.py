@@ -29,7 +29,7 @@ from .product_store import (
     utc_now,
 )
 from .retrieval import RetrievalError, RetrievalService, VectorRanker
-from .service import OperationResult, WorkspaceService
+from .service import WorkspaceService
 from .skills import (
     SkillError,
     approve_skill,

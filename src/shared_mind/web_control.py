@@ -18,7 +18,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from .canonical import canonical_json
 from .product import ProductError, ProductService
-from .workspace import Workspace, WorkspaceError
+from .workspace import Workspace
 
 
 MAX_BODY_BYTES = 1024 * 1024

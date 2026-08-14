@@ -5,9 +5,7 @@ from __future__ import annotations
 import base64
 import concurrent.futures
 import json
-import os
 import re
-import shutil
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -16,9 +14,8 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Protocol, Sequence
 
 from .canonical import canonical_json, sha256_bytes, sha256_json
-from .kernel import Kernel
 from .product_contract import validate_product_object
-from .product_store import ProductStore, ProductStoreError, utc_now
+from .product_store import ProductStore, utc_now
 from .service import WorkspaceService
 from .skills import build_skill_record, skill_id_from_purpose
 from .workspace import Workspace, WorkspaceError

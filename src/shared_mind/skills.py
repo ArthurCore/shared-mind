@@ -7,7 +7,6 @@ from TESTED/APPROVED promotion, and every version is content-addressed.
 
 from __future__ import annotations
 
-import io
 import json
 import re
 import zipfile
@@ -16,7 +15,7 @@ from typing import Any, Callable, Mapping, Protocol, Sequence
 
 from .canonical import canonical_json, sha256_bytes, sha256_json
 from .product_contract import validate_product_object
-from .product_store import ProductStore, ProductStoreError, utc_now
+from .product_store import ProductStore, utc_now
 
 
 SKILL_PACKAGE_VERSION = "skill-package@1"
