@@ -31,25 +31,21 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[mcp,quality]"
       - name: Validate executable contracts
-        run: python contracts/validate_contract.py
-      - name: Run the full suite with branch coverage
-        shell: bash
         run: |
-          mkdir -p .ci/test-results
-          test_status=0
-          coverage_status=0
-          set -o pipefail
-          python -m coverage run -m unittest discover -s tests -v 2>&1 \
-            | tee ".ci/test-results/unittest-${{ matrix.python-version }}.log" \
-            || test_status=$?
-          python -m coverage xml \
-            -o ".ci/test-results/coverage-${{ matrix.python-version }}.xml" \
-            || true
-          python -m coverage report --fail-under=80 || coverage_status=$?
-          if [ "$test_status" -ne 0 ]; then
-            exit "$test_status"
-          fi
-          exit "$coverage_status"
+          python contracts/validate_contract.py
+          python contracts/validate_product_contract.py
+      - name: Run the full suite with branch coverage
+        run: >-
+          python tools/run_parallel_coverage.py
+          --workers 2
+          --timeout 2400
+          --fail-under 80
+          --log-dir ".ci/test-results/per-file-${{ matrix.python-version }}"
+          --summary-log ".ci/test-results/unittest-${{ matrix.python-version }}.log"
+      - name: Export combined coverage XML
+        run: >-
+          python -m coverage xml
+          -o ".ci/test-results/coverage-${{ matrix.python-version }}.xml"
       - name: Retain coverage and unittest evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -85,6 +81,10 @@ jobs:
         run: python -m unittest discover -s tests -p "test_projection.py" -v
       - name: Check deterministic structured-query ordering
         run: python -m unittest discover -s tests -p "test_structured_query.py" -v
+      - name: Check deterministic shared-memory views
+        run: python -m unittest discover -s tests -p "test_memory_views_product.py" -v
+      - name: Check deterministic retrieval and code index
+        run: python -m unittest discover -s tests -p "test_product_retrieval.py" -v
 
   quality-and-security:
     name: Compile, lint, type, and security gates
@@ -105,9 +105,19 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[mcp,quality]"
       - name: Compile every shipped Python module
-        run: python -m compileall -q src contracts/validate_contract.py
+        run: >-
+          python -m compileall -q
+          src
+          contracts/validate_contract.py
+          contracts/validate_product_contract.py
+          tools/run_parallel_coverage.py
       - name: Lint shipped source and contract tooling
-        run: ruff check src contracts/validate_contract.py
+        run: >-
+          ruff check
+          src
+          contracts/validate_contract.py
+          contracts/validate_product_contract.py
+          tools/run_parallel_coverage.py
       - name: Type-check deterministic canonical and read surfaces
         run: >-
           mypy --follow-imports=skip
@@ -115,6 +125,7 @@ jobs:
           src/shared_mind/query.py
           src/shared_mind/projection.py
           src/shared_mind/validation.py
+          src/shared_mind/product_contract.py
       - name: Audit installed dependencies
         run: |
           python -m pip freeze --exclude-editable > "$RUNNER_TEMP/audit-requirements.txt"
@@ -160,6 +171,8 @@ jobs:
           .venv-base/bin/pip install "$WHEEL_PATH"
           .venv-base/bin/python -c "import importlib.util; assert importlib.util.find_spec('mcp') is None"
           .venv-base/bin/shared-mind --help
+          .venv-base/bin/shared-mind-product --help
+          .venv-base/bin/shared-mind-web --help
           .venv-base/bin/python - <<'PY'
           from pathlib import Path
           import sys
@@ -168,6 +181,8 @@ jobs:
           expected = {
               "shared-mind-kernel.schema.v1.json",
               "shared-mind-read.schema.v1.json",
+              "shared-mind-product.schema.v1.json",
+              "product-conformance-fixtures.v1.json",
               "atlas-predicate-registry.v1.json",
           }
           missing = sorted(name for name in expected if not (contract_root / name).is_file())
@@ -181,6 +196,7 @@ jobs:
           .venv-mcp/bin/pip install "${WHEEL_PATH}[mcp]"
           .venv-mcp/bin/python -c "import mcp"
           .venv-mcp/bin/shared-mind-mcp --help
+          .venv-mcp/bin/shared-mind-product-mcp --help
       - name: Retain wheel and release-manifest evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
