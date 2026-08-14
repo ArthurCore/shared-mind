@@ -21,6 +21,7 @@ jobs:
       - name: Apply exact lint cleanup and verify
         run: |
           set -euo pipefail
+          export PYTHONPATH=src
           READY=.github/apply-product-lint-cleanup.ready
           WORKFLOW=.github/workflows/apply-product-lint-cleanup.yml
           if [ ! -f "$READY" ]; then
