@@ -154,9 +154,10 @@ See the [Product guide](docs/product-guide.md) for the complete workflow.
 - Local mode is provider-neutral; embeddings and model extractors are optional.
 - The product web server rejects non-loopback bindings.
 
-Current kernel writes use schema `1.3.0`. The separate product API and product
-contract use `shared-mind-product@1`; package version `0.3.0` introduces the
-product layer without rewriting frozen kernel history.
+Current kernel writes use schema `1.4.0`; frozen 1.0–1.3 history remains
+readable and replay-verifiable. The separate product API and product contract
+use `shared-mind-product@1`; package version `0.3.0` introduces the product
+layer without rewriting frozen kernel history.
 
 ## Interfaces
 
