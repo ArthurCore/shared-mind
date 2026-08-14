@@ -2,6 +2,8 @@
 
 The repository contains durability and multi-process acceptance tests that are
 safer and substantially faster when test modules run in separate interpreters.
+Process-heavy modules run in an exclusive lane after the normal parallel lane
+so they do not compete with one another for SQLite locks or CPU scheduling.
 This runner preserves a complete per-file log while still enforcing one
 combined coverage threshold.
 """
@@ -17,6 +19,15 @@ import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
+
+
+_EXCLUSIVE_TEST_FILES = frozenset(
+    {
+        "test_multi_client_acceptance.py",
+        "test_process_durability.py",
+        "test_concurrency.py",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -133,6 +144,25 @@ def _run_command(root: Path, command: list[str]) -> tuple[int, str]:
     return completed.returncode, completed.stdout
 
 
+def _record_result(
+    result: TestResult,
+    *,
+    completed_count: int,
+    total_count: int,
+    results: list[TestResult],
+    summary_lines: list[str],
+) -> None:
+    results.append(result)
+    line = (
+        f"[{completed_count:02d}/{total_count}] "
+        f"{'PASS' if result.returncode == 0 else 'FAIL'} "
+        f"{result.path.as_posix()} "
+        f"({result.test_count} tests, {result.seconds:.3f}s)"
+    )
+    print(line, flush=True)
+    summary_lines.append(line)
+
+
 def main() -> int:
     args = _parse_args()
     root = args.root.resolve()
@@ -160,6 +190,13 @@ def main() -> int:
             + ", ".join(duplicate_names)
         )
 
+    parallel_files = [
+        path for path in test_files if path.name not in _EXCLUSIVE_TEST_FILES
+    ]
+    exclusive_files = [
+        path for path in test_files if path.name in _EXCLUSIVE_TEST_FILES
+    ]
+
     log_dir.mkdir(parents=True, exist_ok=True)
     summary_log.parent.mkdir(parents=True, exist_ok=True)
     for coverage_path in root.glob(".coverage*"):
@@ -168,6 +205,7 @@ def main() -> int:
     started = time.monotonic()
     results: list[TestResult] = []
     summary_lines: list[str] = []
+    completed_count = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.workers) as executor:
         futures = {
             executor.submit(
@@ -178,19 +216,36 @@ def main() -> int:
                 log_dir=log_dir,
                 timeout=args.timeout,
             ): test_path
-            for test_path in test_files
+            for test_path in parallel_files
         }
         for future in concurrent.futures.as_completed(futures):
-            result = future.result()
-            results.append(result)
-            line = (
-                f"[{len(results):02d}/{len(test_files)}] "
-                f"{'PASS' if result.returncode == 0 else 'FAIL'} "
-                f"{result.path.as_posix()} "
-                f"({result.test_count} tests, {result.seconds:.3f}s)"
+            completed_count += 1
+            _record_result(
+                future.result(),
+                completed_count=completed_count,
+                total_count=len(test_files),
+                results=results,
+                summary_lines=summary_lines,
             )
-            print(line, flush=True)
-            summary_lines.append(line)
+
+    # These modules intentionally exercise multiple OS processes and SQLite
+    # writers.  Running them alone prevents unrelated parallel test workers from
+    # turning scheduler contention into spurious database-lock failures.
+    for test_path in exclusive_files:
+        completed_count += 1
+        _record_result(
+            _run_test_file(
+                root=root,
+                tests_root=tests_root,
+                test_path=test_path,
+                log_dir=log_dir,
+                timeout=args.timeout,
+            ),
+            completed_count=completed_count,
+            total_count=len(test_files),
+            results=results,
+            summary_lines=summary_lines,
+        )
 
     failures = [result for result in results if result.returncode != 0]
     if not failures:
