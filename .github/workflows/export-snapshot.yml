@@ -1,0 +1,30 @@
+name: Export repository snapshot
+
+on:
+  push:
+    branches:
+      - agent/product-roadmap-implementation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Create repository snapshot
+        run: |
+          tar --exclude=.git -czf "$RUNNER_TEMP/shared-mind-snapshot.tar.gz" .
+      - name: Upload repository snapshot
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: shared-mind-repository-snapshot
+          path: ${{ runner.temp }}/shared-mind-snapshot.tar.gz
+          if-no-files-found: error
+          retention-days: 1
