@@ -54,6 +54,7 @@ jobs:
           path: |
             .ci/test-results/unittest-${{ matrix.python-version }}.log
             .ci/test-results/coverage-${{ matrix.python-version }}.xml
+            .ci/test-results/per-file-${{ matrix.python-version }}/
           if-no-files-found: warn
           retention-days: 14
 
