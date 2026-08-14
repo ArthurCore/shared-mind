@@ -1,0 +1,941 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shared-mind.local/contracts/shared-mind-product.schema.v1.json",
+  "title": "Shared Mind product-layer contracts",
+  "$defs": {
+    "Hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "Timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "SemanticId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{1,31}:[a-z0-9][a-z0-9._-]{0,127}$"
+    },
+    "IngestItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "batch_id",
+        "item_id",
+        "source_path",
+        "source_id",
+        "fingerprint",
+        "media_type",
+        "status"
+      ],
+      "properties": {
+        "batch_id": {
+          "type": "string",
+          "pattern": "^batch_[0-9a-f]{24}$"
+        },
+        "item_id": {
+          "type": "string",
+          "pattern": "^item_[0-9a-f]{24}$"
+        },
+        "source_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "source_id": {
+          "$ref": "#/$defs/SemanticId"
+        },
+        "fingerprint": {
+          "$ref": "#/$defs/Hash"
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "captured_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "status": {
+          "enum": [
+            "PENDING",
+            "IMPORTED",
+            "UNCHANGED",
+            "FAILED",
+            "SKIPPED"
+          ]
+        },
+        "revision_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "error_code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "IngestBatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "object_type",
+        "batch_id",
+        "manifest_hash",
+        "status",
+        "created_at",
+        "updated_at",
+        "items",
+        "options"
+      ],
+      "properties": {
+        "object_type": {
+          "const": "INGEST_BATCH"
+        },
+        "batch_id": {
+          "type": "string",
+          "pattern": "^batch_[0-9a-f]{24}$"
+        },
+        "manifest_hash": {
+          "$ref": "#/$defs/Hash"
+        },
+        "status": {
+          "enum": [
+            "PENDING",
+            "RUNNING",
+            "COMPLETED",
+            "PARTIAL",
+            "FAILED"
+          ]
+        },
+        "created_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updated_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "items": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "$ref": "#/$defs/IngestItem"
+          }
+        },
+        "options": {
+          "type": "object"
+        },
+        "summary": {
+          "type": "object"
+        }
+      }
+    },
+    "ExtractionProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "extractor_id",
+        "extractor_version",
+        "mode",
+        "generated_at",
+        "input_revision_ids",
+        "input_hashes",
+        "prompt_version",
+        "parameters"
+      ],
+      "properties": {
+        "extractor_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "extractor_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "mode": {
+          "enum": [
+            "DETERMINISTIC",
+            "MODEL_BACKED"
+          ]
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256
+        },
+        "prompt_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "generated_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "input_revision_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "input_hashes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/Hash"
+          }
+        },
+        "parameters": {
+          "type": "object"
+        },
+        "disclosure_policy": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    },
+    "DraftProposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "object_type",
+        "draft_id",
+        "batch_id",
+        "draft_kind",
+        "status",
+        "version",
+        "dependency_digest",
+        "created_at",
+        "updated_at",
+        "document",
+        "provenance"
+      ],
+      "properties": {
+        "object_type": {
+          "const": "DRAFT_PROPOSAL"
+        },
+        "draft_id": {
+          "type": "string",
+          "pattern": "^draft_[0-9a-f]{24}$"
+        },
+        "batch_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "draft_kind": {
+          "enum": [
+            "KERNEL_PROPOSAL",
+            "SKILL",
+            "MEMORY_ARTIFACT"
+          ]
+        },
+        "status": {
+          "enum": [
+            "DRAFT",
+            "REVIEWED",
+            "REJECTED",
+            "COMMITTED",
+            "EXPIRED",
+            "FAILED"
+          ]
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "dependency_digest": {
+          "$ref": "#/$defs/Hash"
+        },
+        "created_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updated_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "document": {
+          "type": "object"
+        },
+        "provenance": {
+          "$ref": "#/$defs/ExtractionProvenance"
+        }
+      }
+    },
+    "DerivedMemoryArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "object_type",
+        "artifact_id",
+        "artifact_type",
+        "scope",
+        "title",
+        "status",
+        "version",
+        "dependency_digest",
+        "builder_version",
+        "created_at",
+        "updated_at",
+        "document",
+        "provenance"
+      ],
+      "properties": {
+        "object_type": {
+          "const": "DERIVED_MEMORY_ARTIFACT"
+        },
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[a-z0-9._-]{3,160}$"
+        },
+        "artifact_type": {
+          "enum": [
+            "ATOMIC_MAP",
+            "SCENARIO",
+            "CORE_CONTEXT",
+            "WIKI_PAGE",
+            "LINK_GRAPH",
+            "CODE_INDEX"
+          ]
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "status": {
+          "enum": [
+            "READY",
+            "STALE",
+            "FAILED",
+            "DEPRECATED"
+          ]
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "dependency_digest": {
+          "$ref": "#/$defs/Hash"
+        },
+        "builder_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "created_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updated_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "document": {
+          "type": "object"
+        },
+        "provenance": {
+          "type": "object"
+        }
+      }
+    },
+    "SkillRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "object_type",
+        "skill_id",
+        "version",
+        "status",
+        "purpose",
+        "triggers",
+        "preconditions",
+        "steps",
+        "resources",
+        "expected_outputs",
+        "validation_rules",
+        "content_hash",
+        "created_at",
+        "updated_at",
+        "document",
+        "provenance"
+      ],
+      "properties": {
+        "object_type": {
+          "const": "SKILL_RECORD"
+        },
+        "skill_id": {
+          "$ref": "#/$defs/SemanticId"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "enum": [
+            "DRAFT",
+            "TESTED",
+            "APPROVED",
+            "DEPRECATED"
+          ]
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "triggers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "preconditions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "content_hash"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024
+              },
+              "content_hash": {
+                "$ref": "#/$defs/Hash"
+              },
+              "source_revision_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "expected_outputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "validation_rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object"
+          }
+        },
+        "content_hash": {
+          "$ref": "#/$defs/Hash"
+        },
+        "created_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "updated_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "document": {
+          "type": "object"
+        },
+        "provenance": {
+          "type": "object"
+        }
+      }
+    },
+    "ContextRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "object_type",
+        "request_version",
+        "task",
+        "purpose",
+        "query",
+        "references",
+        "depth",
+        "budget_bytes",
+        "budget_tokens",
+        "hints"
+      ],
+      "properties": {
+        "object_type": {
+          "const": "CONTEXT_REQUEST"
+        },
+        "request_version": {
+          "const": "context-request@1"
+        },
+        "task": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        },
+        "purpose": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "query": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 8192
+        },
+        "references": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "depth": {
+          "enum": [
+            "SUMMARY",
+            "DETAIL",
+            "EVIDENCE"
+          ]
+        },
+        "budget_bytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 256,
+          "maximum": 10485760
+        },
+        "budget_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 64,
+          "maximum": 2621440
+        },
+        "hints": {
+          "type": "object",
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "agent_id"
+                ]
+              },
+              {
+                "required": [
+                  "model"
+                ]
+              },
+              {
+                "required": [
+                  "profile"
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    "TelemetryEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "object_type",
+        "event_id",
+        "event_type",
+        "occurred_at",
+        "success",
+        "metadata"
+      ],
+      "properties": {
+        "object_type": {
+          "const": "PRODUCT_TELEMETRY_EVENT"
+        },
+        "event_id": {
+          "type": "string",
+          "pattern": "^event_[0-9a-f]{24}$"
+        },
+        "event_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "object_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "occurred_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "success": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "metadata": {
+          "type": "object"
+        }
+      }
+    },
+    "ProductSkillOperation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op_id",
+            "op",
+            "skill"
+          ],
+          "properties": {
+            "op_id": {
+              "type": "string",
+              "pattern": "^product_op_[0-9a-f]{24}$"
+            },
+            "op": {
+              "enum": [
+                "CREATE_SKILL",
+                "IMPORT_SKILL"
+              ]
+            },
+            "skill": {
+              "$ref": "#/$defs/SkillRecord"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op_id",
+            "op",
+            "skill_id",
+            "expected_version",
+            "replacement_skill"
+          ],
+          "properties": {
+            "op_id": {
+              "type": "string",
+              "pattern": "^product_op_[0-9a-f]{24}$"
+            },
+            "op": {
+              "const": "REVISE_SKILL"
+            },
+            "skill_id": {
+              "$ref": "#/$defs/SemanticId"
+            },
+            "expected_version": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "replacement_skill": {
+              "$ref": "#/$defs/SkillRecord"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op_id",
+            "op",
+            "skill_id",
+            "version",
+            "expected_status",
+            "test_evidence"
+          ],
+          "properties": {
+            "op_id": {
+              "type": "string",
+              "pattern": "^product_op_[0-9a-f]{24}$"
+            },
+            "op": {
+              "const": "MARK_SKILL_TESTED"
+            },
+            "skill_id": {
+              "$ref": "#/$defs/SemanticId"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "expected_status": {
+              "const": "DRAFT"
+            },
+            "test_evidence": {
+              "type": "object"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op_id",
+            "op",
+            "skill_id",
+            "version",
+            "expected_status",
+            "approval"
+          ],
+          "properties": {
+            "op_id": {
+              "type": "string",
+              "pattern": "^product_op_[0-9a-f]{24}$"
+            },
+            "op": {
+              "const": "APPROVE_SKILL"
+            },
+            "skill_id": {
+              "$ref": "#/$defs/SemanticId"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "expected_status": {
+              "const": "TESTED"
+            },
+            "approval": {
+              "type": "object"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "op_id",
+            "op",
+            "skill_id",
+            "version",
+            "expected_status",
+            "rationale"
+          ],
+          "properties": {
+            "op_id": {
+              "type": "string",
+              "pattern": "^product_op_[0-9a-f]{24}$"
+            },
+            "op": {
+              "const": "DEPRECATE_SKILL"
+            },
+            "skill_id": {
+              "$ref": "#/$defs/SemanticId"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "expected_status": {
+              "enum": [
+                "DRAFT",
+                "TESTED",
+                "APPROVED"
+              ]
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            }
+          }
+        }
+      ]
+    },
+    "ProductMutationProposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "object_type",
+        "proposal_id",
+        "idempotency_key",
+        "proposer",
+        "proposed_at",
+        "expected_product_state_hash",
+        "operations"
+      ],
+      "properties": {
+        "object_type": {
+          "const": "PRODUCT_MUTATION_PROPOSAL"
+        },
+        "proposal_id": {
+          "type": "string",
+          "pattern": "^product_proposal_[0-9a-f]{24}$"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+        },
+        "proposer": {
+          "$ref": "#/$defs/SemanticId"
+        },
+        "proposed_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "expected_product_state_hash": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "operations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/ProductSkillOperation"
+          }
+        }
+      }
+    },
+    "ProductMutationReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "object_type",
+        "receipt_id",
+        "proposal_id",
+        "proposal_hash",
+        "idempotency_key",
+        "outcome",
+        "reason_codes",
+        "product_state_hash_before",
+        "product_state_hash_after",
+        "operation_count",
+        "decided_at"
+      ],
+      "properties": {
+        "object_type": {
+          "const": "PRODUCT_MUTATION_RECEIPT"
+        },
+        "receipt_id": {
+          "type": "string",
+          "pattern": "^product_receipt_[0-9a-f]{24}$"
+        },
+        "proposal_id": {
+          "type": "string",
+          "pattern": "^product_proposal_[0-9a-f]{24}$"
+        },
+        "proposal_hash": {
+          "$ref": "#/$defs/Hash"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+        },
+        "outcome": {
+          "enum": [
+            "COMMITTED",
+            "VALIDATION_ERROR",
+            "TRANSACTION_CONFLICT"
+          ]
+        },
+        "reason_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "product_state_hash_before": {
+          "$ref": "#/$defs/Hash"
+        },
+        "product_state_hash_after": {
+          "$ref": "#/$defs/Hash"
+        },
+        "operation_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 64
+        },
+        "decided_at": {
+          "$ref": "#/$defs/Timestamp"
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/IngestBatch"
+    },
+    {
+      "$ref": "#/$defs/DraftProposal"
+    },
+    {
+      "$ref": "#/$defs/DerivedMemoryArtifact"
+    },
+    {
+      "$ref": "#/$defs/SkillRecord"
+    },
+    {
+      "$ref": "#/$defs/ContextRequest"
+    },
+    {
+      "$ref": "#/$defs/TelemetryEvent"
+    },
+    {
+      "$ref": "#/$defs/ProductMutationProposal"
+    },
+    {
+      "$ref": "#/$defs/ProductMutationReceipt"
+    }
+  ]
+}

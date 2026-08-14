@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Sequence, TextIO
 
 from .canonical import canonical_json
+from .product import ProductError, ProductService
 from .service import OperationResult, WorkspaceService
 from .workspace import Workspace, WorkspaceError
 
@@ -62,6 +63,13 @@ def build_parser() -> argparse.ArgumentParser:
     context_parser = commands.add_parser("context")
     context_parser.add_argument("--project")
     context_parser.add_argument("--subject")
+    context_parser.add_argument("--task")
+    context_parser.add_argument("--purpose")
+    context_parser.add_argument("--query")
+    context_parser.add_argument("--ref", dest="references", action="append")
+    context_parser.add_argument(
+        "--depth", choices=("SUMMARY", "DETAIL", "EVIDENCE"), default="DETAIL"
+    )
     context_parser.add_argument("--budget-tokens", type=_positive_integer)
     context_parser.add_argument("--budget-bytes", type=_positive_integer)
 
@@ -134,6 +142,15 @@ def main(
         raise CliUsageError(f"Unsupported command: {arguments.command}")
     except CliUsageError as exc:
         return _emit(output, False, "USAGE_ERROR", message=str(exc), exit_code=EXIT_USAGE)
+    except ProductError as exc:
+        return _emit(
+            output,
+            False,
+            exc.code,
+            data=exc.data,
+            message=exc.message,
+            exit_code=EXIT_VALIDATION_ERROR,
+        )
     except WorkspaceError as exc:
         return _emit(
             output,
@@ -298,6 +315,35 @@ def _project_command(
 def _context_command(
     workspace: Workspace, arguments: argparse.Namespace, output: TextIO
 ) -> int:
+    if any(
+        value is not None
+        for value in (arguments.task, arguments.purpose, arguments.query)
+    ) or arguments.references:
+        if not arguments.task:
+            return _emit(
+                output,
+                False,
+                "CONTEXT_TASK_REQUIRED",
+                message="--task is required for task-aware context selection.",
+                exit_code=EXIT_VALIDATION_ERROR,
+            )
+        service = ProductService(workspace)
+        try:
+            context = service.context(
+                {
+                    "task": arguments.task,
+                    "purpose": arguments.purpose,
+                    "query": arguments.query,
+                    "references": arguments.references or [],
+                    "depth": arguments.depth,
+                    "budget_bytes": arguments.budget_bytes,
+                    "budget_tokens": arguments.budget_tokens,
+                    "hints": {},
+                }
+            )
+        finally:
+            service.close()
+        return _emit(output, True, "TASK_CONTEXT_READY", data={"context": context})
     if arguments.project is not None or arguments.subject is not None:
         return _emit(
             output,

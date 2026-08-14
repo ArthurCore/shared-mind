@@ -17,10 +17,17 @@ class PackageMetadataTest(unittest.TestCase):
         with (ROOT / "pyproject.toml").open("rb") as handle:
             project = tomllib.load(handle)
 
+        scripts = project["project"]["scripts"]
+        self.assertEqual("shared_mind.cli:main", scripts["shared-mind"])
+        self.assertEqual("shared_mind.mcp_server:main", scripts["shared-mind-mcp"])
         self.assertEqual(
-            "shared_mind.cli:main",
-            project["project"]["scripts"]["shared-mind"],
+            "shared_mind.product_cli:main", scripts["shared-mind-product"]
         )
+        self.assertEqual(
+            "shared_mind.product_mcp_server:main",
+            scripts["shared-mind-product-mcp"],
+        )
+        self.assertEqual("shared_mind.web_control:main", scripts["shared-mind-web"])
         packaged_contracts = project["tool"]["setuptools"]["data-files"][
             "share/shared-mind/contracts"
         ]
@@ -29,6 +36,12 @@ class PackageMetadataTest(unittest.TestCase):
         )
         self.assertIn(
             "contracts/atlas-predicate-registry.v1.json", packaged_contracts
+        )
+        self.assertIn(
+            "contracts/shared-mind-product.schema.v1.json", packaged_contracts
+        )
+        self.assertIn(
+            "contracts/product-conformance-fixtures.v1.json", packaged_contracts
         )
 
 

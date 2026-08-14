@@ -769,3 +769,19 @@ time reduction 0.059438376677이 50% 미만이라 efficiency acceptance는 fail�
 ---
 
 이 SRS 이후의 개발은 “커널 기능이 늘었는가?”만으로 평가하지 않는다. **사용자가 새 AI에게 프로젝트를 다시 설명하지 않아도 되는가, 그리고 그 편의성을 얻는 과정에서 근거와 이력이 손실되지 않는가**를 최종 기준으로 삼는다.
+
+## 21. Product layer extension (package 0.3.0)
+
+자동 수집, Draft review, Scenario/Core projection, shared Skill, Task-aware
+Context, retrieval/code index, cold start, governance, backup 및 product
+평가 요구사항은 [`SRS-product-v1.md`](SRS-product-v1.md)에 정의한다. 해당
+계층은 기존 kernel schema `1.3.0` history를 변경하지 않으며, factual/project
+state의 canonical mutation은 계속 본 문서의 Proposal/ledger 경계를 사용한다.
+
+Product 계층의 고정 불변조건은 다음과 같다.
+
+```text
+Agent A memory != Agent B memory      # 금지
+Shared Mind(A) == Shared Mind(B)      # 필수
+Context(task A) != Context(task B)    # 허용
+```

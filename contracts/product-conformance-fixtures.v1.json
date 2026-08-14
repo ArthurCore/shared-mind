@@ -1,0 +1,365 @@
+{
+  "description": "Product-layer positive and negative JSON Schema cases.",
+  "fixture_set": "shared-mind-product-contract@1",
+  "negative_schema_cases": [
+    {
+      "base_object": "ingest_batch",
+      "name": "batch_missing_manifest_hash",
+      "remove_fields": [
+        "manifest_hash"
+      ],
+      "replace_fields": {}
+    },
+    {
+      "base_object": "ingest_batch",
+      "name": "batch_unknown_field",
+      "remove_fields": [],
+      "replace_fields": {
+        "agent_id": "agent:builder"
+      }
+    },
+    {
+      "base_object": "draft_proposal",
+      "name": "draft_invalid_status",
+      "remove_fields": [],
+      "replace_fields": {
+        "status": "AUTO_APPROVED"
+      }
+    },
+    {
+      "base_object": "derived_artifact",
+      "name": "artifact_bad_type",
+      "remove_fields": [],
+      "replace_fields": {
+        "artifact_type": "AUTHORITATIVE_CORE"
+      }
+    },
+    {
+      "base_object": "skill_record",
+      "name": "skill_missing_validation",
+      "remove_fields": [
+        "validation_rules"
+      ],
+      "replace_fields": {}
+    },
+    {
+      "base_object": "context_request",
+      "name": "context_agent_partition_hint",
+      "remove_fields": [],
+      "replace_fields": {
+        "hints": {
+          "agent_id": "agent:builder"
+        }
+      }
+    },
+    {
+      "base_object": "context_request",
+      "name": "context_too_small_budget",
+      "remove_fields": [],
+      "replace_fields": {
+        "budget_bytes": 1
+      }
+    },
+    {
+      "base_object": "telemetry_event",
+      "name": "telemetry_unknown_field",
+      "remove_fields": [],
+      "replace_fields": {
+        "truth_score": 1
+      }
+    },
+    {
+      "base_object": "product_mutation_proposal",
+      "name": "product_proposal_agent_partition_field",
+      "remove_fields": [],
+      "replace_fields": {
+        "agent_id": "agent:builder"
+      }
+    },
+    {
+      "base_object": "product_mutation_proposal",
+      "name": "product_proposal_empty_operations",
+      "remove_fields": [],
+      "replace_fields": {
+        "operations": []
+      }
+    },
+    {
+      "base_object": "product_mutation_receipt",
+      "name": "product_receipt_invalid_outcome",
+      "remove_fields": [],
+      "replace_fields": {
+        "outcome": "AUTO_APPROVED"
+      }
+    }
+  ],
+  "typed_objects": [
+    {
+      "name": "ingest_batch",
+      "object": {
+        "batch_id": "batch_aaaaaaaaaaaaaaaaaaaaaaaa",
+        "created_at": "2026-08-14T00:00:00Z",
+        "items": [
+          {
+            "batch_id": "batch_aaaaaaaaaaaaaaaaaaaaaaaa",
+            "captured_at": "2026-08-14T00:00:00Z",
+            "error_code": null,
+            "fingerprint": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+            "item_id": "item_bbbbbbbbbbbbbbbbbbbbbbbb",
+            "media_type": "text/markdown",
+            "revision_id": "revision_overview_001",
+            "source_id": "document:overview",
+            "source_path": "docs/overview.md",
+            "status": "IMPORTED"
+          }
+        ],
+        "manifest_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "object_type": "INGEST_BATCH",
+        "options": {
+          "include_code": true
+        },
+        "status": "COMPLETED",
+        "summary": {
+          "imported": 1,
+          "total": 1
+        },
+        "updated_at": "2026-08-14T00:00:00Z"
+      }
+    },
+    {
+      "name": "draft_proposal",
+      "object": {
+        "batch_id": "batch_aaaaaaaaaaaaaaaaaaaaaaaa",
+        "created_at": "2026-08-14T00:00:00Z",
+        "dependency_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "document": {},
+        "draft_id": "draft_cccccccccccccccccccccccc",
+        "draft_kind": "KERNEL_PROPOSAL",
+        "expires_at": null,
+        "object_type": "DRAFT_PROPOSAL",
+        "provenance": {
+          "disclosure_policy": null,
+          "extractor_id": "deterministic-directives",
+          "extractor_version": "1",
+          "generated_at": "2026-08-14T00:00:00Z",
+          "input_hashes": [
+            "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+          ],
+          "input_revision_ids": [
+            "revision_overview_001"
+          ],
+          "mode": "DETERMINISTIC",
+          "model": null,
+          "parameters": {},
+          "prompt_version": "directive-parser@1"
+        },
+        "status": "DRAFT",
+        "updated_at": "2026-08-14T00:00:00Z",
+        "version": 1
+      }
+    },
+    {
+      "name": "derived_artifact",
+      "object": {
+        "artifact_id": "artifact_scenario-project",
+        "artifact_type": "SCENARIO",
+        "builder_version": "memory-views@1",
+        "created_at": "2026-08-14T00:00:00Z",
+        "dependency_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "document": {
+          "member_object_ids": [
+            "claim:one"
+          ]
+        },
+        "object_type": "DERIVED_MEMORY_ARTIFACT",
+        "provenance": {
+          "builder_version": "memory-views@1",
+          "kernel_state_root": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+          "member_object_ids": [
+            "claim:one"
+          ]
+        },
+        "scope": "project",
+        "status": "READY",
+        "title": "Current project state",
+        "updated_at": "2026-08-14T00:00:00Z",
+        "version": 1
+      }
+    },
+    {
+      "name": "skill_record",
+      "object": {
+        "content_hash": "sha256:28b466b47c83eb215ae4c927b12ee200ddaaae2d4730369d126bb92da92edeba",
+        "created_at": "2026-08-14T00:00:00Z",
+        "document": {
+          "expected_outputs": [
+            "review"
+          ],
+          "preconditions": [
+            "sources available"
+          ],
+          "purpose": "Review a migration plan",
+          "resources": [],
+          "skill_id": "skill:review",
+          "steps": [
+            "read sources",
+            "check conflicts"
+          ],
+          "triggers": [
+            "migration review"
+          ],
+          "validation_rules": [
+            {
+              "type": "NON_EMPTY"
+            }
+          ],
+          "version": 1
+        },
+        "expected_outputs": [
+          "review"
+        ],
+        "object_type": "SKILL_RECORD",
+        "preconditions": [
+          "sources available"
+        ],
+        "provenance": {
+          "extractor_id": "fixture"
+        },
+        "purpose": "Review a migration plan",
+        "resources": [],
+        "skill_id": "skill:review",
+        "status": "DRAFT",
+        "steps": [
+          "read sources",
+          "check conflicts"
+        ],
+        "triggers": [
+          "migration review"
+        ],
+        "updated_at": "2026-08-14T00:00:00Z",
+        "validation_rules": [
+          {
+            "type": "NON_EMPTY"
+          }
+        ],
+        "version": 1
+      }
+    },
+    {
+      "name": "context_request",
+      "object": {
+        "budget_bytes": 4096,
+        "budget_tokens": null,
+        "depth": "DETAIL",
+        "hints": {},
+        "object_type": "CONTEXT_REQUEST",
+        "purpose": null,
+        "query": "database",
+        "references": [],
+        "request_version": "context-request@1",
+        "task": "Review migration"
+      }
+    },
+    {
+      "name": "telemetry_event",
+      "object": {
+        "event_id": "event_dddddddddddddddddddddddd",
+        "event_type": "CONTEXT_ROUTED",
+        "metadata": {},
+        "object_id": null,
+        "object_type": "PRODUCT_TELEMETRY_EVENT",
+        "occurred_at": "2026-08-14T00:00:00Z",
+        "success": true
+      }
+    },
+    {
+      "name": "product_mutation_proposal",
+      "object": {
+        "expected_product_state_hash": null,
+        "idempotency_key": "skill:create:fixture-review",
+        "object_type": "PRODUCT_MUTATION_PROPOSAL",
+        "operations": [
+          {
+            "op": "CREATE_SKILL",
+            "op_id": "product_op_bbbbbbbbbbbbbbbbbbbbbbbb",
+            "skill": {
+              "content_hash": "sha256:28b466b47c83eb215ae4c927b12ee200ddaaae2d4730369d126bb92da92edeba",
+              "created_at": "2026-08-14T00:00:00Z",
+              "document": {
+                "expected_outputs": [
+                  "review"
+                ],
+                "preconditions": [
+                  "sources available"
+                ],
+                "purpose": "Review a migration plan",
+                "resources": [],
+                "skill_id": "skill:review",
+                "steps": [
+                  "read sources",
+                  "check conflicts"
+                ],
+                "triggers": [
+                  "migration review"
+                ],
+                "validation_rules": [
+                  {
+                    "type": "NON_EMPTY"
+                  }
+                ],
+                "version": 1
+              },
+              "expected_outputs": [
+                "review"
+              ],
+              "object_type": "SKILL_RECORD",
+              "preconditions": [
+                "sources available"
+              ],
+              "provenance": {
+                "extractor_id": "fixture"
+              },
+              "purpose": "Review a migration plan",
+              "resources": [],
+              "skill_id": "skill:review",
+              "status": "DRAFT",
+              "steps": [
+                "read sources",
+                "check conflicts"
+              ],
+              "triggers": [
+                "migration review"
+              ],
+              "updated_at": "2026-08-14T00:00:00Z",
+              "validation_rules": [
+                {
+                  "type": "NON_EMPTY"
+                }
+              ],
+              "version": 1
+            }
+          }
+        ],
+        "proposal_id": "product_proposal_aaaaaaaaaaaaaaaaaaaaaaaa",
+        "proposed_at": "2026-08-14T00:00:00Z",
+        "proposer": "service:shared-mind-product"
+      }
+    },
+    {
+      "name": "product_mutation_receipt",
+      "object": {
+        "decided_at": "2026-08-14T00:00:00Z",
+        "idempotency_key": "skill:create:fixture-review",
+        "object_type": "PRODUCT_MUTATION_RECEIPT",
+        "operation_count": 1,
+        "outcome": "COMMITTED",
+        "product_state_hash_after": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "product_state_hash_before": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "proposal_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "proposal_id": "product_proposal_aaaaaaaaaaaaaaaaaaaaaaaa",
+        "reason_codes": [],
+        "receipt_id": "product_receipt_cccccccccccccccccccccccc"
+      }
+    }
+  ]
+}

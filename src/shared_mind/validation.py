@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sysconfig
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +10,31 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 
 SCHEMA_FILENAME = "shared-mind-kernel.schema.v1.json"
+
+
+@lru_cache(maxsize=16)
+def _check_schema_document(serialized: str) -> None:
+    """Check each distinct schema document once per process.
+
+    Kernel instances are intentionally short-lived, but Draft 2020-12 meta-
+    schema validation is expensive.  The result depends only on the canonical
+    schema bytes, so caching the successful check preserves validation
+    semantics while avoiding repeated multi-second walks of the same contract.
+    """
+
+    Draft202012Validator.check_schema(json.loads(serialized))
+
+
+def _ensure_schema_checked(contract: dict[str, Any]) -> None:
+    _check_schema_document(
+        json.dumps(
+            contract,
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
 
 
 def load_default_schema() -> dict[str, Any]:
@@ -41,7 +67,7 @@ def build_contract_validator(
     schema: dict[str, Any] | None = None,
 ) -> Draft202012Validator:
     contract = schema if schema is not None else load_default_schema()
-    Draft202012Validator.check_schema(contract)
+    _ensure_schema_checked(contract)
     return Draft202012Validator(contract, format_checker=FormatChecker())
 
 
@@ -52,7 +78,7 @@ def build_definition_validator(
     """Build a validator for one named contract definition."""
 
     contract = schema if schema is not None else load_default_schema()
-    Draft202012Validator.check_schema(contract)
+    _ensure_schema_checked(contract)
     if definition not in contract.get("$defs", {}):
         raise KeyError(f"Unknown contract definition: {definition}")
     focused = {

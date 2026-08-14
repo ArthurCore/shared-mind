@@ -1,34 +1,84 @@
 # Shared Mind
 
-Shared Mind is a local-first external memory for carrying sources, evidence,
-claims, decisions, questions, conflicts, and work state across AI sessions. A
-deterministic SQLite ledger owns canonical changes; Markdown, JSON, search, and
-handoff context are reproducible views of that ledger-backed state.
+> **Project has state. Agents come and go.**
 
-The current local path supports:
+Shared Mind is a local-first external cognitive state for carrying sources,
+evidence, claims, decisions, questions, conflicts, work state, and reusable
+Skills across AI sessions. Codex, Claude, GPT, and other clients do not receive
+separate private copies of project memory. They observe one canonical Shared
+State and request a deterministic, task-aware view of that state.
 
-- reproducible local workspace initialization;
-- immutable, content-hashed Markdown and UTF-8 text source revisions;
+```text
+Agent A memory != Agent B memory      # forbidden
+Shared Mind(A) == Shared Mind(B)      # required
+Context(task A) != Context(task B)    # allowed
+```
+
+## What it provides
+
+The kernel provides the trusted state boundary:
+
+- immutable, content-hashed source revisions;
+- factual Claims with byte-range EvidenceLinks;
+- durable `FACT_CONFLICT` records instead of silent truth selection;
+- stale-write rejection through `TRANSACTION_CONFLICT`;
+- Decision, OpenQuestion, and WorkItem lifecycles;
 - schema-validated, idempotent Proposal commits;
-- factual claims with byte-range evidence;
-- durable fact conflicts and guarded conflict resolution;
-- Decision, OpenQuestion, and WorkItem lifecycle records;
-- ledger verification and deterministic replay;
-- deterministic Markdown/JSON projection and budgeted handoff context;
-- deterministic structured query plus advisory rebase hints;
-- a non-interactive JSON CLI with stable result codes; and
-- an optional local stdio MCP adapter with the same service envelopes.
+- an append-only ledger, receipts, verification, and deterministic replay;
+- deterministic Markdown/JSON projections and structured query; and
+- JSON CLI plus an optional local stdio MCP adapter.
 
-Optional, core-outside integrations add three pinned, source-only import
-adapters (AtomicStrata, Qarinah, and SwarmVault), an exact-token counter
-protocol, and a deny-by-default remote-policy evaluator. These are local
-protocols: the repository contains no live vendor connector, credential flow,
-or remote write transport.
+The product layer builds on that boundary without becoming a second source of
+truth:
 
-The product boundary and acceptance criteria are defined in the [SRS](docs/SRS.md).
-The next productization goals—trusted automatic ingest, layered memory,
-versioned Skills, agent loadouts, cold start, retrieval, governance, and the
-continuous compounding loop—are tracked in the [Product Roadmap](ROADMAP.md).
+- bulk file, repository, code, and JSONL conversation ingest;
+- deterministic and policy-gated model extraction into reviewable DraftProposals;
+- Scenario, Core Context, Wiki/link, retrieval, and code views that can be deleted
+  and rebuilt from canonical state;
+- shared, versioned Skills with testing, approval, revision, export, and replay;
+- deterministic Task-aware Context with selection trace and hard budgets;
+- FTS5/BM25 retrieval, optional vector/RRF fusion, Python symbol/reference/call
+  indexing, and impact paths;
+- cold start, review queues, catalog, telemetry, backup/restore, and product
+  quality benchmarks; and
+- separate product CLI, MCP, and loopback-only web control surfaces.
+
+## Architecture
+
+```text
+Files / conversations / code / task traces
+                  |
+                  v
+        immutable SourceRevisions (L0)
+                  |
+                  v
+        reviewable DraftProposals
+                  |
+                  v
+             Proposal commit
+                  |
+                  v
+      ONE canonical Shared Mind ledger
+        |          |          |
+        |          |          +-- shared versioned Skills
+        |          +------------- Decisions / Questions / Work
+        +------------------------ Claims / Evidence / Conflicts
+                  |
+                  v
+  disposable Scenario / Core / retrieval / code views
+                  |
+                  v
+          ContextRequest(task/query/ref/budget)
+                  |
+                  v
+        deterministic context for any client
+```
+
+The canonical kernel database owns project truth and change history. The
+product database owns staging, disposable indexes/views, Skill workflow, and
+telemetry. Factual or work-state changes still cross the kernel Proposal
+boundary. See [Product architecture](docs/product-architecture.md) for the full
+trust model.
 
 ## Quick start
 
@@ -38,97 +88,125 @@ Shared Mind requires Python 3.11 or newer.
 $ python3 -m pip install -e .
 $ shared-mind init ./memory --purpose "Preserve this project's reasoning across AI sessions."
 $ cd ./memory
-$ shared-mind context --budget-tokens 4096
 ```
 
-Every operational CLI response is one JSON document. A newly initialized
-workspace has empty context; add source files beneath its `sources/` directory,
-then submit structured Proposals to accumulate canonical state.
-`--budget-bytes` is a hard limit. Dependency-free `--budget-tokens` uses the
-versioned estimator reported in the context metadata with
-`token_estimate_exact: false`; use a
-model tokenizer to derive a byte limit when exact model accounting is required.
+### Cold-start an existing project
 
-Coding agents should start with the [Coding-agent bootstrap](docs/agent-bootstrap.md).
-It gives the one-command handoff path, the Proposal-only mutation boundary, and
-the projection review workflow.
+```console
+$ shared-mind-product cold-start ./project \
+    --conversation ./sessions.jsonl \
+    --task "Continue implementation"
+```
 
-For other integration surfaces, see the [local MCP guide](docs/mcp.md),
-[external source adapters](docs/adapters.md), [remote policy boundary](docs/remote-policy.md),
-and [product-continuity evaluation](docs/dogfooding.md).
+The command performs bounded ingest, deterministic extraction, Proposal commit,
+derived-view/index rebuild, and first handoff generation. Model-backed extraction
+is never enabled implicitly.
 
-## Authority model
+### Review before committing
+
+```console
+$ shared-mind-product ingest ./project --conversation ./sessions.jsonl
+$ shared-mind-product extract <batch-id>
+$ shared-mind-product draft list --batch-id <batch-id>
+$ shared-mind-product draft show <draft-id>
+$ shared-mind-product draft commit <draft-id>
+$ shared-mind-product build all
+```
+
+### Request task-aware context
+
+```console
+$ shared-mind context \
+    --task "Review the authentication migration" \
+    --query "auth compatibility" \
+    --budget-bytes 32768
+```
+
+The same state, request, selector version, and budget produce the same context
+regardless of which model or client made the request.
+
+### Search and drill down on demand
+
+```console
+$ shared-mind-product search "authentication migration"
+$ shared-mind-product tool capabilities
+$ shared-mind-product tool read_source_span \
+    --arguments '{"revision_id":"revision_...","start_byte":0,"end_byte":200}'
+```
+
+See the [Product guide](docs/product-guide.md) for the complete workflow.
+
+## Authority and safety model
 
 - Source bytes and their hashes are evidence authority.
-- The append-only operation ledger is change authority.
-- Materialized SQLite tables are replayable current state.
-- `projections/project.md`, `projections/project.json`, and context packs are
-  non-authoritative views.
-- A factual contradiction is preserved as an open `FACT_CONFLICT`; Shared Mind
-  does not claim to decide which assertion is true.
-- A stale destructive Proposal is rejected as `TRANSACTION_CONFLICT` without
-  advancing the ledger; the returned rebase hint is advisory and is never
-  auto-applied.
+- The append-only kernel ledger is canonical change authority.
+- Materialized kernel tables are replayable current state.
+- Product Drafts do not mutate canonical state.
+- Scenario, Core Context, Wiki, retrieval, and CodeGraph data are disposable
+  views, not truth.
+- LLM output cannot write canonical memory directly.
+- An active factual Claim requires verified EvidenceLink bytes.
+- Contradictory Claims remain visible in an open `FACT_CONFLICT`.
+- A stale non-commutative Proposal is rejected without advancing the ledger.
+- Skills are shared by identity and version; they are not copied into
+  Agent-specific memory stores.
+- A Skill must have explicit passing test evidence before approval.
+- Local mode is provider-neutral; embeddings and model extractors are optional.
+- The product web server rejects non-loopback bindings.
 
-Current writes use schema `1.3.0`. Its canonical `DecisionReceipt` always has
-a required, nullable `proposer` field so representable actor provenance is
-auditable without fabricating an identity for malformed input. Frozen 1.2
-receipts remain byte-preserved, and mixed 1.0-1.3 history remains readable and
-replay-verifiable.
+Current kernel writes use schema `1.3.0`. The separate product API and product
+contract use `shared-mind-product@1`; package version `0.3.0` introduces the
+product layer without rewriting frozen kernel history.
 
-Canonical state must change through `proposal commit` or the Proposal-backed
-`source add` command. Direct SQLite mutation is outside the public interface.
-The in-process SQLite authorizer blocks public DML/DDL; a database file owner
-performing external forensic SQL remains outside this local trust boundary.
+## Interfaces
+
+```text
+shared-mind                 Kernel CLI and task-aware context compatibility path
+shared-mind-mcp             Frozen, optional kernel MCP surface
+shared-mind-product         Ingest, review, views, Skills, search, governance
+shared-mind-product-mcp     Separate product MCP surface
+shared-mind-web             Loopback-only local control surface
+```
+
+Coding agents should start with the
+[Coding-agent bootstrap](docs/agent-bootstrap.md). Product workflows and exact
+command examples are in the [Product guide](docs/product-guide.md).
 
 ## Repository layout
 
 ```text
-ROADMAP.md              Next productization goals and ordered implementation work
-contracts/              Versioned JSON Schema, predicate registry, fixtures
-docs/                    SRS, agent bootstrap, and verification notes
-src/shared_mind/         Kernel, continuity, workspace, CLI, and projections
-tests/                   Executable conformance and regression tests
-benchmarks/              Opt-in deterministic context benchmark and evidence
-evals/                   Offline product-continuity scorer and schemas
-AGENTS.md                Contributor invariants
+ROADMAP.md                         Product goals and implementation tracking
+contracts/                         Kernel/read/product schemas and fixtures
+docs/SRS.md                        Kernel and continuity baseline SRS
+docs/SRS-product-v1.md             Product-layer requirements and traceability
+docs/product-architecture.md       One Shared State architecture and trust model
+docs/product-guide.md              Operator and agent workflow guide
+src/shared_mind/                    Kernel and product implementation
+tests/                              Conformance, regression, product, security tests
+benchmarks/                         Deterministic scale benchmark evidence
+evals/                              Product-continuity scorer and retained evidence
+AGENTS.md                           Contributor invariants
 ```
 
 ## Verify
 
 ```bash
 python3 contracts/validate_contract.py
+python3 contracts/validate_product_contract.py
 PYTHONPATH=src python3 -m unittest discover -s tests -v
 ```
 
-The final hosted Python 3.13 run completed **336 standard-library tests** in
-1689.180 seconds (`skipped=1`) with 86% branch-enabled coverage. Contract
-validation is a separate mandatory gate. The retained evidence belongs to
-[GitHub Actions run 31555504041](https://github.com/ArthurCore/shared-mind/actions/runs/31555504041)
-at source/test HEAD `b214453`.
+CI runs the complete suite with branch coverage on Python 3.11, 3.12, and 3.13;
+determinism subsets on Linux, macOS, and Windows; compile/lint/type/dependency/
+security gates; and fresh base/MCP wheel installation smoke tests. Product
+Scenario and retrieval determinism are included in the cross-platform subset.
 
-CI is configured for Python 3.11-3.13, Linux/macOS/Windows determinism subsets,
-80% branch coverage, lint/type/dependency/security gates, and clean base/MCP
-wheel smokes. All eight jobs in run `31555504041` passed, including full
-coverage on Python 3.11, 3.12, and 3.13. Locally, SQLite uses WAL with
-`synchronous=FULL`; process-kill and WAL recovery tests cover the durable commit
-boundary.
+The earlier kernel baseline is retained in
+[GitHub Actions run 31555504041](https://github.com/ArthurCore/shared-mind/actions/runs/31555504041).
+Current product-layer evidence is recorded in the branch/PR CI run referenced by
+`ROADMAP.md` after all jobs pass.
 
 The checked-in [DEV-021 benchmark evidence](benchmarks/results/dev-021-2026-08-11.md)
-records completed 100k-entry history-heavy and hot-active fixtures. The final
-single-traversal hot-active context returned the byte-identical canonical
-output at p95 1.653288 seconds, under the 2-second NFR-008 target; the
-history-heavy p95 was 2.707 milliseconds. The approximately 17% hot-active
-margin is environment-sensitive and remains a regression watch point. On the
-frozen `47b7f1c` implementation, clean 100k verification completed in 476.764
-seconds and explicit replay in 255.182 seconds with exact receipt count, head,
-and state-root parity. These were persisted schema-1.2 fixtures verified and
-replayed by schema-1.3 code, not freshly generated schema-1.3 fixtures. Earlier
-contaminated timings remain in the raw artifact but are not used as performance
-claims.
-
-The CLI can also verify that ledger hashes and replayed state agree:
-
-```console
-$ shared-mind replay --verify
-```
+continues to cover the 100k-entry kernel context path. Product-level cold-start,
+routing, retrieval, Skill reuse, and integrity evaluations are executable in
+the product test suite.

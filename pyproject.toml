@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "shared-mind-kernel"
-version = "0.2.0"
+version = "0.3.0"
 description = "Local-first, replayable external memory for AI work continuity"
 requires-python = ">=3.11"
 dependencies = ["jsonschema>=4.18,<5"]
@@ -24,6 +24,9 @@ quality = [
 [project.scripts]
 shared-mind = "shared_mind.cli:main"
 shared-mind-mcp = "shared_mind.mcp_server:main"
+shared-mind-product = "shared_mind.product_cli:main"
+shared-mind-product-mcp = "shared_mind.product_mcp_server:main"
+shared-mind-web = "shared_mind.web_control:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -32,6 +35,8 @@ where = ["src"]
 "share/shared-mind/contracts" = [
   "contracts/shared-mind-kernel.schema.v1.json",
   "contracts/shared-mind-read.schema.v1.json",
+  "contracts/shared-mind-product.schema.v1.json",
+  "contracts/product-conformance-fixtures.v1.json",
   "contracts/atlas-predicate-registry.v1.json",
 ]
 

@@ -107,6 +107,28 @@ class ReleaseGateStructureTest(unittest.TestCase):
         }
         self.assertNotIn("mcp", base_names)
 
+    def test_product_entrypoints_and_contracts_are_packaged(self) -> None:
+        scripts = self.pyproject["project"]["scripts"]
+        self.assertEqual(
+            "shared_mind.product_cli:main", scripts["shared-mind-product"]
+        )
+        self.assertEqual(
+            "shared_mind.product_mcp_server:main",
+            scripts["shared-mind-product-mcp"],
+        )
+        self.assertEqual(
+            "shared_mind.web_control:main", scripts["shared-mind-web"]
+        )
+        packaged_contracts = self.pyproject["tool"]["setuptools"]["data-files"][
+            "share/shared-mind/contracts"
+        ]
+        self.assertIn(
+            "contracts/shared-mind-product.schema.v1.json", packaged_contracts
+        )
+        self.assertIn(
+            "contracts/product-conformance-fixtures.v1.json", packaged_contracts
+        )
+
     def test_dev_or_quality_extras_supply_every_local_release_gate(self) -> None:
         optional = self.pyproject["project"]["optional-dependencies"]
         gate_extra_names = {"dev", "quality"}.intersection(optional)
@@ -199,20 +221,17 @@ class ReleaseGateStructureTest(unittest.TestCase):
         self.assertIn("determin", self.workflow_lower)
         self.assertIn("test_projection.py", self.workflow_lower)
         self.assertIn("test_structured_query.py", self.workflow_lower)
+        self.assertIn("test_memory_views_product.py", self.workflow_lower)
+        self.assertIn("test_product_retrieval.py", self.workflow_lower)
 
     def test_contract_validation_and_full_suite_enforce_80_percent_coverage(
         self,
     ) -> None:
         self.assertIn("contracts/validate_contract.py", self.workflow)
-        self.assertRegex(
-            self.workflow_lower,
-            r"(?:unittest\s+discover|pytest)",
-        )
-        self.assertRegex(self.workflow_lower, r"coverage\s+run\b")
-        self.assertRegex(
-            self.workflow_lower,
-            r"coverage\s+report\b[^\n]*(?:--fail-under(?:=|\s+)80)",
-        )
+        self.assertIn("contracts/validate_product_contract.py", self.workflow)
+        self.assertIn("tools/run_parallel_coverage.py", self.workflow)
+        self.assertIn("--workers 2", self.workflow)
+        self.assertIn("--fail-under 80", self.workflow)
 
     def test_compile_lint_type_and_security_commands_are_blocking_gates(self) -> None:
         self.assertIn("compileall", self.workflow_lower)
@@ -270,6 +289,8 @@ class ReleaseGateStructureTest(unittest.TestCase):
         for contract in (
             "shared-mind-kernel.schema.v1.json",
             "shared-mind-read.schema.v1.json",
+            "shared-mind-product.schema.v1.json",
+            "product-conformance-fixtures.v1.json",
             "atlas-predicate-registry.v1.json",
         ):
             with self.subTest(packaged_contract=contract):
