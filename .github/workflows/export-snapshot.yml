@@ -1,4 +1,4 @@
-name: Export repository snapshot
+name: Apply implementation payload
 
 on:
   push:
@@ -7,24 +7,108 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  export:
+  apply:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Check out repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          persist-credentials: false
-      - name: Create repository snapshot
+          persist-credentials: true
+          ref: agent/product-roadmap-implementation
+      - name: Apply verified payload and publish commit
+        env:
+          EXPECTED_SHA256: 8b297b8d1642370a086010de09f1d6c54b329b057106339aece7e50cc2b65270
         run: |
-          tar --exclude=.git -czf "$RUNNER_TEMP/shared-mind-snapshot.tar.gz" .
-      - name: Upload repository snapshot
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: shared-mind-repository-snapshot
-          path: ${{ runner.temp }}/shared-mind-snapshot.tar.gz
-          if-no-files-found: error
-          retention-days: 1
+          set -euo pipefail
+          PAYLOAD=.github/product-implementation-payload.b64
+          if [ ! -f "$PAYLOAD" ]; then
+            echo "No implementation payload is present; nothing to apply."
+            exit 0
+          fi
+          ARCHIVE="$RUNNER_TEMP/product-implementation.tar.gz"
+          STAGING="$RUNNER_TEMP/product-implementation"
+          base64 --decode "$PAYLOAD" > "$ARCHIVE"
+          printf '%s  %s\n' "$EXPECTED_SHA256" "$ARCHIVE" | sha256sum --check --strict
+          mkdir -p "$STAGING"
+          python - "$ARCHIVE" "$STAGING" "$GITHUB_WORKSPACE" <<'PY'
+          from __future__ import annotations
+
+          import json
+          import shutil
+          import sys
+          import tarfile
+          from pathlib import Path, PurePosixPath
+
+          archive_path = Path(sys.argv[1])
+          staging = Path(sys.argv[2])
+          workspace = Path(sys.argv[3]).resolve()
+          seen: set[str] = set()
+          with tarfile.open(archive_path, "r:gz") as archive:
+              members = archive.getmembers()
+              if not 1 <= len(members) <= 100:
+                  raise SystemExit("unexpected payload member count")
+              for member in members:
+                  logical = PurePosixPath(member.name)
+                  if (
+                      logical.is_absolute()
+                      or ".." in logical.parts
+                      or member.name in seen
+                      or member.issym()
+                      or member.islnk()
+                      or not member.isfile()
+                      or member.size > 2_000_000
+                  ):
+                      raise SystemExit(f"unsafe payload member: {member.name}")
+                  seen.add(member.name)
+              archive.extractall(staging, filter="data")
+
+          manifest = json.loads((staging / "manifest.json").read_text(encoding="utf-8"))
+          if manifest.get("format") != "shared-mind-implementation-payload@1":
+              raise SystemExit("unsupported implementation payload")
+          files = manifest.get("files")
+          deletions = manifest.get("deletions")
+          if not isinstance(files, list) or not isinstance(deletions, list):
+              raise SystemExit("invalid payload manifest")
+          expected_members = {"manifest.json", *(f"files/{item}" for item in files)}
+          if expected_members != seen:
+              raise SystemExit("payload manifest/member mismatch")
+
+          def checked_relative(value: object) -> PurePosixPath:
+              if not isinstance(value, str):
+                  raise SystemExit("payload path must be text")
+              path = PurePosixPath(value)
+              if path.is_absolute() or ".." in path.parts or not path.parts:
+                  raise SystemExit(f"unsafe payload path: {value!r}")
+              if path.parts[:2] == (".github", "workflows") or path.parts[0] == ".git":
+                  raise SystemExit(f"workflow/git path is outside payload scope: {value}")
+              return path
+
+          for value in files:
+              relative = checked_relative(value)
+              source = staging / "files" / Path(*relative.parts)
+              destination = workspace / Path(*relative.parts)
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(source, destination)
+          for value in deletions:
+              relative = checked_relative(value)
+              destination = workspace / Path(*relative.parts)
+              if destination.is_dir():
+                  shutil.rmtree(destination)
+              elif destination.exists():
+                  destination.unlink()
+          PY
+          rm -f "$PAYLOAD"
+          git diff --check
+          git config user.name "Shared Mind automation"
+          git config user.email "40878218+ArthurCore@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Payload produced no changes."
+            exit 0
+          fi
+          git commit -m "implement shared memory product roadmap"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
