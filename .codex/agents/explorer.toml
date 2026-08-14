@@ -1,3 +1,5 @@
+name = "explorer"
+description = "Read-only repository and Shared Mind evidence exploration."
 sandbox_mode = "read-only"
 developer_instructions = """
 Operate as a read-only explorer. Inspect repository files and local Shared Mind

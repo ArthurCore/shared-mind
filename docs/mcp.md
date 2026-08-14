@@ -32,13 +32,18 @@ certification.
 
 The checked-in `.codex/config.toml` enables multi-agent support and declares a
 project-local `shared_mind` stdio server. It launches `shared-mind-mcp` with
-`--workspace .`, uses `cwd = "."`, and starts with `required = false`. No secret,
-environment variable, personal absolute path, or remote endpoint is stored in
-the project configuration.
+`--workspace ../shared-mind-memory`, uses `cwd = "."`, and starts with
+`required = false`. This follows the self-dogfooding boundary: canonical memory
+lives beside the repository instead of inside it. No secret, environment
+variable, personal absolute path, or remote endpoint is stored in the project
+configuration.
 
 The `explorer`, `reviewer`, and `docs_researcher` roles load project-local TOML
-layers from `.codex/agents/`. Each layer uses a read-only sandbox and explicitly
-forbids file edits and canonical mutations.
+layers by standalone-file discovery from `.codex/agents/`. Each layer declares
+the required `name`, `description`, and `developer_instructions`, uses a
+read-only sandbox, and explicitly forbids file edits and canonical mutations.
+Do not repeat these files as `.codex/agents/...` `config_file` overlays in the
+project config: relative overlay paths are resolved from `.codex/config.toml`.
 
 Treat the repository and its workspace content as trusted local input before
 enabling the server. `required = false` makes an unavailable optional adapter a

@@ -3,18 +3,6 @@ multi_agent = true
 
 [mcp_servers.shared_mind]
 command = "shared-mind-mcp"
-args = ["--workspace", "."]
+args = ["--workspace", "../shared-mind-memory"]
 cwd = "."
 required = false
-
-[agents.explorer]
-description = "Read-only repository and Shared Mind evidence exploration"
-config_file = ".codex/agents/explorer.toml"
-
-[agents.reviewer]
-description = "Read-only correctness, security, and conformance review"
-config_file = ".codex/agents/reviewer.toml"
-
-[agents.docs_researcher]
-description = "Read-only documentation and primary-source research"
-config_file = ".codex/agents/docs-researcher.toml"
