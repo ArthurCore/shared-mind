@@ -46,7 +46,7 @@ class McpProjectConfigurationContractTest(unittest.TestCase):
         self.assertIs(config["features"]["multi_agent"], True)
         server = config["mcp_servers"]["shared_mind"]
         self.assertEqual("shared-mind-mcp", server["command"])
-        self.assertEqual(["--workspace", "."], server["args"])
+        self.assertEqual(["--workspace", "../shared-mind-memory"], server["args"])
         self.assertEqual(".", server["cwd"])
         self.assertIs(server["required"], False)
         self.assertNotIn("env", server)
