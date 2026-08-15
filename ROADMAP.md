@@ -2,11 +2,11 @@
 
 | 항목 | 값 |
 |---|---|
-| 문서 버전 | 1.14.0 |
+| 문서 버전 | 1.15.0 |
 | 기준일 | 2026-08-15 |
-| 상태 | DEV-029~096 완료 (hosted CI closeout 대기) |
+| 상태 | DEV-029~097 완료 (hosted CI closeout 대기) |
 | 대상 저장소 | `ArthurCore/shared-mind` |
-| 구현 브랜치 | `agent/dev-096-candidate-response-integrity` |
+| 구현 브랜치 | `agent/dev-097-live-summary-integrity` |
 | 참고 프로젝트 | `TencentCloud/TencentDB-Agent-Memory` |
 
 ## 1. 제품 목표
@@ -505,6 +505,23 @@ RED/GREEN은
 [`docs/testing/dev-096-candidate-response-integrity.tdd.md`](docs/testing/dev-096-candidate-response-integrity.tdd.md)에
 기록한다.
 
+### DEV-097 — Live Summary Contract Integrity
+
+**상태: DONE (local gates)**
+
+- sanitized live-summary schema를 public comparison helper 내부에서 적용한다.
+- comparison 계산 전에는 `comparison`만 optional이며, 제공된 comparison은
+  schema-valid해야 한다.
+- provenance/version/hash/provider/redaction 누락·변조와 unknown/private nested
+  fields를 `INVALID_LIVE_SUMMARY`로 fail closed한다.
+- 기존 metric/report reason code 및 comparison `@1`/`@2` 결과를 보존한다.
+
+계약은
+[`docs/DEV-097-live-summary-integrity.md`](docs/DEV-097-live-summary-integrity.md),
+RED/GREEN은
+[`docs/testing/dev-097-live-summary-integrity.tdd.md`](docs/testing/dev-097-live-summary-integrity.tdd.md)에
+기록한다.
+
 ## 14. 구현된 인터페이스
 
 ```text
@@ -570,6 +587,9 @@ src/shared_mind/web_control.py
 - DEV-096 candidate response integrity: **6 RED→GREEN tests**, evaluation
   회귀 포함 **39 tests 통과**.
 - DEV-096 완료 전체 회귀: **476 tests, 0 failures, branch coverage 83%**.
+- DEV-097 live summary integrity: **7 RED→GREEN tests**, live evaluation 회귀
+  포함 **36 tests 통과**.
+- DEV-097 완료 전체 회귀: **483 tests, 0 failures, branch coverage 83%**.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.
@@ -683,6 +703,10 @@ closeout을 완료했다. PR #15 첫 source/test/documentation head
 [run 31875521479](https://github.com/ArthurCore/shared-mind/actions/runs/31875521479)은
 Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
 8개 job을 모두 통과했다.
+
+DEV-097은 incomplete/secret-bearing live artifact가 public helper에서 passing
+comparison을 만드는 경로를 차단하고 483-test/83% local regression을 완료했다.
+Shared Mind closeout과 hosted CI 근거는 PR 완료 시 이 절에 추가한다.
 
 ## 16. Definition of Done
 
