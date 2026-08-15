@@ -153,6 +153,13 @@ class ContinuityEvaluationUnitTest(unittest.TestCase):
         polluted_context["selection_trace"].append(
             {"id": "irrelevant-memory", "kind": "record", "included": True, "reasons": []}
         )
+        polluted_context["context_hash"] = sha256_json(
+            {
+                key: value
+                for key, value in polluted_context.items()
+                if key != "context_hash"
+            }
+        )
         report = evaluate_zero_relearning(
             polluted_context, actual, expectation(), elapsed_ms=6_000, token_count=5_000
         )

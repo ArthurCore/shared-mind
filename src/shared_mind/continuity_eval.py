@@ -468,6 +468,15 @@ def _context(value: Mapping[str, Any]) -> dict[str, Any]:
         raise ContinuityEvaluationError(
             "CONTEXT_INVALID", "budget must be an object", path="$.budget"
         )
+    expected_hash = sha256_json(
+        {key: item for key, item in document.items() if key != "context_hash"}
+    )
+    if document["context_hash"] != expected_hash:
+        raise ContinuityEvaluationError(
+            "CONTEXT_HASH_MISMATCH",
+            "context_hash does not match the canonical context document",
+            path="$.context_hash",
+        )
     return dict(document)
 
 
