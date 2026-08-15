@@ -357,20 +357,22 @@ src/shared_mind/web_control.py
 
 ### 15.2 Hosted GitHub Actions 상태
 
-최종 branch CI는 코드 checkout 또는 test 실행 전에 GitHub가 runner 할당을 거부했다.
-GitHub annotation은 최근 결제 실패 또는 Actions spending limit 증가가 필요하다고 명시한다.
-따라서 이 상태는 **test failure가 아니라 외부 실행 인프라 차단**으로 기록한다.
+Actions runner access가 복구됐다. PR #4의 구현 head
+`b52b7257a5b8b11f1949fe6272217d67970f7a16`에서
+[GitHub Actions run 31857557825](https://github.com/ArthurCore/shared-mind/actions/runs/31857557825)가
+성공했고, 아래 8개 job이 모두 실제 step을 실행해 통과했다.
 
-Hosted CI가 다시 활성화되면 다음 8개 job이 최종 확인 대상이다.
+1. Python 3.11 contract + full branch coverage: **PASS**.
+2. Python 3.12 contract + full branch coverage: **PASS**.
+3. Python 3.13 contract + full branch coverage: **PASS**.
+4. Ubuntu determinism: **PASS**.
+5. macOS determinism: **PASS**.
+6. Windows determinism: **PASS**.
+7. Compile/Ruff/mypy/dependency audit/Bandit: **PASS**.
+8. Fresh wheel install and all entrypoint smoke: **PASS**.
 
-1. Python 3.11 contract + full branch coverage.
-2. Python 3.12 contract + full branch coverage.
-3. Python 3.13 contract + full branch coverage.
-4. Ubuntu determinism.
-5. macOS determinism.
-6. Windows determinism.
-7. Compile/Ruff/mypy/dependency audit/Bandit.
-8. Fresh wheel install and all entrypoint smoke.
+기존 billing/spending-limit 표시는 해소된 외부 runner-access incident였으며 현재
+구현 또는 merge blocker가 아니다.
 
 ## 16. Definition of Done
 
