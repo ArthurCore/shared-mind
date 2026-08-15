@@ -2,13 +2,78 @@ from __future__ import annotations
 
 import json
 import unittest
+from unittest.mock import Mock, patch
 
-from shared_mind.memory_views import MemoryViewError
+from shared_mind.memory_views import ContextRouter, MemoryViewError
 
 from tests.product_support import ProductTestCase
 
 
 class MemoryViewsProductTest(ProductTestCase):
+    def test_context_drops_optional_trace_when_final_counters_cross_budget(self) -> None:
+        workspace = Mock(purpose="Test project")
+        kernel = Mock()
+        workspace.open_kernel.return_value = kernel
+        store = Mock()
+        store.list_artifacts.return_value = []
+        router = ContextRouter(workspace, store)
+        router.views = Mock()
+        router.views.projection.return_value = {
+            "state_root": "sha256:" + "0" * 64,
+            "ledger": {"head_sequence": 0},
+        }
+        router.views.atomic_records.return_value = [
+            {
+                "object_id": f"work_{index:04d}",
+                "kind": "WORK_ITEM",
+                "title": f"Work item {index}",
+                "summary": "continue " + "x" * 80,
+                "status": "TODO",
+                "source_revision_ids": [],
+                "related_ids": [],
+                "projection_ref": (
+                    f"project.json#/continuity/work_items/{index}"
+                ),
+                "document": {
+                    "priority": "P1",
+                    "description": "continue " + "y" * 180,
+                },
+            }
+            for index in range(150)
+        ]
+        request = {
+            "task": "continue work",
+            "purpose": None,
+            "query": "continue",
+            "references": [],
+            "depth": "EVIDENCE",
+            "budget_bytes": 1_580,
+            "budget_tokens": None,
+            "hints": {},
+        }
+
+        with (
+            patch(
+                "shared_mind.memory_views.build_context_pack",
+                return_value={"core": "z" * 200},
+            ),
+            patch("shared_mind.memory_views.select_skills", return_value=[]),
+        ):
+            result = router.route(request)
+
+        self.assertLessEqual(result["budget"]["included_bytes"], 1_580)
+        self.assertEqual(
+            result["budget"]["included_bytes"],
+            len(
+                json.dumps(
+                    result,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            ),
+        )
+
     def test_scenario_core_and_drill_down_are_derived_and_deterministic(self) -> None:
         self.seed_product()
         first = self.service.build_memory_views()
