@@ -114,3 +114,19 @@ trace revision with reasons `explicit reference` and matching task terms:
 
 This is one shared project state. No Codex-, Claude-, GPT-, model-, or
 session-specific canonical memory was created.
+
+## Completion and next handoff
+
+After capture, consolidation, and verification, the public kernel Proposal
+`proposal_complete_dev_081_session_capture_001` moved DEV-081 from `DOING`
+version 2 to `DONE` version 3 at ledger sequence 148. Final workspace values:
+
+- state root: `sha256:6fd15e191e5df0d26f5afd1f265918cd479d86bb41ea0ca2019126dd46e1e715`
+- head hash: `sha256:7e6f9027fe0d456e71b13d7a44620990ee25edd527beb4e4c5dc45817cecb37c`
+- product verification: `PRODUCT_INTEGRITY_VALID`
+- DEV-082 WorkItem: `workitem_extract_83c292866dfcfc397860b284`, `TODO` version 1
+- next-session context hash: `sha256:4180ae248912c87592d9509fd44a3295fd2cb6aa0e3d12dd99b28ce7feed4924`
+
+The next context ranks DEV-082 first and carries the active Decisions and
+source pointers needed to begin Zero-Relearning Evaluation without a project
+history prompt.
