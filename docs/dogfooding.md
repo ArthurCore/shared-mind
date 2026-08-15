@@ -90,6 +90,13 @@ non-object inputs therefore fail before semantic comparison. Candidate errors
 use `INVALID_CANDIDATE_RESPONSE`; error text contains only path and schema
 keyword, not the rejected value.
 
+The public live comparison helper independently validates the checked-in
+sanitized live-summary schema. Only the not-yet-computed `comparison` field may
+be absent. Missing provenance, invalid version/hash/provider/redaction fields,
+unknown or secret-bearing settings, and nested private report fields fail with
+`INVALID_LIVE_SUMMARY` before a comparison is returned. Existing metric/report
+reason codes and historical comparison semantics remain stable.
+
 The golden fixture records a manual baseline of 24,000 bytes, 6,000 tokens, and
 120 seconds, versus 9,720 bytes, 2,430 tokens, and 45 seconds for context-only
 handoff. Those fixture values represent reductions of 59.5%, 59.5%, and 62.5%

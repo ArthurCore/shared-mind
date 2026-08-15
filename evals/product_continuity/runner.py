@@ -15,7 +15,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, FormatChecker
 
 
 _DIMENSION_FIELDS = {
@@ -343,6 +343,19 @@ def _response_validator() -> Draft202012Validator:
     return Draft202012Validator(schema)
 
 
+@lru_cache(maxsize=1)
+def _live_summary_validator() -> Draft202012Validator:
+    schema_path = Path(__file__).with_name(
+        "product-continuity-live-summary.schema.v1.json"
+    )
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema["required"] = [
+        field for field in schema["required"] if field != "comparison"
+    ]
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema, format_checker=FormatChecker())
+
+
 def _validate_response_contract(value: Any, *, code: str) -> None:
     errors = sorted(
         _response_validator().iter_errors(value),
@@ -360,6 +373,26 @@ def _validate_response_contract(value: Any, *, code: str) -> None:
     raise ValueError(
         f"{code}: {location} violates the closed response schema "
         f"({error.validator})"
+    )
+
+
+def _validate_live_summary_contract(value: Any) -> None:
+    errors = sorted(
+        _live_summary_validator().iter_errors(value),
+        key=lambda error: (
+            tuple(str(part) for part in error.absolute_path),
+            str(error.validator),
+        ),
+    )
+    if not errors:
+        return
+    error = errors[0]
+    location = "$"
+    for part in error.absolute_path:
+        location += f"[{part}]" if isinstance(part, int) else f".{part}"
+    raise ValueError(
+        f"INVALID_LIVE_SUMMARY: {location} violates the sanitized live "
+        f"summary schema ({error.validator})"
     )
 
 
@@ -434,9 +467,11 @@ def live_summary_comparison(
             f"{comparison_version!r}"
         )
 
-    arms = _mapping(summary["arms"], "arms")
-    manual = _mapping(arms["manual_baseline"], "arms.manual_baseline")
-    context = _mapping(arms["context_only"], "arms.context_only")
+    if not isinstance(summary, Mapping):
+        raise ValueError("INVALID_LIVE_SUMMARY: $ must be an object")
+    arms = _live_summary_mapping(summary, "arms")
+    manual = _live_summary_mapping(arms, "manual_baseline", parent="arms")
+    context = _live_summary_mapping(arms, "context_only", parent="arms")
 
     reductions = {}
     for output_name, input_name in (
@@ -445,18 +480,22 @@ def live_summary_comparison(
         ("time_seconds", "elapsed_time_seconds"),
     ):
         baseline = _positive_live_metric(
-            manual[input_name], f"arms.manual_baseline.{input_name}"
+            manual.get(input_name), f"arms.manual_baseline.{input_name}"
         )
         candidate = _positive_live_metric(
-            context[input_name], f"arms.context_only.{input_name}"
+            context.get(input_name), f"arms.context_only.{input_name}"
         )
         reduction = 1.0 - candidate / baseline
         if comparison_version == LIVE_COMPARISON_V1:
             reduction = max(0.0, min(1.0, reduction))
         reductions[output_name] = round(reduction, 12)
 
-    manual_report = _mapping(manual["report"], "arms.manual_baseline.report")
-    context_report = _mapping(context["report"], "arms.context_only.report")
+    manual_report = _live_summary_mapping(
+        manual, "report", parent="arms.manual_baseline"
+    )
+    context_report = _live_summary_mapping(
+        context, "report", parent="arms.context_only"
+    )
     manual_quality = _live_report_quality(
         manual_report, "arms.manual_baseline.report"
     )
@@ -484,6 +523,8 @@ def live_summary_comparison(
         and meets_reduction_target
     )
 
+    _validate_live_summary_contract(summary)
+
     return {
         "report_version": comparison_version,
         "reductions": reductions,
@@ -492,6 +533,16 @@ def live_summary_comparison(
         "schema_valid": schema_valid,
         "passed": passed,
     }
+
+
+def _live_summary_mapping(
+    value: Mapping[str, Any], field: str, *, parent: str = "$"
+) -> Mapping[str, Any]:
+    child = value.get(field)
+    if not isinstance(child, Mapping):
+        path = f"{parent}.{field}" if parent != "$" else f"$.{field}"
+        raise ValueError(f"INVALID_LIVE_SUMMARY: {path} must be an object")
+    return child
 
 
 def _positive_live_metric(value: Any, path: str) -> float:
