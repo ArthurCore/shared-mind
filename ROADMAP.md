@@ -509,6 +509,14 @@ DEV-089은 fresh schema 1.3 두 profile의 100k one-command certification과
 [run 31871755515](https://github.com/ArthurCore/shared-mind/actions/runs/31871755515)의
 actions/python 분석도 통과했다.
 
+DEV-090은 bounded streaming evidence hash, 503MiB real-file parity,
+442-test/83% local regression과 Shared Mind closeout을 완료했다. PR #9 첫 head의
+[run 31872311320](https://github.com/ArthurCore/shared-mind/actions/runs/31872311320)과
+push [run 31872301244](https://github.com/ArthurCore/shared-mind/actions/runs/31872301244)는
+각각 8개 CI job을 모두 통과했다. CodeQL
+[run 31872310697](https://github.com/ArthurCore/shared-mind/actions/runs/31872310697)의
+actions/python 분석도 통과했다.
+
 ## 16. Definition of Done
 
 DEV 작업은 다음 조건을 만족할 때 완료로 본다.

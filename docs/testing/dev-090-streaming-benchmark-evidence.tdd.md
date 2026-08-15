@@ -67,4 +67,12 @@ and head hash
 `sha256:8445dd3c870ad882ba2a44e6328e3bf4f74f6ddb12699cee08abcc3e468d4014`.
 The next-session context has no active WorkItem or open Question and hash
 `sha256:81fb08ce082136efefb722f0035c678bd5b402660fd6c2bf93100e290d6d305c`.
-Hosted CI is recorded after the branch is pushed.
+
+Hosted evidence for PR #9's first head:
+
+- PR run [`31872311320`](https://github.com/ArthurCore/shared-mind/actions/runs/31872311320):
+  all eight CI jobs PASS;
+- push run [`31872301244`](https://github.com/ArthurCore/shared-mind/actions/runs/31872301244):
+  all eight CI jobs PASS;
+- CodeQL run [`31872310697`](https://github.com/ArthurCore/shared-mind/actions/runs/31872310697):
+  actions and Python analysis PASS.
