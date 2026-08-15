@@ -255,12 +255,18 @@ _TOOL_DEFINITIONS = (
                         "MEMORY_POLLUTION",
                         "MEMORY_LIFECYCLE",
                         "CONFLICT_RESOLUTION",
-                        "CONTEXT_QUALITY"
+                        "CONTEXT_QUALITY",
+                        "PAIRED_CONTEXT_REDUCTION"
                     ],
                 },
                 "context": {"type": "object"},
                 "observation": {"type": "object"},
                 "expectation": {"type": "object"},
+                "baseline_context": {"type": "object"},
+                "baseline_observation": {"type": "object"},
+                "candidate_context": {"type": "object"},
+                "candidate_observation": {"type": "object"},
+                "thresholds": {"type": "object"},
                 "memories": {"type": "array", "items": {"type": "object"}},
                 "expected_truth": {"type": "object"},
                 "confident_threshold": {"type": "number", "minimum": 0, "maximum": 1},
@@ -268,6 +274,10 @@ _TOOL_DEFINITIONS = (
                 "after": {"type": "object"},
                 "elapsed_ms": {"type": "number", "minimum": 0},
                 "token_count": {"type": "integer", "minimum": 0},
+                "baseline_elapsed_ms": {"type": "number", "minimum": 0},
+                "candidate_elapsed_ms": {"type": "number", "minimum": 0},
+                "baseline_token_count": {"type": "integer", "minimum": 0},
+                "candidate_token_count": {"type": "integer", "minimum": 0},
             },
             required=("evaluation",),
         ),
@@ -566,6 +576,30 @@ class ProductMcpApplication:
                 return (
                     self.service.evaluate_conflict_resolution(before, after),
                     "CONFLICT_RESOLUTION_EVALUATED",
+                )
+            if evaluation == "PAIRED_CONTEXT_REDUCTION":
+                paired = (
+                    values.get("baseline_context"),
+                    values.get("baseline_observation"),
+                    values.get("candidate_context"),
+                    values.get("candidate_observation"),
+                    values.get("expectation"),
+                    values.get("thresholds"),
+                )
+                if not all(isinstance(item, Mapping) for item in paired):
+                    raise TypeError(
+                        "paired contexts, observations, expectation, and thresholds "
+                        "must be objects"
+                    )
+                return (
+                    self.service.evaluate_paired_context_reduction(
+                        *paired,
+                        baseline_elapsed_ms=values["baseline_elapsed_ms"],
+                        candidate_elapsed_ms=values["candidate_elapsed_ms"],
+                        baseline_token_count=values["baseline_token_count"],
+                        candidate_token_count=values["candidate_token_count"],
+                    ),
+                    "CONTEXT_REDUCTION_EVALUATED",
                 )
             return (
                 self.service.evaluate_context_quality(

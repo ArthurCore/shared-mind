@@ -461,15 +461,19 @@ python3 contracts/validate_contract.py
 #     + 6 semantic cases + 7 continuity operations
 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
-# Hosted Python 3.13: Ran 336 tests in 1689.180s
-# OK (skipped=1), branch-enabled coverage total 86%
+# DEV-087 local Python 3.13 parallel runner: 428 tests, 0 failures
+# branch-enabled coverage total 83%
 ```
 
-GitHub Actions run
-[`31555504041`](https://github.com/ArthurCore/shared-mind/actions/runs/31555504041)은
-source/test HEAD `b214453`에서 Python 3.11, 3.12, 3.13 full coverage, Linux/
-macOS/Windows determinism, quality/security, fresh base/MCP wheel의 8개 job을
-모두 통과했다. Python 3.13 보존 artifact의 정확한 결과는 위와 같다.
+PR #5 GitHub Actions run
+[`31866492746`](https://github.com/ArthurCore/shared-mind/actions/runs/31866492746)은
+source/test HEAD `97d5811cf9ac852f076f76e5cff04f6d097e9567`에서 Python 3.11,
+3.12, 3.13 full coverage, Linux/macOS/Windows determinism, quality/security,
+fresh base/MCP wheel의 8개 job을 모두 통과했다. 위 DEV-087 428-test/83% 수치는
+local 결과다. 이후 PR #6 구현 head
+`58b6fb1b0a9a69f1e9cfe2d18da9405a82b0669b`의
+[`31867443975`](https://github.com/ArthurCore/shared-mind/actions/runs/31867443975)도
+같은 8개 job과 19개 commit check를 모두 통과했다.
 
 ### 13.2 요구사항 추적표
 
@@ -661,6 +665,12 @@ valid, score 100, fact accuracy 1.0, open-conflict recall 1.0, bytes/tokens/time
 모두 50% 이상 감소로 pass다. Codex artifact도 schema valid, score 100, fact
 accuracy 1.0, open-conflict recall 1.0이지만 token reduction 0.069944913327과
 time reduction 0.059438376677이 50% 미만이라 efficiency acceptance는 fail이다.
+
+DEV-087은 같은 local Shared State에서 full baseline과 compact task-aware context를
+쌍으로 생성해 별도로 평가한다. 두 arm은 동일 state root와 explicit expectation을
+공유하고, zero-relearning 품질이 유지된 경우에만 bytes/tokens/context-ready time
+감소를 인정한다. 이 local deterministic 측정은 provider별 live inference benchmark를
+대체하지 않으며 평가 report는 canonical truth가 아니다.
 
 ### 16.5 통합·릴리스·내구성 시험
 

@@ -455,6 +455,150 @@ def benchmark_context_quality(
     }
 
 
+def evaluate_paired_context_reduction(
+    baseline_context: Mapping[str, Any],
+    baseline_observation: Mapping[str, Any],
+    candidate_context: Mapping[str, Any],
+    candidate_observation: Mapping[str, Any],
+    expectation: Mapping[str, Any],
+    thresholds: Mapping[str, Any],
+    *,
+    baseline_elapsed_ms: int | float,
+    candidate_elapsed_ms: int | float,
+    baseline_token_count: int,
+    candidate_token_count: int,
+) -> dict[str, Any]:
+    """Compare two contexts from one state without promoting either to truth."""
+
+    baseline_document = _context(baseline_context)
+    candidate_document = _context(candidate_context)
+    if baseline_document["kernel_state_root"] != candidate_document["kernel_state_root"]:
+        raise ContinuityEvaluationError(
+            "PAIRED_STATE_ROOT_MISMATCH",
+            "baseline and candidate contexts must reference the same kernel state root",
+            path="$.candidate_context.kernel_state_root",
+        )
+    baseline_elapsed = _positive_number(
+        baseline_elapsed_ms,
+        "$.baseline_elapsed_ms",
+        "PAIRED_BASELINE_ELAPSED_INVALID",
+    )
+    baseline_tokens = _positive_integer(
+        baseline_token_count,
+        "$.baseline_token_count",
+        "PAIRED_BASELINE_TOKEN_COUNT_INVALID",
+    )
+    candidate_elapsed = _non_negative_number(
+        candidate_elapsed_ms, "$.candidate_elapsed_ms"
+    )
+    candidate_tokens = _non_negative_integer(
+        candidate_token_count, "$.candidate_token_count"
+    )
+    declared_thresholds = _paired_thresholds(thresholds)
+
+    baseline = evaluate_zero_relearning(
+        baseline_document,
+        baseline_observation,
+        expectation,
+        elapsed_ms=baseline_elapsed,
+        token_count=baseline_tokens,
+    )
+    candidate = evaluate_zero_relearning(
+        candidate_document,
+        candidate_observation,
+        expectation,
+        elapsed_ms=candidate_elapsed,
+        token_count=candidate_tokens,
+    )
+    baseline_bytes = _positive_integer(
+        baseline["metrics"]["context_bytes"],
+        "$.baseline_context.budget.included_bytes",
+        "PAIRED_BASELINE_CONTEXT_BYTES_INVALID",
+    )
+    candidate_bytes = _non_negative_integer(
+        candidate["metrics"]["context_bytes"],
+        "$.candidate_context.budget.included_bytes",
+    )
+    reductions = {
+        "context_bytes_reduction_rate": (baseline_bytes - candidate_bytes)
+        / baseline_bytes,
+        "context_tokens_reduction_rate": (baseline_tokens - candidate_tokens)
+        / baseline_tokens,
+        "time_to_productive_action_reduction_rate": (
+            baseline_elapsed - candidate_elapsed
+        )
+        / baseline_elapsed,
+    }
+
+    minimum_metrics = (
+        "continuity_accuracy",
+        "decision_recall",
+        "open_question_recall",
+        "conflict_recall",
+        "evidence_traceability",
+    )
+    maximum_metrics = (
+        "wrong_memory_rate",
+        "missing_critical_memory_rate",
+        "irrelevant_context_rate",
+    )
+    quality_preserved = candidate["passed"] and all(
+        float(candidate["metrics"][name]) >= float(baseline["metrics"][name])
+        for name in minimum_metrics
+    ) and all(
+        float(candidate["metrics"][name]) <= float(baseline["metrics"][name])
+        for name in maximum_metrics
+    )
+
+    failures: list[str] = []
+    if not baseline["passed"]:
+        failures.append("BASELINE_QUALITY_GATE_FAILED")
+    if not candidate["passed"]:
+        failures.append("CANDIDATE_QUALITY_GATE_FAILED")
+    if not quality_preserved:
+        failures.append("CANDIDATE_QUALITY_REGRESSION")
+    for metric, not_reduced, threshold_name, below_threshold in (
+        (
+            "context_bytes_reduction_rate",
+            "CONTEXT_BYTES_NOT_REDUCED",
+            "min_context_bytes_reduction_rate",
+            "CONTEXT_BYTES_REDUCTION_BELOW_THRESHOLD",
+        ),
+        (
+            "context_tokens_reduction_rate",
+            "CONTEXT_TOKENS_NOT_REDUCED",
+            "min_context_tokens_reduction_rate",
+            "CONTEXT_TOKENS_REDUCTION_BELOW_THRESHOLD",
+        ),
+        (
+            "time_to_productive_action_reduction_rate",
+            "TIME_TO_PRODUCTIVE_ACTION_NOT_REDUCED",
+            "min_time_to_productive_action_reduction_rate",
+            "TIME_TO_PRODUCTIVE_ACTION_REDUCTION_BELOW_THRESHOLD",
+        ),
+    ):
+        if reductions[metric] <= 0:
+            failures.append(not_reduced)
+        if reductions[metric] < declared_thresholds[threshold_name]:
+            failures.append(below_threshold)
+
+    report = {
+        "report_version": "paired-context-reduction-eval@1",
+        "evaluator_version": "shared-state-continuity-evaluator@1",
+        "kernel_state_root": baseline_document["kernel_state_root"],
+        "expectation_hash": sha256_json(dict(expectation)),
+        "thresholds_hash": sha256_json(declared_thresholds),
+        "baseline": baseline,
+        "candidate": candidate,
+        "reductions": reductions,
+        "quality_preserved": quality_preserved,
+        "failures": list(dict.fromkeys(failures)),
+        "passed": not failures,
+    }
+    report["report_hash"] = sha256_json(report)
+    return report
+
+
 def _context(value: Mapping[str, Any]) -> dict[str, Any]:
     document = _mapping(value, "context", "CONTEXT_INVALID")
     for field in ("context_hash", "kernel_state_root"):
@@ -567,6 +711,39 @@ def _thresholds(value: Any) -> dict[str, int | float]:
     return result
 
 
+def _paired_thresholds(value: Any) -> dict[str, Any]:
+    document = _mapping(value, "thresholds", "PAIRED_THRESHOLDS_INVALID")
+    required = {
+        "threshold_version",
+        "min_context_bytes_reduction_rate",
+        "min_context_tokens_reduction_rate",
+        "min_time_to_productive_action_reduction_rate",
+    }
+    if set(document) != required or document.get("threshold_version") != (
+        "paired-context-reduction-thresholds@1"
+    ):
+        raise ContinuityEvaluationError(
+            "PAIRED_THRESHOLDS_INVALID",
+            "paired reduction thresholds must use the exact versioned field set",
+            path="$.thresholds",
+        )
+    return {
+        "threshold_version": "paired-context-reduction-thresholds@1",
+        "min_context_bytes_reduction_rate": _fraction(
+            document["min_context_bytes_reduction_rate"],
+            "$.thresholds.min_context_bytes_reduction_rate",
+        ),
+        "min_context_tokens_reduction_rate": _fraction(
+            document["min_context_tokens_reduction_rate"],
+            "$.thresholds.min_context_tokens_reduction_rate",
+        ),
+        "min_time_to_productive_action_reduction_rate": _fraction(
+            document["min_time_to_productive_action_reduction_rate"],
+            "$.thresholds.min_time_to_productive_action_reduction_rate",
+        ),
+    }
+
+
 def _metric_failures(
     metrics: Mapping[str, int | float | None], thresholds: Mapping[str, int | float]
 ) -> list[str]:
@@ -651,10 +828,26 @@ def _non_negative_number(value: Any, path: str) -> int | float:
     return value
 
 
+def _positive_number(value: Any, path: str, code: str) -> int | float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        raise ContinuityEvaluationError(
+            code, f"{path} must be positive", path=path
+        )
+    return value
+
+
 def _non_negative_integer(value: Any, path: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise ContinuityEvaluationError(
             "EVALUATION_NUMBER_INVALID", f"{path} must be a non-negative integer", path=path
+        )
+    return value
+
+
+def _positive_integer(value: Any, path: str, code: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ContinuityEvaluationError(
+            code, f"{path} must be a positive integer", path=path
         )
     return value
 

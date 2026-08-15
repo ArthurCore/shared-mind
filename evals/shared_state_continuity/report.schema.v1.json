@@ -7,11 +7,13 @@
     {"$ref": "#/$defs/MemoryPollutionReport"},
     {"$ref": "#/$defs/MemoryLifecycleReport"},
     {"$ref": "#/$defs/ConflictResolutionReport"},
-    {"$ref": "#/$defs/ContextQualityReport"}
+    {"$ref": "#/$defs/ContextQualityReport"},
+    {"$ref": "#/$defs/PairedContextReductionReport"}
   ],
   "$defs": {
     "Hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "Rate": {"type": "number", "minimum": 0, "maximum": 1},
+    "ReductionRate": {"type": "number", "maximum": 1},
     "StringList": {
       "type": "array",
       "items": {"type": "string"},
@@ -62,6 +64,41 @@
         "irrelevant_context_ids": {"$ref": "#/$defs/StringList"},
         "failures": {"$ref": "#/$defs/StringList"},
         "passed": {"type": "boolean"}
+      }
+    },
+    "PairedContextReductionReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_version", "evaluator_version", "kernel_state_root",
+        "expectation_hash", "thresholds_hash", "baseline", "candidate",
+        "reductions", "quality_preserved", "failures", "passed", "report_hash"
+      ],
+      "properties": {
+        "report_version": {"const": "paired-context-reduction-eval@1"},
+        "evaluator_version": {"const": "shared-state-continuity-evaluator@1"},
+        "kernel_state_root": {"$ref": "#/$defs/Hash"},
+        "expectation_hash": {"$ref": "#/$defs/Hash"},
+        "thresholds_hash": {"$ref": "#/$defs/Hash"},
+        "baseline": {"$ref": "#/$defs/ZeroRelearningReport"},
+        "candidate": {"$ref": "#/$defs/ZeroRelearningReport"},
+        "reductions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "context_bytes_reduction_rate", "context_tokens_reduction_rate",
+            "time_to_productive_action_reduction_rate"
+          ],
+          "properties": {
+            "context_bytes_reduction_rate": {"$ref": "#/$defs/ReductionRate"},
+            "context_tokens_reduction_rate": {"$ref": "#/$defs/ReductionRate"},
+            "time_to_productive_action_reduction_rate": {"$ref": "#/$defs/ReductionRate"}
+          }
+        },
+        "quality_preserved": {"type": "boolean"},
+        "failures": {"$ref": "#/$defs/StringList"},
+        "passed": {"type": "boolean"},
+        "report_hash": {"$ref": "#/$defs/Hash"}
       }
     },
     "MemoryPollutionReport": {

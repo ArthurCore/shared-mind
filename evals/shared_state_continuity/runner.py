@@ -12,6 +12,7 @@ from typing import Any
 from shared_mind.canonical import canonical_json, sha256_bytes, sha256_json
 from shared_mind.continuity_eval import (
     benchmark_context_quality,
+    evaluate_paired_context_reduction,
     evaluate_zero_relearning,
 )
 
@@ -59,6 +60,56 @@ def run_evaluation(
         "passed": zero["passed"] and quality["passed"],
     }
     _publish_no_clobber(Path(output_path), (canonical_json(result) + "\n").encode("utf-8"))
+    return result
+
+
+def run_paired_evaluation(
+    baseline_context_path: str | Path,
+    baseline_observation_path: str | Path,
+    candidate_context_path: str | Path,
+    candidate_observation_path: str | Path,
+    expectation_path: str | Path,
+    thresholds_path: str | Path,
+    output_path: str | Path,
+    *,
+    baseline_elapsed_ms: int | float,
+    candidate_elapsed_ms: int | float,
+    baseline_token_count: int,
+    candidate_token_count: int,
+) -> dict[str, Any]:
+    """Evaluate one baseline/candidate pair and atomically retain the evidence."""
+
+    documents = {
+        "baseline_context": _read_object(baseline_context_path),
+        "baseline_observation": _read_object(baseline_observation_path),
+        "candidate_context": _read_object(candidate_context_path),
+        "candidate_observation": _read_object(candidate_observation_path),
+        "expectation": _read_object(expectation_path),
+        "thresholds": _read_object(thresholds_path),
+    }
+    report = evaluate_paired_context_reduction(
+        documents["baseline_context"],
+        documents["baseline_observation"],
+        documents["candidate_context"],
+        documents["candidate_observation"],
+        documents["expectation"],
+        documents["thresholds"],
+        baseline_elapsed_ms=baseline_elapsed_ms,
+        candidate_elapsed_ms=candidate_elapsed_ms,
+        baseline_token_count=baseline_token_count,
+        candidate_token_count=candidate_token_count,
+    )
+    result = {
+        "artifact_version": "paired-context-reduction-run@1",
+        "input_hashes": {
+            name: sha256_json(document) for name, document in documents.items()
+        },
+        "report": report,
+        "passed": report["passed"],
+    }
+    _publish_no_clobber(
+        Path(output_path), (canonical_json(result) + "\n").encode("utf-8")
+    )
     return result
 
 

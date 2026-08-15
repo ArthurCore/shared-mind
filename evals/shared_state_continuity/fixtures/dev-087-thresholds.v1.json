@@ -1,0 +1,1 @@
+{"min_context_bytes_reduction_rate":0.6,"min_context_tokens_reduction_rate":0.6,"min_time_to_productive_action_reduction_rate":0.4,"threshold_version":"paired-context-reduction-thresholds@1"}
