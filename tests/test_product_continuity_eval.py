@@ -267,7 +267,12 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
                 expected = expected_by_provider[summary["provider"]]
                 self._assert_valid(self.live_summary_validator, summary)
                 self.assertEqual(
-                    runner.live_summary_comparison(summary),
+                    runner.live_summary_comparison(
+                        summary,
+                        comparison_version=(
+                            "product-continuity-live-comparison@1"
+                        ),
+                    ),
                     summary["comparison"],
                 )
                 self.assertEqual(expected["comparison"], summary["comparison"])
