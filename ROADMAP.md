@@ -2,11 +2,11 @@
 
 | 항목 | 값 |
 |---|---|
-| 문서 버전 | 1.6.0 |
+| 문서 버전 | 1.7.0 |
 | 기준일 | 2026-08-15 |
-| 상태 | DEV-029~088 완료 |
+| 상태 | DEV-029~089 완료 |
 | 대상 저장소 | `ArthurCore/shared-mind` |
-| 구현 브랜치 | `agent/dev-088-literal-safe-search` |
+| 구현 브랜치 | `agent/dev-089-schema13-benchmark-certification` |
 | 참고 프로젝트 | `TencentCloud/TencentDB-Agent-Memory` |
 
 ## 1. 제품 목표
@@ -359,6 +359,29 @@ RED/GREEN과 self-dogfooding evidence는
 [`docs/testing/dev-088-literal-safe-retrieval.tdd.md`](docs/testing/dev-088-literal-safe-retrieval.tdd.md)에
 기록한다.
 
+### DEV-089 — Fresh Schema 1.3 Benchmark Certification
+
+**상태: DONE**
+
+- fresh current-schema fixture 생성, 전체 ledger 검증, explicit file replay,
+  5 warmup/50 sample context 측정을 한 명령으로 수행한다.
+- strict `context-benchmark-certification@1` schema, portable database hash/size,
+  result self-hash와 atomic no-clobber write를 사용한다.
+- historical schema fixture, invalid verifier, replay mismatch와 result drift는
+  fail closed한다.
+- fresh schema 1.3 `history-heavy`와 `hot-active` 각각 ledger/receipt 100,000건,
+  verifier 0 errors, exact replay parity를 확인한다.
+- context p95는 history-heavy 4.7165ms/950 bytes, hot-active
+  1.6767885s/2,928 bytes로 둘 다 2초 목표를 통과한다.
+
+계약은
+[`docs/DEV-089-schema13-benchmark-certification.md`](docs/DEV-089-schema13-benchmark-certification.md),
+RED/GREEN은
+[`docs/testing/dev-089-schema13-benchmark-certification.tdd.md`](docs/testing/dev-089-schema13-benchmark-certification.tdd.md),
+측정 evidence는
+[`benchmarks/results/dev-089-schema13-2026-08-15.md`](benchmarks/results/dev-089-schema13-2026-08-15.md)에
+기록한다.
+
 ## 14. 구현된 인터페이스
 
 ```text
@@ -398,6 +421,11 @@ src/shared_mind/web_control.py
 - DEV-088 구현 전체 회귀: **432 tests, 0 failures, branch coverage 83%**.
 - DEV-088 literal-safe retrieval: **4 tests**, 검색/인터페이스 회귀 포함
   **33 tests 통과**.
+- DEV-089 benchmark certification: strict schema/실패 경계/체크인 artifact 포함
+  **7 tests**, projection/benchmark 회귀 포함 **28 tests 통과**.
+- DEV-089 fresh schema 1.3 100k: 두 profile 모두 ledger/receipt 1:1,
+  verifier/replay exact parity와 50-sample p95 2초 이내 통과.
+- DEV-089 완료 전체 회귀: **439 tests, 0 failures, branch coverage 83%**.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.
