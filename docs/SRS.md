@@ -495,8 +495,11 @@ fresh wheel의 8개 hosted job을 모두 통과했다.
 
 DEV-094는 evaluator-side scoring contract의 exact typed constants, weights,
 penalties, and quality thresholds를 scorer 내부에서 고정했다. local Python
-3.13 parallel branch coverage는 463 tests / 0 failures / 83%이며 hosted 결과는
-PR closeout 후 기록한다.
+3.13 parallel branch coverage는 463 tests / 0 failures / 83%다. PR #13 첫
+documentation head `3051f9986ac6e867cb6ef4949a609fc161e3e616`의
+[`31874440698`](https://github.com/ArthurCore/shared-mind/actions/runs/31874440698)은
+동일한 Python 3.11~3.13 coverage, 3-OS determinism, quality/security,
+fresh wheel의 8개 hosted job을 모두 통과했다.
 
 ### 13.2 요구사항 추적표
 
