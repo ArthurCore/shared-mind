@@ -109,6 +109,50 @@ def context() -> dict:
     return document
 
 
+def pollution_input() -> dict:
+    return {
+        "memories": [
+            {
+                "memory_id": "m-current",
+                "semantic_key": "database",
+                "value": "postgresql",
+                "lifecycle": "CURRENT",
+                "relevant": True,
+                "confidence": 1.0,
+            }
+        ],
+        "expected_truth": {"database": "postgresql"},
+        "confident_threshold": 0.9,
+    }
+
+
+def conflict_snapshots() -> tuple[dict, dict]:
+    before = {
+        "conflict_id": "conflict-interface",
+        "status": "OPEN",
+        "episode": 1,
+        "version": 1,
+        "member_digest": "sha256:" + "8" * 64,
+        "members": ["claim-a", "claim-b"],
+        "resolution": None,
+        "claims": {"claim-a": {"v": 1}, "claim-b": {"v": 1}},
+    }
+    after = before | {
+        "status": "RESOLVED",
+        "version": 2,
+        "resolution": {
+            "resolver": {"actor_type": "HUMAN", "actor_id": "human:test"},
+            "selected_claim_ids": ["claim-a"],
+            "rejected_claim_ids": ["claim-b"],
+            "rationale": "Evidence supports claim-a.",
+            "evidence_link_ids": ["evidence-a"],
+            "decided_at": "2026-08-15T00:00:00Z",
+            "resolution_epoch": 1,
+        },
+    }
+    return before, after
+
+
 class ContinuityEvaluationUnitTest(unittest.TestCase):
     def test_dev_082_perfect_zero_relearning_report_has_all_required_metrics(self) -> None:
         report = evaluate_zero_relearning(
@@ -455,6 +499,120 @@ class ContinuityEvaluationInterfaceTest(ProductTestCase):
             app.close()
         self.assertFalse(mcp["isError"])
         self.assertEqual(expected, mcp["structuredContent"]["data"])
+
+    def test_dev_083_through_086_are_exposed_consistently(self) -> None:
+        self.seed_product()
+        pollution = pollution_input()
+        before, after = conflict_snapshots()
+        expected_pollution = self.service.evaluate_memory_pollution(
+            pollution["memories"],
+            expected_truth=pollution["expected_truth"],
+            confident_threshold=pollution["confident_threshold"],
+        )
+        expected_lifecycle = self.service.memory_lifecycle_inventory()
+        expected_conflict = self.service.evaluate_conflict_resolution(before, after)
+        expected_quality = self.service.evaluate_context_quality(
+            context(), observation(), expectation(), elapsed_ms=1_250, token_count=2_048
+        )
+        self.assertGreater(expected_lifecycle["counts"]["CURRENT"], 0)
+        self.assertEqual(
+            expected_lifecycle["total"],
+            sum(expected_lifecycle["counts"].values()),
+        )
+
+        files = {
+            "pollution": pollution,
+            "before": before,
+            "after": after,
+            "context": context(),
+            "observation": observation(),
+            "expectation": expectation(),
+        }
+        for name, document in files.items():
+            self.write_source(f"eval/{name}.json", json.dumps(document))
+
+        cli_cases = (
+            (
+                ("metrics", "memory-pollution", "eval/pollution.json"),
+                "MEMORY_POLLUTION_EVALUATED",
+                expected_pollution,
+            ),
+            (
+                ("metrics", "lifecycle"),
+                "MEMORY_LIFECYCLE_READY",
+                expected_lifecycle,
+            ),
+            (
+                (
+                    "metrics",
+                    "conflict-resolution",
+                    "eval/before.json",
+                    "eval/after.json",
+                ),
+                "CONFLICT_RESOLUTION_EVALUATED",
+                expected_conflict,
+            ),
+            (
+                (
+                    "metrics",
+                    "context-quality",
+                    "eval/context.json",
+                    "eval/observation.json",
+                    "eval/expectation.json",
+                    "--elapsed-ms",
+                    "1250",
+                    "--token-count",
+                    "2048",
+                ),
+                "CONTEXT_QUALITY_EVALUATED",
+                expected_quality,
+            ),
+        )
+        for arguments, expected_code, expected_data in cli_cases:
+            with self.subTest(interface="CLI", evaluation=expected_code):
+                code, result = self._cli(*arguments)
+                self.assertEqual(0, code)
+                self.assertEqual(expected_code, result["code"])
+                self.assertEqual(expected_data, result["data"])
+
+        app = ProductMcpApplication(self.workspace)
+        try:
+            mcp_cases = (
+                (
+                    {
+                        "evaluation": "MEMORY_POLLUTION",
+                        **pollution,
+                    },
+                    expected_pollution,
+                ),
+                ({"evaluation": "MEMORY_LIFECYCLE"}, expected_lifecycle),
+                (
+                    {
+                        "evaluation": "CONFLICT_RESOLUTION",
+                        "before": before,
+                        "after": after,
+                    },
+                    expected_conflict,
+                ),
+                (
+                    {
+                        "evaluation": "CONTEXT_QUALITY",
+                        "context": context(),
+                        "observation": observation(),
+                        "expectation": expectation(),
+                        "elapsed_ms": 1_250,
+                        "token_count": 2_048,
+                    },
+                    expected_quality,
+                ),
+            )
+            for arguments, expected_data in mcp_cases:
+                with self.subTest(interface="MCP", evaluation=arguments["evaluation"]):
+                    result = app.call_tool("continuity_evaluate", arguments)
+                    self.assertFalse(result["isError"])
+                    self.assertEqual(expected_data, result["structuredContent"]["data"])
+        finally:
+            app.close()
 
 
 if __name__ == "__main__":
