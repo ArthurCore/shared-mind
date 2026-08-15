@@ -208,9 +208,13 @@ it does not write SQLite directly.
 ## 12. Post-task compounding
 
 ```bash
-shared-mind-product capture task-123 ./task-trace.jsonl --auto-commit
+shared-mind-product capture DEV-081 ./task-trace.json --auto-commit
 ```
 
-The trace becomes an immutable source, new candidates enter staging, approved
-deterministic changes use the same canonical Proposal boundary, and affected
-views/indexes are consolidated incrementally.
+For real session capture, the JSON document must satisfy `TASK_TRACE`
+(`task-trace@1`) and contain ordered `TASK`, `TOOL`, `RESULT`, `DECISION`,
+`FAILURE`, and/or `TEST` events. The trace becomes an immutable source, exact
+duplicates return `UNCHANGED`, and reuse of a trace ID with different bytes is
+rejected. New candidates enter staging, approved deterministic changes use the
+same canonical Proposal boundary, and affected views/indexes are consolidated
+incrementally. See [DEV-081 Real Session Capture](DEV-081-real-session-capture.md).

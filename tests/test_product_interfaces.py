@@ -11,6 +11,7 @@ from shared_mind.product_mcp_server import ProductMcpApplication, RESOURCE_URIS,
 from shared_mind.web_control import WebControlApplication, create_server
 
 from tests.product_support import ProductTestCase
+from tests.test_task_trace_capture import TASK_ID, task_trace
 
 
 class ProductInterfacesTest(ProductTestCase):
@@ -56,6 +57,29 @@ class ProductInterfacesTest(ProductTestCase):
         code, verified = self._product_cli("verify")
         self.assertEqual(0, code)
         self.assertTrue(verified["data"]["valid"])
+
+    def test_product_cli_captures_strict_task_trace_idempotently(self) -> None:
+        trace_path = self.write_source(
+            "dev-081-trace.json", json.dumps(task_trace(), ensure_ascii=False)
+        )
+        code, captured = self._product_cli("capture", TASK_ID, trace_path.name)
+        self.assertEqual(0, code)
+        self.assertEqual("TASK_CAPTURED", captured["code"])
+        self.assertEqual("CAPTURED", captured["data"]["capture_receipt"]["status"])
+
+        code, duplicate = self._product_cli("capture", TASK_ID, trace_path.name)
+        self.assertEqual(0, code)
+        self.assertEqual("UNCHANGED", duplicate["data"]["capture_receipt"]["status"])
+        self.assertEqual(
+            captured["data"]["capture_receipt"]["source_revision_id"],
+            duplicate["data"]["capture_receipt"]["source_revision_id"],
+        )
+
+        outside = self.base / "outside-task-trace.json"
+        outside.write_text(json.dumps(task_trace()), encoding="utf-8")
+        code, denied = self._product_cli("capture", TASK_ID, str(outside))
+        self.assertEqual(3, code)
+        self.assertEqual("PATH_OUTSIDE_WORKSPACE", denied["code"])
 
     def test_skill_review_lifecycle_is_exposed_by_cli_mcp_and_web(self) -> None:
         skill = build_skill_record(
