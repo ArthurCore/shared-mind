@@ -540,6 +540,12 @@ EVIDENCE context를 `shared-mind resume` 한 명령으로 결합했다. local Py
 3.13 parallel branch coverage는 495 tests / 0 failures / 83%다. Hosted CI는
 branch push/PR 전이므로 아직 주장하지 않는다.
 
+DEV-100은 기본 resume context를 24 KiB로 축소하고 128 KiB를 explicit safety
+ceiling으로 유지한다. purpose, active decision, open question/conflict,
+actionable work와 evidence projection reference 보존을 focused integration
+test와 실제 dogfooding으로 검증했다. managed sandbox의 loopback bind와
+dependency-audit network 제한 때문에 unsandboxed/hosted gate는 대기 중이다.
+
 ### 13.2 요구사항 추적표
 
 | 요구사항 | 상태 | 주 증거 |
@@ -724,6 +730,7 @@ deny-by-default remote policy evaluator.
 | 완료(local) | DEV-097 | live summary contract integrity | sanitized schema enforcement, pre-comparison optional output, secret/provenance fail-closed |
 | 완료(local) | DEV-098 | evaluator policy/adversarial integrity | exact offline policy, executable unique vectors, declared/effective penalty parity |
 | 완료(local) | DEV-099 | uv-first session resume UX | manual venv/alias 없이 uv tool install, sibling workspace discovery, integrity-verified one-command context |
+| 차단(external gates) | DEV-100 | compact resume context | 24 KiB default와 explicit 128 KiB ceiling은 GREEN/dogfood 완료; loopback/audit/build gate 대기 |
 
 ## 16. 시험 전략과 합격 기준
 

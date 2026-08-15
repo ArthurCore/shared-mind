@@ -25,7 +25,10 @@ emits exactly one JSON document. Require `ok: true`, code `SESSION_READY`, and
 `data.integrity.valid: true`, then read `data.context`. The context contains
 current unconflicted claims, all open conflicts and their member claims, active
 decisions, open questions, actionable work items, the ledger sequence, the
-state root, and truncation metadata.
+state root, and truncation metadata. The default is a compact 24 KiB EVIDENCE
+request. It preserves those mandatory continuity sections and their projection
+references while leaving older or less relevant evidence for on-demand
+drill-down.
 
 An explicit task remains short:
 
@@ -33,7 +36,14 @@ An explicit task remains short:
 $ shared-mind resume "Review the authentication migration"
 ```
 
-For custom selectors and budgets use the advanced command:
+The explicit full resume ceiling remains available for evidence-heavy work:
+
+```console
+$ shared-mind resume --budget-bytes 131072
+```
+
+For custom selectors, token budgets, or more than 128 KiB use the advanced
+command:
 
 ```console
 $ shared-mind context --task "Review the authentication migration" --budget-tokens 4096

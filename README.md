@@ -104,7 +104,15 @@ $ shared-mind resume
 Run `uv tool update-shell` once if the installed commands are not yet on
 `PATH`. The `*-memory` sibling convention lets `shared-mind resume` discover
 the workspace from anywhere below the project tree. It verifies kernel and
-product integrity before returning a task-aware `SESSION_READY` context.
+product integrity before returning a task-aware `SESSION_READY` context. The
+default EVIDENCE context is capped at 24 KiB so a cold start restores the
+continuity core without packing unrelated history up to the old 128 KiB
+target. Request the full resume ceiling explicitly when deeper evidence is
+needed:
+
+```console
+$ shared-mind resume --budget-bytes 131072
+```
 
 For this repository the existing workspace is `../shared-mind-memory`, so only
 the install and `shared-mind resume` commands are needed. Re-running `init` or
@@ -139,8 +147,8 @@ $ shared-mind-product build all
 $ shared-mind resume "Review the authentication migration"
 ```
 
-Use `shared-mind context` only when custom query, reference, depth, byte, or
-token-budget controls are required.
+Use `shared-mind context` when custom query, reference, depth, token-budget, or
+more than the 128 KiB resume safety ceiling is required.
 
 The same state, request, selector version, and budget produce the same context
 regardless of which model or client made the request.

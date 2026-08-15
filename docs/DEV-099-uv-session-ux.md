@@ -1,5 +1,9 @@
 # DEV-099 — uv-first Session Resume UX
 
+> DEV-100 supersedes only the default packing budget: `resume` now defaults to
+> 24 KiB and retains 128 KiB as an explicit safety ceiling. DEV-099's workspace
+> discovery, integrity, and one-command session contracts are unchanged.
+
 ## Problem
 
 The previous primary path asked a user to create and activate a virtual

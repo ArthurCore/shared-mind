@@ -559,6 +559,27 @@ RED/GREEN·uv tool install·실제 self-dogfooding evidence는
 [`docs/testing/dev-099-uv-session-ux.tdd.md`](docs/testing/dev-099-uv-session-ux.tdd.md)에
 기록한다.
 
+### DEV-100 — Compact Resume Context
+
+**상태: BLOCKED (implementation/dogfood GREEN; external gates required)**
+
+- 기본 `shared-mind resume` EVIDENCE budget을 24 KiB로 제한해 128 KiB를
+  packing target이 아닌 explicit safety ceiling로 바꾼다.
+- 기본 cold start는 purpose, active decisions, open questions/conflicts,
+  actionable work와 evidence drill-down projection reference를 보존한다.
+- `--budget-bytes 131072`는 명시적인 full resume option으로 유지하고 그보다
+  큰 요청은 advanced `context` command로 분리한다.
+- 동일 Shared State/request/selector/budget의 deterministic context hash,
+  integrity-first fail-closed behavior와 canonical mutation boundary는 바꾸지
+  않는다.
+- RED/GREEN, 실제 bytes/token estimate, 전체 regression과 real dogfooding을
+  evidence로 남긴다.
+
+계약은 [`docs/DEV-100-compact-resume.md`](docs/DEV-100-compact-resume.md),
+RED/GREEN·실제 self-dogfooding evidence는
+[`docs/testing/dev-100-compact-resume.tdd.md`](docs/testing/dev-100-compact-resume.tdd.md)에
+기록한다.
+
 ## 14. 구현된 인터페이스
 
 ```text
@@ -767,6 +788,11 @@ discovery, integrity-before-context fail-closed behavior를 구현하고
 495-test/83% local regression과 Shared Mind closeout을 완료했다. task trace
 `trace:dev-099-uv-session-ux-20260815-001`과 WorkItem DONE v3가 같은 Shared
 State에 보존됐다. Hosted CI는 branch push/PR 전이므로 아직 주장하지 않는다.
+
+DEV-100은 24 KiB compact resume default와 explicit 128 KiB ceiling을 RED→GREEN
+구현하고 actual self-dogfooding에서 context bytes/token estimate를 81.27%
+줄였다. managed sandbox가 loopback bind와 dependency audit network를 막아
+canonical DONE closeout은 unsandboxed/hosted gate를 기다린다.
 
 ## 16. Definition of Done
 
