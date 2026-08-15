@@ -705,8 +705,12 @@ Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
 8개 job을 모두 통과했다.
 
 DEV-097은 incomplete/secret-bearing live artifact가 public helper에서 passing
-comparison을 만드는 경로를 차단하고 483-test/83% local regression을 완료했다.
-Shared Mind closeout과 hosted CI 근거는 PR 완료 시 이 절에 추가한다.
+comparison을 만드는 경로를 차단하고 483-test/83% local regression과 Shared
+Mind closeout을 완료했다. PR #16 첫 source/test/documentation head
+`3420dad27fcf29351a5d1fa9b868b0e080bc9105`의
+[run 31875983194](https://github.com/ArthurCore/shared-mind/actions/runs/31875983194)은
+Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
+8개 job을 모두 통과했다.
 
 ## 16. Definition of Done
 
