@@ -21,6 +21,32 @@ _DIMENSION_FIELDS = {
     "open_question": "open_questions",
     "actionable_work": "actionable_work_items",
 }
+_SCORING_DIMENSIONS = {
+    "project_purpose": 10,
+    "decision_and_rationale": 20,
+    "settled_claim_and_evidence_locator": 20,
+    "open_conflict_and_all_members": 25,
+    "open_question": 10,
+    "actionable_work": 15,
+}
+_SCORING_PENALTIES = {
+    "FALSE_SETTLED_CONFLICT_MEMBER": 50,
+    "HALLUCINATED_ID": 25,
+    "OMITTED_CONFLICT_MEMBER": 25,
+}
+_SCORING_CONSTANTS = {
+    "maximum_score": 100,
+    "passing_score": 100,
+    "required_fact_accuracy": 1.0,
+    "required_open_conflict_member_recall": 1.0,
+}
+_SCORING_FIELDS = frozenset(
+    {
+        *_SCORING_CONSTANTS,
+        "dimensions",
+        "penalties",
+    }
+)
 
 LIVE_COMPARISON_V1 = "product-continuity-live-comparison@1"
 LIVE_COMPARISON_V2 = "product-continuity-live-comparison@2"
@@ -64,8 +90,8 @@ def evaluate_scenario(
 
     expected = _mapping(scenario["expected_response"], "expected_response")
     context = _mapping(scenario["context"], "context")
-    scoring = _mapping(scenario["scoring"], "scoring")
-    weights = _mapping(scoring["dimensions"], "scoring.dimensions")
+    scoring = _scoring_contract(scenario.get("scoring"))
+    weights = scoring["dimensions"]
     scenario_id_matches = response.get("scenario_id") == scenario.get("scenario_id")
 
     dimension_matches = {
@@ -107,7 +133,7 @@ def evaluate_scenario(
     if omitted_conflict_member:
         penalty_codes.append("OMITTED_CONFLICT_MEMBER")
 
-    penalties = _mapping(scoring["penalties"], "scoring.penalties")
+    penalties = scoring["penalties"]
     earned_score = sum(dimension_scores.values())
     penalty_score = sum(int(penalties[code]) for code in penalty_codes)
     maximum_score = int(scoring["maximum_score"])
@@ -146,6 +172,52 @@ def evaluate_scenario(
         "penalty_codes": penalty_codes,
         "metric_comparison": metric_comparison,
     }
+
+
+def _scoring_contract(value: Any) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping) or set(value) != _SCORING_FIELDS:
+        raise ValueError(
+            "INVALID_SCORING_CONTRACT: scoring must use the exact field set"
+        )
+
+    for field, expected in _SCORING_CONSTANTS.items():
+        actual = value[field]
+        if type(actual) is not type(expected) or actual != expected:
+            raise ValueError(
+                f"INVALID_SCORING_CONTRACT: scoring.{field} must be the "
+                f"exact typed constant {expected!r}"
+            )
+
+    _exact_integer_constants(
+        value["dimensions"],
+        expected=_SCORING_DIMENSIONS,
+        path="scoring.dimensions",
+    )
+    _exact_integer_constants(
+        value["penalties"],
+        expected=_SCORING_PENALTIES,
+        path="scoring.penalties",
+    )
+    return value
+
+
+def _exact_integer_constants(
+    value: Any,
+    *,
+    expected: Mapping[str, int],
+    path: str,
+) -> None:
+    if not isinstance(value, Mapping) or set(value) != set(expected):
+        raise ValueError(
+            f"INVALID_SCORING_CONTRACT: {path} must use the exact field set"
+        )
+    for field, expected_value in expected.items():
+        actual = value[field]
+        if type(actual) is not int or actual != expected_value:
+            raise ValueError(
+                f"INVALID_SCORING_CONTRACT: {path}.{field} must be the "
+                f"exact integer constant {expected_value}"
+            )
 
 
 def sha256_bytes(value: bytes) -> str:

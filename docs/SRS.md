@@ -461,7 +461,7 @@ python3 contracts/validate_contract.py
 #     + 6 semantic cases + 7 continuity operations
 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
-# DEV-093 local Python 3.13 parallel runner: 457 tests, 0 failures
+# DEV-094 local Python 3.13 parallel runner: 463 tests, 0 failures
 # branch-enabled coverage total 83%
 ```
 
@@ -490,6 +490,14 @@ quality/security, fresh wheel의 8개 hosted job을 모두 통과했다.
 DEV-093 PR #12 source/test/documentation head
 `4f64e72e443a55043d56bf465d748d3a467e94f0`의
 [`31873909032`](https://github.com/ArthurCore/shared-mind/actions/runs/31873909032)은
+동일한 Python 3.11~3.13 coverage, 3-OS determinism, quality/security,
+fresh wheel의 8개 hosted job을 모두 통과했다.
+
+DEV-094는 evaluator-side scoring contract의 exact typed constants, weights,
+penalties, and quality thresholds를 scorer 내부에서 고정했다. local Python
+3.13 parallel branch coverage는 463 tests / 0 failures / 83%다. PR #13 첫
+documentation head `3051f9986ac6e867cb6ef4949a609fc161e3e616`의
+[`31874440698`](https://github.com/ArthurCore/shared-mind/actions/runs/31874440698)은
 동일한 Python 3.11~3.13 coverage, 3-OS determinism, quality/security,
 fresh wheel의 8개 hosted job을 모두 통과했다.
 
@@ -582,6 +590,9 @@ fresh wheel의 8개 hosted job을 모두 통과했다.
 - DEV-093은 public offline/live comparison helper 안에서 version, exact field
   shape, boolean pass, bounded score, finite quality fraction을 검증해 caller가
   schema validation을 생략해도 malformed evaluation input을 fail closed한다.
+- DEV-094는 evaluator-side scoring field set, typed 100-point thresholds,
+  required quality `1.0`, six dimension weights, and three positive penalties를
+  exact contract로 검증해 scoring policy drift를 fail closed한다.
 
 ## 14. 개발 로드맵
 
@@ -660,6 +671,7 @@ deny-by-default remote policy evaluator.
 | 완료 | DEV-091 | unclamped live evaluation reductions | signed comparison@2 regressions, explicit comparison@1 artifact compatibility, malformed metric fail-closed |
 | 완료 | DEV-092 | unclamped offline evaluation reductions | signed report@2 regressions, explicit report@1 schema compatibility, nested live-summary dispatch |
 | 완료(local) | DEV-093 | evaluation input integrity | empty quality/NaN/truthy-string/version drift fail-closed, valid/historical output preservation |
+| 완료(local) | DEV-094 | scoring contract integrity | exact typed thresholds/weights/penalties, weakened policy fail-closed, golden output preservation |
 
 ## 16. 시험 전략과 합격 기준
 
