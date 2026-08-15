@@ -61,6 +61,8 @@ class MemoryViewsProductTest(ProductTestCase):
         subject_after = self.service.store.get_artifact(subject["artifact_id"])
         self.assertEqual(subject_digest, subject_after["dependency_digest"])
         self.assertEqual(subject_version, subject_after["version"])
+        verification = self.service.verify()
+        self.assertTrue(verification["derived_views"]["valid"], verification)
 
     def test_scenario_views_cover_subject_decision_and_workstream(self) -> None:
         self.seed_product()
