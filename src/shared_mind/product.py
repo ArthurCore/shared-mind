@@ -20,6 +20,7 @@ from .continuity_eval import (
     classify_memory_lifecycle,
     evaluate_conflict_resolution,
     evaluate_memory_pollution,
+    evaluate_paired_context_reduction,
     evaluate_zero_relearning,
 )
 from .memory_views import ContextRouter, MemoryViewBuilder, MemoryViewError
@@ -1372,6 +1373,42 @@ class ProductService:
                 expectation,
                 elapsed_ms=elapsed_ms,
                 token_count=token_count,
+            )
+        except ContinuityEvaluationError as exc:
+            raise ProductError(
+                exc.code,
+                exc.message,
+                data={"path": exc.path},
+            ) from exc
+
+    def evaluate_paired_context_reduction(
+        self,
+        baseline_context: Mapping[str, Any],
+        baseline_observation: Mapping[str, Any],
+        candidate_context: Mapping[str, Any],
+        candidate_observation: Mapping[str, Any],
+        expectation: Mapping[str, Any],
+        thresholds: Mapping[str, Any],
+        *,
+        baseline_elapsed_ms: int | float,
+        candidate_elapsed_ms: int | float,
+        baseline_token_count: int,
+        candidate_token_count: int,
+    ) -> dict[str, Any]:
+        """Evaluate context reduction over one immutable Shared State snapshot."""
+
+        try:
+            return evaluate_paired_context_reduction(
+                baseline_context,
+                baseline_observation,
+                candidate_context,
+                candidate_observation,
+                expectation,
+                thresholds,
+                baseline_elapsed_ms=baseline_elapsed_ms,
+                candidate_elapsed_ms=candidate_elapsed_ms,
+                baseline_token_count=baseline_token_count,
+                candidate_token_count=candidate_token_count,
             )
         except ContinuityEvaluationError as exc:
             raise ProductError(

@@ -206,6 +206,25 @@ def build_parser() -> argparse.ArgumentParser:
     context_quality.add_argument(
         "--token-count", type=_non_negative_integer, required=True
     )
+    context_reduction = metrics_commands.add_parser("context-reduction")
+    context_reduction.add_argument("baseline_context")
+    context_reduction.add_argument("baseline_observation")
+    context_reduction.add_argument("candidate_context")
+    context_reduction.add_argument("candidate_observation")
+    context_reduction.add_argument("expectation")
+    context_reduction.add_argument("thresholds")
+    context_reduction.add_argument(
+        "--baseline-elapsed-ms", type=_non_negative_number, required=True
+    )
+    context_reduction.add_argument(
+        "--candidate-elapsed-ms", type=_non_negative_number, required=True
+    )
+    context_reduction.add_argument(
+        "--baseline-token-count", type=_non_negative_integer, required=True
+    )
+    context_reduction.add_argument(
+        "--candidate-token-count", type=_non_negative_integer, required=True
+    )
     return parser
 
 
@@ -488,6 +507,22 @@ def _dispatch(service: ProductService, args: argparse.Namespace) -> tuple[Any, s
                     token_count=args.token_count,
                 ),
                 "CONTEXT_QUALITY_EVALUATED",
+            )
+        if args.metrics_command == "context-reduction":
+            return (
+                service.evaluate_paired_context_reduction(
+                    _load_workspace_json(service, args.baseline_context),
+                    _load_workspace_json(service, args.baseline_observation),
+                    _load_workspace_json(service, args.candidate_context),
+                    _load_workspace_json(service, args.candidate_observation),
+                    _load_workspace_json(service, args.expectation),
+                    _load_workspace_json(service, args.thresholds),
+                    baseline_elapsed_ms=args.baseline_elapsed_ms,
+                    candidate_elapsed_ms=args.candidate_elapsed_ms,
+                    baseline_token_count=args.baseline_token_count,
+                    candidate_token_count=args.candidate_token_count,
+                ),
+                "CONTEXT_REDUCTION_EVALUATED",
             )
         return (
             service.cold_start_benchmark(
