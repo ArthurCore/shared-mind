@@ -2,13 +2,20 @@ from __future__ import annotations
 
 import io
 import json
+import math
 import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from shared_mind.cli import EXIT_INTEGRITY_ERROR, EXIT_OK, build_parser, main
+from shared_mind.cli import (
+    DEFAULT_RESUME_BUDGET_BYTES,
+    EXIT_INTEGRITY_ERROR,
+    EXIT_OK,
+    build_parser,
+    main,
+)
 from shared_mind.product import ProductService
 from shared_mind.workspace import Workspace
 
@@ -41,6 +48,14 @@ class SessionUxTest(unittest.TestCase):
             "Continue the highest-priority unblocked project work.", arguments.task
         )
         self.assertEqual("EVIDENCE", arguments.depth)
+        self.assertEqual(24 * 1024, DEFAULT_RESUME_BUDGET_BYTES)
+        self.assertEqual(DEFAULT_RESUME_BUDGET_BYTES, arguments.budget_bytes)
+
+    def test_resume_preserves_an_explicit_128_kib_evidence_budget(self) -> None:
+        arguments = build_parser().parse_args(
+            ["resume", "--budget-bytes", str(128 * 1024)]
+        )
+
         self.assertEqual(128 * 1024, arguments.budget_bytes)
 
     def test_workspace_discovery_finds_the_project_sibling_memory(self) -> None:
@@ -79,6 +94,80 @@ class SessionUxTest(unittest.TestCase):
             result["data"]["context"]["request"]["task"],
         )
         self.assertEqual("EVIDENCE", result["data"]["context"]["request"]["depth"])
+
+    def test_default_resume_restores_compact_continuity_and_drill_down_refs(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Workspace.initialize(
+                Path(temporary) / "atlas-memory", purpose="Atlas continuity"
+            )
+            service = ProductService(workspace)
+            try:
+                source = workspace.root / "continuity.md"
+                source.write_text(
+                    "\n".join(
+                        (
+                            "FACT: system:atlas | deployment.database_engine@1 | software:postgresql | production",
+                            "DECISION: Keep PostgreSQL | Continue with PostgreSQL | Verified runbook | Migrate later",
+                            "QUESTION: Which maintenance window? | Not yet approved",
+                            "WORK: P0 | Validate migration runbook",
+                        )
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                conflicting = workspace.root / "conflicting.md"
+                conflicting.write_text(
+                    "FACT: system:atlas | deployment.database_engine@1 | software:mysql | production\n",
+                    encoding="utf-8",
+                )
+                for path in (source, conflicting):
+                    batch = service.ingest([path])
+                    service.extract(batch["batch_id"])
+                    service.commit_batch_drafts(batch["batch_id"])
+                service.build_memory_views()
+            finally:
+                service.close()
+
+            contexts = []
+            for _ in range(2):
+                output = io.StringIO()
+                exit_code = main(
+                    ["--workspace", str(workspace.root), "resume"], stdout=output
+                )
+                self.assertEqual(EXIT_OK, exit_code, output.getvalue())
+                contexts.append(json.loads(output.getvalue())["data"]["context"])
+
+        first, second = contexts
+        self.assertEqual(first, second)
+        self.assertEqual(24 * 1024, first["budget"]["budget_bytes"])
+        self.assertLessEqual(first["budget"]["included_bytes"], 24 * 1024)
+        self.assertLess(first["budget"]["included_bytes"], (128 * 1024) // 4)
+        self.assertEqual(
+            first["budget"]["included_bytes"],
+            len(
+                json.dumps(
+                    first,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            ),
+        )
+        core = first["core_context"]
+        self.assertEqual("Atlas continuity", core["purpose"])
+        self.assertEqual(1, len(core["decisions"]))
+        self.assertEqual(1, len(core["open_questions"]))
+        self.assertEqual(1, len(core["open_conflicts"]))
+        self.assertEqual(1, len(core["work_items"]))
+        for section in ("decisions", "open_questions", "open_conflicts", "work_items"):
+            self.assertTrue(core[section][0]["projection_ref"])
+        truncation = core["truncation"]
+        self.assertEqual(
+            math.ceil(truncation["rendered_bytes"] / 4),
+            truncation["estimated_tokens"],
+        )
 
     def test_resume_fails_closed_before_context_when_integrity_is_invalid(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
