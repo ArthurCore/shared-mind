@@ -83,6 +83,13 @@ non-empty; and decisions, claims/evidence, conflicts/members, questions, and
 work items must match the context authority. Vacuous or ungrounded evaluator
 fixtures fail with `INVALID_SCENARIO_CONTRACT` before candidate scoring.
 
+Candidate and evaluator expected responses are both validated against the
+pinned closed response schema inside the scorer. Unknown or private fields,
+missing fields, malformed IDs/hashes, invalid statuses/cardinality/bounds, and
+non-object inputs therefore fail before semantic comparison. Candidate errors
+use `INVALID_CANDIDATE_RESPONSE`; error text contains only path and schema
+keyword, not the rejected value.
+
 The golden fixture records a manual baseline of 24,000 bytes, 6,000 tokens, and
 120 seconds, versus 9,720 bytes, 2,430 tokens, and 45 seconds for context-only
 handoff. Those fixture values represent reductions of 59.5%, 59.5%, and 62.5%
