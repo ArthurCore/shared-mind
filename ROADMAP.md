@@ -2,11 +2,11 @@
 
 | 항목 | 값 |
 |---|---|
-| 문서 버전 | 1.10.0 |
+| 문서 버전 | 1.11.0 |
 | 기준일 | 2026-08-15 |
-| 상태 | DEV-029~092 완료 |
+| 상태 | DEV-029~093 완료 |
 | 대상 저장소 | `ArthurCore/shared-mind` |
-| 구현 브랜치 | `agent/dev-092-unclamped-offline-reduction` |
+| 구현 브랜치 | `agent/dev-093-evaluation-input-integrity` |
 | 참고 프로젝트 | `TencentCloud/TencentDB-Agent-Memory` |
 
 ## 1. 제품 목표
@@ -435,6 +435,24 @@ RED/GREEN은
 [`docs/testing/dev-092-unclamped-offline-reduction.tdd.md`](docs/testing/dev-092-unclamped-offline-reduction.tdd.md)에
 기록한다.
 
+### DEV-093 — Evaluation Input Integrity
+
+**상태: DONE (local gates)**
+
+- public offline scorer가 별도 schema 호출 없이도 metrics version, exact shape,
+  fixed threshold, quality fraction을 검증한다.
+- empty quality map의 vacuous `all()` 통과를 차단한다.
+- live comparison은 nested report version, boolean `passed`, bounded score와
+  finite quality fraction을 직접 검증한다.
+- malformed input은 stable reason prefix로 fail closed하고 valid/historical
+  report 결과는 유지한다.
+
+계약은
+[`docs/DEV-093-evaluation-input-integrity.md`](docs/DEV-093-evaluation-input-integrity.md),
+RED/GREEN은
+[`docs/testing/dev-093-evaluation-input-integrity.tdd.md`](docs/testing/dev-093-evaluation-input-integrity.tdd.md)에
+기록한다.
+
 ## 14. 구현된 인터페이스
 
 ```text
@@ -488,6 +506,9 @@ src/shared_mind/web_control.py
 - DEV-092 unclamped offline reduction: **4 RED tests**, final focused
   **5 tests**, offline/live product-continuity 회귀 포함 **23 tests 통과**.
 - DEV-092 완료 전체 회귀: **451 tests, 0 failures, branch coverage 83%**.
+- DEV-093 evaluation input integrity: **6 RED→GREEN tests**, continuity
+  evaluation 회귀 포함 **29 tests 통과**.
+- DEV-093 완료 전체 회귀: **457 tests, 0 failures, branch coverage 83%**.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.
