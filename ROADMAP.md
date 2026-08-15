@@ -2,11 +2,11 @@
 
 | 항목 | 값 |
 |---|---|
-| 문서 버전 | 1.8.0 |
+| 문서 버전 | 1.9.0 |
 | 기준일 | 2026-08-15 |
-| 상태 | DEV-029~090 완료 |
+| 상태 | DEV-029~091 완료 |
 | 대상 저장소 | `ArthurCore/shared-mind` |
-| 구현 브랜치 | `agent/dev-090-streaming-benchmark-hash` |
+| 구현 브랜치 | `agent/dev-091-unclamped-live-reduction` |
 | 참고 프로젝트 | `TencentCloud/TencentDB-Agent-Memory` |
 
 ## 1. 제품 목표
@@ -402,6 +402,23 @@ RED/GREEN과 actual-file evidence는
 [`docs/testing/dev-090-streaming-benchmark-evidence.tdd.md`](docs/testing/dev-090-streaming-benchmark-evidence.tdd.md)에
 기록한다.
 
+### DEV-091 — Unclamped Live Evaluation Reductions
+
+**상태: DONE**
+
+- live comparison 기본 계약을 `product-continuity-live-comparison@2`로 올린다.
+- context가 baseline보다 비싸거나 느릴 때 음수 감소율을 실제 값으로 보존한다.
+- explicit `@1` 경로는 기존 clamp와 checked-in artifact bytes를 그대로 재현한다.
+- unknown version과 boolean/0/음수/non-finite metric은 stable error로 fail closed한다.
+- nested comparison version에 따라 live-summary schema가 clamped/unclamped 값을
+  엄격하게 검증한다.
+
+계약은
+[`docs/DEV-091-unclamped-live-reduction.md`](docs/DEV-091-unclamped-live-reduction.md),
+RED/GREEN은
+[`docs/testing/dev-091-unclamped-live-reduction.tdd.md`](docs/testing/dev-091-unclamped-live-reduction.tdd.md)에
+기록한다.
+
 ## 14. 구현된 인터페이스
 
 ```text
@@ -449,6 +466,9 @@ src/shared_mind/web_control.py
 - DEV-090 streaming evidence hashing: **3 RED→GREEN tests**, benchmark/projection
   회귀 포함 **31 tests 통과**, real 503MiB source/replay SHA/size exact parity.
 - DEV-090 완료 전체 회귀: **442 tests, 0 failures, branch coverage 83%**.
+- DEV-091 unclamped live reduction: **4 RED→GREEN tests**, product-continuity
+  회귀 포함 **18 tests 통과**.
+- DEV-091 완료 전체 회귀: **446 tests, 0 failures, branch coverage 83%**.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.

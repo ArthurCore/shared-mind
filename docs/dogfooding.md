@@ -131,6 +131,13 @@ deterministic scorer reports, comparison flags, and a redaction attestation.
 It rejects top-level extra fields, including common secret-bearing keys, and
 forbids floating model aliases such as `latest`.
 
+New comparisons use `product-continuity-live-comparison@2`. Its reductions are
+the signed value `1 - context / baseline`, so a slower or more expensive context
+arm remains visible as a negative number. Historical checked-in summaries keep
+`product-continuity-live-comparison@1`; reproduce them by passing that version
+explicitly to `live_summary_comparison`. Version 1's zero clamp is retained only
+for exact historical compatibility and must not be used for new evidence.
+
 ## Offline reproduction
 
 Run these commands from the repository root. They make no provider call and do
@@ -249,7 +256,7 @@ Use this protocol for either provider:
    every resource by at least 50%, preserves baseline quality, exposes 100% of
    open conflicts and their members, and has no false-settled or hallucinated ID.
    Build the shareable summary from aggregate fields only, compute its comparison
-   with `live_summary_comparison`, and validate it against
+   with the default comparison version 2 in `live_summary_comparison`, and validate it against
    `product-continuity-live-summary.schema.v1.json` before retaining or sharing
    the artifact.
 8. Remove the opt-in marker immediately after the approved calls:

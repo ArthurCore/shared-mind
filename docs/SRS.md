@@ -461,7 +461,7 @@ python3 contracts/validate_contract.py
 #     + 6 semantic cases + 7 continuity operations
 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
-# DEV-090 local Python 3.13 parallel runner: 442 tests, 0 failures
+# DEV-091 local Python 3.13 parallel runner: 446 tests, 0 failures
 # branch-enabled coverage total 83%
 ```
 
@@ -469,7 +469,7 @@ PR #5 GitHub Actions run
 [`31866492746`](https://github.com/ArthurCore/shared-mind/actions/runs/31866492746)은
 source/test HEAD `97d5811cf9ac852f076f76e5cff04f6d097e9567`에서 Python 3.11,
 3.12, 3.13 full coverage, Linux/macOS/Windows determinism, quality/security,
-fresh base/MCP wheel의 8개 job을 모두 통과했다. 위 DEV-090 442-test/83% 수치는
+fresh base/MCP wheel의 8개 job을 모두 통과했다. 위 DEV-091 446-test/83% 수치는
 local 결과다. 이후 PR #6 구현 head
 `58b6fb1b0a9a69f1e9cfe2d18da9405a82b0669b`의
 [`31867443975`](https://github.com/ArthurCore/shared-mind/actions/runs/31867443975)도
@@ -561,6 +561,9 @@ DEV-088 PR #7 head `3db636a4579925a9badce97d189ce6669fb7ddd4`의
   descriptor의 identity/size/time metadata drift를 fail closed한다. 보존된
   527,572,992-byte source/replay는 DEV-089 SHA/size와 exact parity이며 two-file
   first pass의 Python peak allocation은 약 2.11MiB였다.
+- DEV-091은 새 live comparison `@2`에서 baseline 대비 비용/시간 악화를 음수
+  감소율로 보존한다. checked-in `@1` artifact는 explicit compatibility 경로로
+  byte-identical 재현하며 unknown version과 비정상 metric은 fail closed한다.
 
 ## 14. 개발 로드맵
 
@@ -636,6 +639,7 @@ deny-by-default remote policy evaluator.
 | 완료 | DEV-088 | literal-safe retrieval query | task ID/version/operator/punctuation을 literal Unicode token으로 처리, `retrieval-index@2`, Python/CLI/MCP parity |
 | 완료(현재 환경 인증) | DEV-089 | fresh schema 1.3 100k certification | one-command create/verify/replay/measure, strict evidence schema/self-hash, 두 profile p95 2초 이내 |
 | 완료 | DEV-090 | streaming benchmark evidence hashing | fixed 1MiB chunks, descriptor drift fail-closed, real 503MiB source/replay SHA parity |
+| 완료 | DEV-091 | unclamped live evaluation reductions | signed comparison@2 regressions, explicit comparison@1 artifact compatibility, malformed metric fail-closed |
 
 ## 16. 시험 전략과 합격 기준
 
