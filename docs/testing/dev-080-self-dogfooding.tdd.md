@@ -65,4 +65,3 @@ All commands ran under Python 3.13.2.
 - `a9ae138` — directive pollution GREEN
 - `748e052` — incremental Scenario verification RED
 - `e768898` — incremental Scenario verification GREEN
-
