@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 from collections.abc import Mapping
 from functools import lru_cache
 from pathlib import Path
@@ -127,6 +128,16 @@ _RESOURCE_METRIC_FIELDS = frozenset({"bytes", "tokens", "time_seconds"})
 _QUALITY_METRIC_FIELDS = frozenset(
     {"fact_accuracy", "open_conflict_member_recall"}
 )
+_EXECUTION_POLICY_FIELDS = frozenset(
+    {"default_mode", "network_allowed_in_tests", "live_client"}
+)
+_LIVE_CLIENT_POLICY_FIELDS = frozenset(
+    {"enabled_by_default", "requires_explicit_opt_in", "environment_variable"}
+)
+_ADVERSARIAL_CASE_FIELDS = frozenset(
+    {"name", "expected_penalty_code", "response"}
+)
+_ADVERSARIAL_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]{2,127}$")
 
 
 def evaluate_scenario(
@@ -171,25 +182,7 @@ def evaluate_scenario(
         for dimension in _DIMENSION_FIELDS
     }
 
-    conflict_member_ids = _context_conflict_member_ids(context)
-    settled_ids = _ids_in_records(response.get("settled_claims"), "claim_id")
-    false_settled = bool(conflict_member_ids & settled_ids)
-
-    grounded_ids = _object_ids(context)
-    response_ids = _object_ids(response)
-    hallucinated_ids = response_ids - grounded_ids
-
-    conflict_recall, omitted_conflict_member = _open_conflict_member_recall(
-        context, response
-    )
-
-    penalty_codes: list[str] = []
-    if false_settled:
-        penalty_codes.append("FALSE_SETTLED_CONFLICT_MEMBER")
-    if hallucinated_ids:
-        penalty_codes.append("HALLUCINATED_ID")
-    if omitted_conflict_member:
-        penalty_codes.append("OMITTED_CONFLICT_MEMBER")
+    penalty_codes, conflict_recall = _response_penalty_codes(context, response)
 
     penalties = scoring["penalties"]
     earned_score = sum(dimension_scores.values())
@@ -305,7 +298,105 @@ def _scenario_contract(
         path="context.work_items",
     ):
         _invalid_scenario("expected work items must match context work items")
+    _validate_execution_policy(scenario.get("execution_policy"))
+    _validate_adversarial_cases(
+        scenario.get("adversarial_cases"),
+        context=context,
+        scenario_id=scenario_id,
+    )
     return expected, context
+
+
+def _validate_execution_policy(value: Any) -> None:
+    if not isinstance(value, Mapping) or set(value) != _EXECUTION_POLICY_FIELDS:
+        _invalid_scenario("execution_policy must use the exact offline field set")
+    if value.get("default_mode") != "OFFLINE_GOLDEN":
+        _invalid_scenario("execution_policy default_mode must be OFFLINE_GOLDEN")
+    if type(value.get("network_allowed_in_tests")) is not bool or value.get(
+        "network_allowed_in_tests"
+    ) is not False:
+        _invalid_scenario("execution_policy must disable network access in tests")
+    live = value.get("live_client")
+    if not isinstance(live, Mapping) or set(live) != _LIVE_CLIENT_POLICY_FIELDS:
+        _invalid_scenario("execution_policy live_client must use the exact field set")
+    if type(live.get("enabled_by_default")) is not bool or live.get(
+        "enabled_by_default"
+    ) is not False:
+        _invalid_scenario("live_client must be disabled by default")
+    if type(live.get("requires_explicit_opt_in")) is not bool or live.get(
+        "requires_explicit_opt_in"
+    ) is not True:
+        _invalid_scenario("live_client must require explicit opt in")
+    if (
+        live.get("environment_variable")
+        != "SHARED_MIND_PRODUCT_CONTINUITY_LIVE"
+    ):
+        _invalid_scenario("live_client environment variable must be pinned")
+
+
+def _validate_adversarial_cases(
+    value: Any,
+    *,
+    context: Mapping[str, Any],
+    scenario_id: str,
+) -> None:
+    if not isinstance(value, list) or not value:
+        _invalid_scenario("adversarial_cases must be a non-empty list")
+    names: set[str] = set()
+    declared_codes: set[str] = set()
+    for index, case in enumerate(value):
+        path = f"adversarial_cases[{index}]"
+        if not isinstance(case, Mapping) or set(case) != _ADVERSARIAL_CASE_FIELDS:
+            _invalid_scenario(f"{path} must use the exact field set")
+        name = case.get("name")
+        if (
+            not isinstance(name, str)
+            or _ADVERSARIAL_NAME_PATTERN.fullmatch(name) is None
+            or name in names
+        ):
+            _invalid_scenario(f"{path}.name must be a unique stable identifier")
+        names.add(name)
+        expected_code = case.get("expected_penalty_code")
+        if (
+            not isinstance(expected_code, str)
+            or expected_code not in _SCORING_PENALTIES
+            or expected_code in declared_codes
+        ):
+            _invalid_scenario(
+                f"{path}.expected_penalty_code must be unique and supported"
+            )
+        declared_codes.add(expected_code)
+        response = case.get("response")
+        _validate_response_contract(response, code="INVALID_SCENARIO_CONTRACT")
+        if response.get("scenario_id") != scenario_id:
+            _invalid_scenario(f"{path}.response scenario_id must match scenario_id")
+        actual_codes, _ = _response_penalty_codes(context, response)
+        if actual_codes != [expected_code]:
+            _invalid_scenario(
+                f"{path} must trigger exactly its declared penalty code"
+            )
+
+
+def _response_penalty_codes(
+    context: Mapping[str, Any], response: Mapping[str, Any]
+) -> tuple[list[str], float]:
+    conflict_member_ids = _context_conflict_member_ids(context)
+    settled_ids = _ids_in_records(response.get("settled_claims"), "claim_id")
+    false_settled = bool(conflict_member_ids & settled_ids)
+    grounded_ids = _object_ids(context)
+    response_ids = _object_ids(response)
+    hallucinated_ids = response_ids - grounded_ids
+    conflict_recall, omitted_conflict_member = _open_conflict_member_recall(
+        context, response
+    )
+    penalty_codes: list[str] = []
+    if false_settled:
+        penalty_codes.append("FALSE_SETTLED_CONFLICT_MEMBER")
+    if hallucinated_ids:
+        penalty_codes.append("HALLUCINATED_ID")
+    if omitted_conflict_member:
+        penalty_codes.append("OMITTED_CONFLICT_MEMBER")
+    return penalty_codes, conflict_recall
 
 
 def _context_continuity_records(

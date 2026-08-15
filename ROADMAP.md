@@ -2,11 +2,11 @@
 
 | 항목 | 값 |
 |---|---|
-| 문서 버전 | 1.15.0 |
+| 문서 버전 | 1.16.0 |
 | 기준일 | 2026-08-15 |
-| 상태 | DEV-029~097 완료 (hosted CI closeout 대기) |
+| 상태 | DEV-029~098 완료 (hosted CI closeout 대기) |
 | 대상 저장소 | `ArthurCore/shared-mind` |
-| 구현 브랜치 | `agent/dev-097-live-summary-integrity` |
+| 구현 브랜치 | `agent/dev-098-evaluator-policy-integrity` |
 | 참고 프로젝트 | `TencentCloud/TencentDB-Agent-Memory` |
 
 ## 1. 제품 목표
@@ -522,6 +522,23 @@ RED/GREEN은
 [`docs/testing/dev-097-live-summary-integrity.tdd.md`](docs/testing/dev-097-live-summary-integrity.tdd.md)에
 기록한다.
 
+### DEV-098 — Evaluator Policy and Adversarial Contract Integrity
+
+**상태: DONE (local gates)**
+
+- exact offline execution policy를 scorer 내부에서 검증한다.
+- adversarial case의 closed shape, unique identity/penalty, candidate schema,
+  scenario identity를 검증한다.
+- 각 vector가 ordinary scoring과 동일한 계산에서 선언 penalty 하나를 정확히
+  발생시켜야 한다.
+- malformed/private/ineffective vector는 `INVALID_SCENARIO_CONTRACT`로 거부한다.
+
+계약은
+[`docs/DEV-098-evaluator-policy-integrity.md`](docs/DEV-098-evaluator-policy-integrity.md),
+RED/GREEN은
+[`docs/testing/dev-098-evaluator-policy-integrity.tdd.md`](docs/testing/dev-098-evaluator-policy-integrity.tdd.md)에
+기록한다.
+
 ## 14. 구현된 인터페이스
 
 ```text
@@ -590,6 +607,9 @@ src/shared_mind/web_control.py
 - DEV-097 live summary integrity: **7 RED→GREEN tests**, live evaluation 회귀
   포함 **36 tests 통과**.
 - DEV-097 완료 전체 회귀: **483 tests, 0 failures, branch coverage 83%**.
+- DEV-098 evaluator policy integrity: **7 RED→GREEN tests**, evaluation 회귀
+  포함 **51 tests 통과**.
+- DEV-098 완료 전체 회귀: **490 tests, 0 failures, branch coverage 83%**.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.
@@ -709,6 +729,14 @@ comparison을 만드는 경로를 차단하고 483-test/83% local regression과 
 Mind closeout을 완료했다. PR #16 첫 source/test/documentation head
 `3420dad27fcf29351a5d1fa9b868b0e080bc9105`의
 [run 31875983194](https://github.com/ArthurCore/shared-mind/actions/runs/31875983194)은
+Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
+8개 job을 모두 통과했다.
+
+DEV-098은 ignored execution policy와 ineffective adversarial vector가 100점을
+유지하는 경로를 차단하고 490-test/83% local regression과 Shared Mind
+closeout을 완료했다. PR #17 첫 source/test/documentation head
+`9e4142f93ddacecfdbc1babaee72f8b57a25ab82`의
+[run 31876421867](https://github.com/ArthurCore/shared-mind/actions/runs/31876421867)은
 Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
 8개 job을 모두 통과했다.
 
