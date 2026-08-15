@@ -70,3 +70,20 @@ workspace rather than fabricating a conflict in canonical project memory.
 - Skill mutations remain on the ProductMutationProposal boundary.
 - No Agent-, client-, or model-specific canonical memory was introduced.
 - The same state/request/version produces the same report and hash.
+
+## Shared Mind closeout
+
+The immutable trace
+`trace:dev-082-086-continuity-evaluations-20260815-001` was captured as source
+revision `revision_fb82c9a31c7aa1cff73c941be355cd56`. A single validated kernel
+Proposal then marked DEV-082~086 `DONE` and answered the zero-relearning,
+wrong-memory, and lifecycle questions with that source as evidence. The
+context-reduction question remains intentionally `OPEN`: this run established
+absolute context cost but did not produce a paired reduction baseline.
+
+Final consolidation and verification returned `PRODUCT_INTEGRITY_VALID` at
+ledger sequence 151 and state root
+`sha256:9c0555aeb0ba9cd35fadc3b17005f7bb201230b0cfb0afd6587f3c03110c686a`.
+There are no `TODO`, `DOING`, or `BLOCKED` WorkItems. A next-session context was
+generated with context hash
+`sha256:50f0b8aea2982917d6455ae03419e5f3426406da8f34d11327e84e2d9fb9e317`.
