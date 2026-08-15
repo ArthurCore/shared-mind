@@ -108,6 +108,29 @@ The process exited normally after its response; no test Codex session remained
 running. The temporary workspace had no project records, so the restored
 continuity lists were correctly empty rather than invented.
 
+## Shared State capture and closeout
+
+Strict trace `trace:dev-101-natural-language-setup-20260815-001` was captured
+through the public product CLI into the same `../shared-mind-memory` workspace.
+It preserved ten ordered TASK/TOOL/DECISION/FAILURE/TEST/RESULT events as source
+revision `revision_8d4ae87a0373f4f824674881a2ef2631`; extraction completed with
+zero failures and no canonical Draft was inferred from the raw evidence.
+
+A separately validated, version-guarded kernel Proposal moved
+`workitem_dev_101_natural_language_setup_001` from TODO v1 to DONE v2 at ledger
+sequence 210. Final consolidation, product verification, and explicit ledger
+replay passed:
+
+- product result `PRODUCT_INTEGRITY_VALID`;
+- state root
+  `sha256:cd1e7e996c715a138f1b55c1c8972608da4ff86736a1e9abff8cb6810d6b647d`;
+- head hash
+  `sha256:a69e9243f61dad51f1e3adb7f7704b21845d7c35d35691bdb4a8d372f95dad80`;
+- replay checked all 210 entries with no errors; and
+- the next setup context excluded completed DEV-101, retained the remaining
+  blocked DEV-100 WorkItem, and fit in 24,520 bytes of the default 24 KiB
+  budget.
+
 ## Preserved boundaries
 
 - One-time software installation is still required; natural language cannot

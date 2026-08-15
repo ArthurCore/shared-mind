@@ -813,6 +813,15 @@ DEV-100은 24 KiB compact resume default와 explicit 128 KiB ceiling을 RED→GR
 줄였다. managed sandbox가 loopback bind와 dependency audit network를 막아
 canonical DONE closeout은 unsandboxed/hosted gate를 기다린다.
 
+DEV-101은 `Shared Mind 초기설정해` 자연어 요청을 전역 Codex Skill과
+idempotent `shared-mind setup`으로 연결했다. stale disposable view와 mandatory
+continuity budget overflow를 실제 dogfooding RED로 발견·수정했고,
+508-test/83% regression, fresh uv wheel smoke, 실제 shared workspace 및 완전히
+새 Codex 세션의 한 문장 forward test를 통과했다. task trace
+`trace:dev-101-natural-language-setup-20260815-001`과 WorkItem DONE v2가 같은
+Shared State에 보존됐다. Hosted CI는 branch push/PR 전이므로 아직 주장하지
+않는다.
+
 ## 16. Definition of Done
 
 DEV 작업은 다음 조건을 만족할 때 완료로 본다.
