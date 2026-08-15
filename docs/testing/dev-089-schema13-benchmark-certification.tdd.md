@@ -82,3 +82,15 @@ reference, reported no active WorkItems or open Questions, and produced context
 hash `sha256:b582284a85944a651553c6313a908ea752c08daf1d147b26e7f06d88f1d86e5a`.
 Result files remain derived benchmark evidence and do not mutate canonical
 state.
+
+Hosted evidence for PR #8's first documentation head:
+
+- PR run
+  [`31871756255`](https://github.com/ArthurCore/shared-mind/actions/runs/31871756255):
+  all eight CI jobs PASS;
+- push run
+  [`31871738857`](https://github.com/ArthurCore/shared-mind/actions/runs/31871738857):
+  all eight CI jobs PASS;
+- CodeQL run
+  [`31871755515`](https://github.com/ArthurCore/shared-mind/actions/runs/31871755515):
+  actions and Python analysis PASS.

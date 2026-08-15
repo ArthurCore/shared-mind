@@ -476,6 +476,16 @@ Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
 [run 31869406046](https://github.com/ArthurCore/shared-mind/actions/runs/31869406046)도
 8개 job을 모두 통과했다.
 
+DEV-089은 fresh schema 1.3 두 profile의 100k one-command certification과
+439-test/83% local regression을 완료했다. PR #8 첫 documentation head의
+[run 31871756255](https://github.com/ArthurCore/shared-mind/actions/runs/31871756255)와
+동일 source head push
+[run 31871738857](https://github.com/ArthurCore/shared-mind/actions/runs/31871738857)은
+각각 Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel
+8개 job을 모두 통과했다. CodeQL
+[run 31871755515](https://github.com/ArthurCore/shared-mind/actions/runs/31871755515)의
+actions/python 분석도 통과했다.
+
 ## 16. Definition of Done
 
 DEV 작업은 다음 조건을 만족할 때 완료로 본다.
