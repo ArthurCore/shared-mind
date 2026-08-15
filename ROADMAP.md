@@ -2,11 +2,11 @@
 
 | 항목 | 값 |
 |---|---|
-| 문서 버전 | 1.4.0 |
+| 문서 버전 | 1.5.0 |
 | 기준일 | 2026-08-15 |
-| 상태 | DEV-029~086 완료 |
+| 상태 | DEV-029~087 완료 |
 | 대상 저장소 | `ArthurCore/shared-mind` |
-| 구현 브랜치 | `agent/dev-082-086-continuity-evals` |
+| 구현 브랜치 | `agent/dev-087-context-reduction-eval` |
 | 참고 프로젝트 | `TencentCloud/TencentDB-Agent-Memory` |
 
 ## 1. 제품 목표
@@ -321,6 +321,25 @@ RED/GREEN·전체 회귀·실제 dogfooding evidence는
 [`docs/testing/dev-082-086-continuity-evaluations.tdd.md`](docs/testing/dev-082-086-continuity-evaluations.tdd.md)에
 기록한다. 평가 결과는 immutable evidence일 뿐 canonical truth가 아니다.
 
+### DEV-087 — Paired Context Reduction Evaluation
+
+**상태: DONE**
+
+- 같은 canonical state, task, query, references에서 full baseline과 compact
+  candidate를 쌍으로 비교한다.
+- 두 context hash와 state root를 검증하고 DEV-082 zero-relearning 품질을 양쪽에
+  적용한다.
+- bytes, counted tokens, time-to-productive-action 감소율을 unclamped actual 값으로
+  기록한다.
+- 핵심 recall/evidence가 낮아지거나 wrong/missing memory가 늘면 크기가 작아도 실패한다.
+- Python/CLI/MCP와 immutable runner/report schema가 동일한 결과를 반환해야 한다.
+
+계약은 [`docs/DEV-087-context-reduction-evaluation.md`](docs/DEV-087-context-reduction-evaluation.md),
+RED/GREEN과 실제 paired measurement는
+[`docs/testing/dev-087-context-reduction-evaluation.tdd.md`](docs/testing/dev-087-context-reduction-evaluation.tdd.md)에
+기록한다. 실제 paired evidence와 전체 회귀를 통과한 뒤 기존 OpenQuestion을
+source-backed answer로 종료했다.
+
 ## 14. 구현된 인터페이스
 
 ```text
@@ -355,6 +374,8 @@ src/shared_mind/web_control.py
 - DEV-081 완료 전체 회귀: **401 tests, 0 failures, branch coverage 82%**.
 - DEV-082~086 완료 전체 회귀: **417 tests, 0 failures, branch coverage 82%**.
 - DEV-082~086 targeted continuity evaluation: **15 tests 통과**.
+- DEV-087 구현 전체 회귀: **428 tests, 0 failures, branch coverage 83%**.
+- DEV-087 paired context reduction: **11 tests**, 기존 연속성 포함 **26 tests 통과**.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.
@@ -373,8 +394,11 @@ Actions runner access가 복구됐다. PR #4의 구현 head
 성공했고, 최종 documentation head `ac90490a37393f8d3065ea926acd3b40dbf922d6`도
 [run 31859364496](https://github.com/ArthurCore/shared-mind/actions/runs/31859364496)에서
 아래 8개 job을 모두 통과한 뒤 main에 병합됐다. DEV-082~086
-branch는 아직 push/PR 전이므로 hosted 결과가 없으며, 위 417-test/82% 수치는 로컬
-Python 3.13 검증 결과다.
+   branch는 PR #5 head `97d5811cf9ac852f076f76e5cff04f6d097e9567`의
+   [run 31866492746](https://github.com/ArthurCore/shared-mind/actions/runs/31866492746)에서
+   같은 8개 job을 통과하고 merge commit
+   `d358912c2fbd9dfcc22f1f74883319e6db59f856`로 main에 병합됐다. 위
+   417-test/82% 수치는 병합 전 로컬 Python 3.13 검증 결과다.
 
 1. Python 3.11 contract + full branch coverage: **PASS**.
 2. Python 3.12 contract + full branch coverage: **PASS**.
@@ -387,6 +411,9 @@ Python 3.13 검증 결과다.
 
 기존 billing/spending-limit 표시는 해소된 외부 runner-access incident였으며 현재
 구현 또는 merge blocker가 아니다.
+
+DEV-087은 local regression/dogfooding과 Shared Mind closeout까지 완료했으며, 이
+브랜치의 hosted 결과는 push/PR 후 기록한다.
 
 ## 16. Definition of Done
 
@@ -422,7 +449,8 @@ DEV 작업은 다음 조건을 만족할 때 완료로 본다.
 
 ## 18. 이후 범위
 
-DEV-080~086은 완료됐다. 다음 항목은 DEV-086 이후에도 현재 제품 범위에 포함하지 않는다.
+DEV-080~087은 완료됐다. 다음 항목은 이 단계 이후에도 현재 제품 범위에 포함하지
+않는다.
 
 - multi-tenant cloud service와 distributed database.
 - 조직/팀 RBAC와 외부 identity provider.
