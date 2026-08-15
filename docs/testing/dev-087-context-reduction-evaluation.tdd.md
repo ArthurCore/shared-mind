@@ -63,7 +63,7 @@ test files:       51
 tests:            428
 failures:         0
 branch coverage:  83%
-elapsed:          32.851s
+elapsed:          32.446s
 ```
 
 Both contract validators, compileall, Ruff, the configured mypy scope, Bandit,
