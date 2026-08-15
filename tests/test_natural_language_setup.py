@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from shared_mind.cli import EXIT_OK, build_parser, main
+from shared_mind.workspace import Workspace
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -144,6 +145,28 @@ class NaturalLanguageSetupTest(unittest.TestCase):
                 completed["data"]["context"]["ledger_sequence"],
                 repeated["data"]["context"]["ledger_sequence"],
             )
+
+    def test_setup_repairs_only_stale_disposable_views_before_resuming(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self._project(root)
+            codex_home = root / "codex-home"
+            initial_exit, initial = self._run_setup(project, codex_home)
+            self.assertEqual(EXIT_OK, initial_exit, initial)
+            workspace = Workspace.open(root / "atlas-memory")
+            late_source = workspace.source_root / "late.md"
+            late_source.write_text("Late evidence without directives.\n", encoding="utf-8")
+            _, receipt = workspace.add_source(late_source)
+            self.assertEqual("COMMITTED", receipt.outcome)
+
+            resumed_exit, resumed = self._run_setup(project, codex_home)
+
+            self.assertEqual(EXIT_OK, resumed_exit, resumed)
+            self.assertEqual("SETUP_READY", resumed["code"])
+            self.assertTrue(resumed["data"]["consolidation"]["performed"])
+            self.assertTrue(resumed["data"]["consolidation"]["changed_artifact_ids"])
+            self.assertTrue(resumed["data"]["integrity"]["valid"])
+            self.assertEqual(receipt.ledger_seq, resumed["data"]["context"]["ledger_sequence"])
 
     def test_setup_fails_closed_on_an_unmanaged_conflicting_global_skill(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
