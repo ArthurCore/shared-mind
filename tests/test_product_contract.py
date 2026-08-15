@@ -45,7 +45,23 @@ class ProductContractTest(unittest.TestCase):
             check=False,
         )
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertIn("8 typed fixtures", result.stdout)
+        self.assertIn("10 typed fixtures", result.stdout)
+
+    def test_task_trace_contracts_are_public_and_strict(self) -> None:
+        schema = load_product_schema()
+        self.assertIn("TaskTraceEvent", schema["$defs"])
+        self.assertIn("TaskTrace", schema["$defs"])
+        self.assertIn("TaskTraceCaptureReceipt", schema["$defs"])
+        fixtures = json.loads(
+            (ROOT / "contracts/product-conformance-fixtures.v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        objects = {item["name"]: item["object"] for item in fixtures["typed_objects"]}
+        self.assertTrue(Draft202012Validator(schema).is_valid(objects["task_trace"]))
+        self.assertTrue(
+            Draft202012Validator(schema).is_valid(objects["task_trace_capture_receipt"])
+        )
 
     def test_context_request_forbids_agent_partition_hints(self) -> None:
         with self.assertRaises(MemoryViewError) as caught:
