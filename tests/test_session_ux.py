@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from shared_mind.cli import (
+    CliUsageError,
     DEFAULT_RESUME_BUDGET_BYTES,
     EXIT_INTEGRITY_ERROR,
     EXIT_OK,
@@ -57,6 +58,12 @@ class SessionUxTest(unittest.TestCase):
         )
 
         self.assertEqual(128 * 1024, arguments.budget_bytes)
+
+    def test_resume_rejects_a_budget_above_the_128_kib_safety_ceiling(self) -> None:
+        with self.assertRaises(CliUsageError):
+            build_parser().parse_args(
+                ["resume", "--budget-bytes", str((128 * 1024) + 1)]
+            )
 
     def test_workspace_discovery_finds_the_project_sibling_memory(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
