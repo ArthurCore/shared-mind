@@ -628,6 +628,201 @@
         }
       }
     },
+    "TaskTraceEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "object_type",
+        "event_version",
+        "event_id",
+        "sequence",
+        "event_type",
+        "occurred_at",
+        "summary",
+        "details"
+      ],
+      "properties": {
+        "object_type": {
+          "const": "TASK_TRACE_EVENT"
+        },
+        "event_version": {
+          "const": "task-trace-event@1"
+        },
+        "event_id": {
+          "type": "string",
+          "pattern": "^trace_event_[A-Za-z0-9._-]{8,128}$"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "event_type": {
+          "enum": [
+            "TASK",
+            "TOOL",
+            "RESULT",
+            "DECISION",
+            "FAILURE",
+            "TEST"
+          ]
+        },
+        "occurred_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        },
+        "details": {
+          "type": "object"
+        }
+      }
+    },
+    "TaskTrace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "object_type",
+        "trace_version",
+        "trace_id",
+        "task_id",
+        "session_id",
+        "started_at",
+        "ended_at",
+        "related_object_ids",
+        "events"
+      ],
+      "properties": {
+        "object_type": {
+          "const": "TASK_TRACE"
+        },
+        "trace_version": {
+          "const": "task-trace@1"
+        },
+        "trace_id": {
+          "$ref": "#/$defs/SemanticId"
+        },
+        "task_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "session_id": {
+          "$ref": "#/$defs/SemanticId"
+        },
+        "started_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "ended_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "related_object_ids": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "events": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10000,
+          "items": {
+            "$ref": "#/$defs/TaskTraceEvent"
+          }
+        }
+      }
+    },
+    "TaskTraceCaptureReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "object_type",
+        "capture_version",
+        "trace_id",
+        "task_id",
+        "session_id",
+        "status",
+        "content_hash",
+        "source_revision_id",
+        "batch_id",
+        "event_count",
+        "event_types",
+        "started_at",
+        "ended_at",
+        "destination"
+      ],
+      "properties": {
+        "object_type": {
+          "const": "TASK_TRACE_CAPTURE_RECEIPT"
+        },
+        "capture_version": {
+          "const": "task-trace-capture@1"
+        },
+        "trace_id": {
+          "$ref": "#/$defs/SemanticId"
+        },
+        "task_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+        },
+        "session_id": {
+          "$ref": "#/$defs/SemanticId"
+        },
+        "status": {
+          "enum": [
+            "CAPTURED",
+            "UNCHANGED"
+          ]
+        },
+        "content_hash": {
+          "$ref": "#/$defs/Hash"
+        },
+        "source_revision_id": {
+          "type": "string",
+          "pattern": "^revision_[A-Za-z0-9._-]{8,128}$"
+        },
+        "batch_id": {
+          "type": "string",
+          "pattern": "^batch_[0-9a-f]{24}$"
+        },
+        "event_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "event_types": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "TASK",
+              "TOOL",
+              "RESULT",
+              "DECISION",
+              "FAILURE",
+              "TEST"
+            ]
+          }
+        },
+        "started_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "ended_at": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "destination": {
+          "type": "string",
+          "pattern": "^sources/task-traces/[0-9a-f]{32}\\.jsonl$"
+        }
+      }
+    },
     "ProductSkillOperation": {
       "oneOf": [
         {
@@ -936,6 +1131,12 @@
     },
     {
       "$ref": "#/$defs/ProductMutationReceipt"
+    },
+    {
+      "$ref": "#/$defs/TaskTrace"
+    },
+    {
+      "$ref": "#/$defs/TaskTraceCaptureReceipt"
     }
   ]
 }

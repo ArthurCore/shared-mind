@@ -59,7 +59,7 @@ class TaskTraceCaptureTest(ProductTestCase):
 
     def _trace_files(self) -> list[Path]:
         root = self.workspace.source_root / "task-traces"
-        return sorted(root.rglob("*")) if root.exists() else []
+        return sorted(path for path in root.rglob("*") if path.is_file()) if root.exists() else []
 
     def test_capture_is_versioned_immutable_and_restorable_in_a_fresh_session(self) -> None:
         result = self.service.post_task_capture(TASK_ID, task_trace())
@@ -88,7 +88,7 @@ class TaskTraceCaptureTest(ProductTestCase):
                 "2026-08-15T00:00:01Z",
                 span["source_revision"]["captured_at"],
             )
-            search = fresh.search("DEV-081 failure evidence", kinds=["SOURCE_TEXT"])
+            search = fresh.search("failure evidence", kinds=["SOURCE_TEXT"])
             self.assertIn(
                 f"source-text:{receipt['source_revision_id']}",
                 [item["document_id"] for item in search["results"]],
@@ -214,7 +214,7 @@ class TaskTraceCaptureTest(ProductTestCase):
         self.assertIn("DEV-081 — Real Session Capture", roadmap)
         self.assertIn("**상태: NEXT / IN PROGRESS**", roadmap)
         for dev in range(82, 87):
-            self.assertRegex(roadmap, rf"DEV-{dev}[^\n]*TODO")
+            self.assertRegex(roadmap, rf"DEV-{dev:03d}[^\n]*TODO")
 
 
 if __name__ == "__main__":

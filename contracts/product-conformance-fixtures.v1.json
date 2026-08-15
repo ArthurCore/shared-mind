@@ -91,6 +91,30 @@
       "replace_fields": {
         "outcome": "AUTO_APPROVED"
       }
+    },
+    {
+      "base_object": "task_trace",
+      "name": "task_trace_empty_events",
+      "remove_fields": [],
+      "replace_fields": {
+        "events": []
+      }
+    },
+    {
+      "base_object": "task_trace",
+      "name": "task_trace_agent_partition_field",
+      "remove_fields": [],
+      "replace_fields": {
+        "agent_id": "agent:codex"
+      }
+    },
+    {
+      "base_object": "task_trace_capture_receipt",
+      "name": "task_trace_receipt_invalid_status",
+      "remove_fields": [],
+      "replace_fields": {
+        "status": "OVERWRITTEN"
+      }
     }
   ],
   "typed_objects": [
@@ -359,6 +383,56 @@
         "proposal_id": "product_proposal_aaaaaaaaaaaaaaaaaaaaaaaa",
         "reason_codes": [],
         "receipt_id": "product_receipt_cccccccccccccccccccccccc"
+      }
+    },
+    {
+      "name": "task_trace",
+      "object": {
+        "ended_at": "2026-08-15T00:00:02Z",
+        "events": [
+          {
+            "details": {
+              "command": "python -m unittest tests.test_task_trace_capture"
+            },
+            "event_id": "trace_event_aaaaaaaaaaaaaaaaaaaaaaaa",
+            "event_type": "TEST",
+            "event_version": "task-trace-event@1",
+            "object_type": "TASK_TRACE_EVENT",
+            "occurred_at": "2026-08-15T00:00:02Z",
+            "sequence": 1,
+            "summary": "DEV-081 targeted test passed"
+          }
+        ],
+        "object_type": "TASK_TRACE",
+        "related_object_ids": [
+          "workitem_extract_aa0a56c4dbee6f1a7734bd3c"
+        ],
+        "session_id": "session:dev-081-fixture",
+        "started_at": "2026-08-15T00:00:01Z",
+        "task_id": "DEV-081",
+        "trace_id": "trace:dev-081-fixture",
+        "trace_version": "task-trace@1"
+      }
+    },
+    {
+      "name": "task_trace_capture_receipt",
+      "object": {
+        "batch_id": "batch_aaaaaaaaaaaaaaaaaaaaaaaa",
+        "capture_version": "task-trace-capture@1",
+        "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "destination": "sources/task-traces/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jsonl",
+        "ended_at": "2026-08-15T00:00:02Z",
+        "event_count": 1,
+        "event_types": [
+          "TEST"
+        ],
+        "object_type": "TASK_TRACE_CAPTURE_RECEIPT",
+        "session_id": "session:dev-081-fixture",
+        "source_revision_id": "revision_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "started_at": "2026-08-15T00:00:01Z",
+        "status": "CAPTURED",
+        "task_id": "DEV-081",
+        "trace_id": "trace:dev-081-fixture"
       }
     }
   ]

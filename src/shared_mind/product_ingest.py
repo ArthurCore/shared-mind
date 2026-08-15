@@ -488,7 +488,14 @@ class IngestManager:
                     continue
                 if not isinstance(value, Mapping):
                     continue
-                for field in ("timestamp", "created_at", "time", "date"):
+                for field in (
+                    "timestamp",
+                    "started_at",
+                    "occurred_at",
+                    "created_at",
+                    "time",
+                    "date",
+                ):
                     normalized = _normalize_timestamp(value.get(field))
                     if normalized:
                         timestamps.append(normalized)

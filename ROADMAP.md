@@ -2,11 +2,11 @@
 
 | 항목 | 값 |
 |---|---|
-| 문서 버전 | 1.2.0 |
-| 기준일 | 2026-08-14 |
-| 상태 | DEV-029~079 구현 완료 기준선; hosted CI는 외부 결제 제한으로 실행 차단 |
+| 문서 버전 | 1.3.0 |
+| 기준일 | 2026-08-15 |
+| 상태 | DEV-029~080 완료; DEV-081 NEXT / IN PROGRESS; DEV-082~086 TODO |
 | 대상 저장소 | `ArthurCore/shared-mind` |
-| 구현 브랜치 | `agent/product-roadmap-implementation` |
+| 구현 브랜치 | `agent/dev-081-session-capture` |
 | 참고 프로젝트 | `TencentCloud/TencentDB-Agent-Memory` |
 
 ## 1. 제품 목표
@@ -269,7 +269,47 @@ flowchart LR
 - compounding loop가 kernel/product mutation boundary를 우회하지 않는다.
 - 반복 가능한 fixture와 product evaluation artifact를 제공한다.
 
-## 13. 구현된 인터페이스
+## 13. Milestone 13 — Self-Dogfooding Continuity Evaluation
+
+이 milestone은 DEV-029~079 완료 기준선을 유지한 채 실제 Shared Mind workspace
+`../shared-mind-memory` 하나를 Codex, Claude, GPT와 모든 새 세션이 함께 사용하는
+단계다. Agent별 canonical memory, AgentProfile, Agent Loadout, Fixed Asset Binding은
+계속 금지한다.
+
+### DEV-080 — Shared Mind Self-Dogfooding
+
+**상태: DONE**
+
+- 실제 external workspace에서 self cold-start를 수행했다.
+- directive pollution과 incremental Scenario verification 결함을 RED→GREEN으로 수정했다.
+- Python 3.13.2 전체 391 tests / 0 failures / branch coverage 82%와
+  `PRODUCT_INTEGRITY_VALID`를 기록했다.
+
+### DEV-081 — Real Session Capture
+
+**상태: NEXT / IN PROGRESS**
+
+- versioned, immutable task trace에 TASK/TOOL/RESULT/DECISION/FAILURE/TEST event를 보존한다.
+- 동일 trace 재전송은 canonical history와 audit를 늘리지 않고, 같은 trace ID의 다른
+  bytes는 fail closed한다.
+- malformed trace는 file/source/receipt를 만들기 전에 거부한다.
+- source 등록 뒤 실패한 retry는 동일 SourceRevision을 재사용한다.
+- 입력 timestamp와 event 순서를 그대로 보존하고 다음 새 세션에서 검색 및 source
+  evidence drill-down이 가능해야 한다.
+- capture는 kernel Proposal source-registration boundary를 우회하지 않는다.
+
+### DEV-082~086
+
+- [ ] **DEV-082 — Zero-Relearning Evaluation — TODO**: fresh session의 continuity accuracy,
+  decision/open-question/conflict recall, evidence traceability와 productive-action 시간을 자동 측정한다.
+- [ ] **DEV-083 — Memory Pollution / Wrong Memory Evaluation — TODO**: duplicate, irrelevant,
+  stale, confidently wrong memory를 측정한다.
+- [ ] **DEV-084 — Memory Lifecycle — TODO**: stale, superseded, completed, current를 구분한다.
+- [ ] **DEV-085 — Conflict Resolution Workflow — TODO**: 원 conflicting Claims와 해결 rationale을 보존한다.
+- [ ] **DEV-086 — Context Quality Benchmark — TODO**: relevant recall, missing critical memory,
+  irrelevant context, evidence traceability, bytes/tokens와 time-to-action을 측정한다.
+
+## 14. 구현된 인터페이스
 
 ```text
 shared-mind                 Kernel CLI와 task-aware context compatibility path
@@ -293,13 +333,13 @@ src/shared_mind/product_mcp_server.py
 src/shared_mind/web_control.py
 ```
 
-## 14. 검증 기준선
+## 15. 검증 기준선
 
-### 14.1 완료된 로컬 검증
+### 15.1 완료된 로컬 검증
 
 - kernel contract validator 통과.
 - product contract validator 통과: **11 positive fixtures + 10 negative fixtures**.
-- 안정된 전체 회귀 기준선: **385 tests, 0 failures, 2 skipped, branch coverage 82%**.
+- DEV-080 완료 전체 회귀 기준선: **391 tests, 0 failures, branch coverage 82%**.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.
@@ -310,7 +350,7 @@ src/shared_mind/web_control.py
 - process-heavy 테스트가 일반 병렬 worker와 SQLite/CPU를 경쟁하지 않도록 coverage runner에 exclusive lane 추가.
 - durability barrier ready file을 atomic rename으로 공개해 부분 JSON 관찰 race 제거.
 
-### 14.2 Hosted GitHub Actions 상태
+### 15.2 Hosted GitHub Actions 상태
 
 최종 branch CI는 코드 checkout 또는 test 실행 전에 GitHub가 runner 할당을 거부했다.
 GitHub annotation은 최근 결제 실패 또는 Actions spending limit 증가가 필요하다고 명시한다.
@@ -327,7 +367,7 @@ Hosted CI가 다시 활성화되면 다음 8개 job이 최종 확인 대상이�
 7. Compile/Ruff/mypy/dependency audit/Bandit.
 8. Fresh wheel install and all entrypoint smoke.
 
-## 15. Definition of Done
+## 16. Definition of Done
 
 DEV 작업은 다음 조건을 만족할 때 완료로 본다.
 
@@ -343,7 +383,7 @@ DEV 작업은 다음 조건을 만족할 때 완료로 본다.
 - failure는 stable machine-readable reason code를 반환한다.
 - README/SRS/architecture/roadmap이 실제 구현과 일치한다.
 
-## 16. 현재 성공 지표
+## 17. 현재 성공 지표
 
 | 지표 | 기준 |
 |---|---|
@@ -359,10 +399,10 @@ DEV 작업은 다음 조건을 만족할 때 완료로 본다.
 | unreviewed Skill auto-promotion | 0 |
 | same state/request/version/budget cross-client parity | 동일 context hash |
 
-## 17. 이후 범위
+## 18. 이후 범위
 
-DEV-029~079 이후의 기능은 현재 완료 기준선에 포함하지 않는다.
-실제 dogfooding 지표와 사용 요구가 확인된 뒤 별도 milestone/ADR로 추가한다.
+DEV-080은 완료됐고 DEV-081~086은 위 Milestone 13에서 순차 수행한다. 다음 항목은
+DEV-086 이후에도 현재 제품 범위에 포함하지 않는다.
 
 - multi-tenant cloud service와 distributed database.
 - 조직/팀 RBAC와 외부 identity provider.
