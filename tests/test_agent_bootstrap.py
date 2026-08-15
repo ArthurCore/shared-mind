@@ -48,6 +48,7 @@ class AgentBootstrapDocumentationTest(unittest.TestCase):
         self.assertEqual(
             {
                 "init",
+                "setup",
                 "source",
                 "proposal",
                 "context",

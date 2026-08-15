@@ -51,6 +51,13 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("path")
     init_parser.add_argument("--purpose")
 
+    setup_parser = commands.add_parser("setup")
+    setup_parser.add_argument("--project")
+    setup_parser.add_argument("--workspace", dest="workspace_path")
+    setup_parser.add_argument("--purpose")
+    setup_parser.add_argument("--no-cold-start", action="store_true")
+    setup_parser.add_argument("--no-install-skill", action="store_true")
+
     source_parser = commands.add_parser("source")
     source_commands = source_parser.add_subparsers(dest="source_command", required=True)
     source_add = source_commands.add_parser("add")
@@ -142,6 +149,22 @@ def main(
                 True,
                 "WORKSPACE_INITIALIZED",
                 data=workspace.describe(),
+            )
+        if arguments.command == "setup":
+            from .setup import setup_project
+
+            return _emit(
+                output,
+                True,
+                "SETUP_READY",
+                data=setup_project(
+                    start=Path.cwd(),
+                    project=arguments.project,
+                    workspace_path=arguments.workspace_path,
+                    purpose=arguments.purpose,
+                    cold_start=not arguments.no_cold_start,
+                    install_codex_skill=not arguments.no_install_skill,
+                ),
             )
         workspace = (
             Workspace.open(arguments.workspace)

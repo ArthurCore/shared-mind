@@ -97,14 +97,24 @@ activate a virtual environment.
 
 ```console
 $ uv tool install --editable '.[mcp]'
-$ shared-mind init ../my-project-memory --purpose "Preserve this project's reasoning across AI sessions."
-$ shared-mind resume
+$ shared-mind setup
 ```
 
 Run `uv tool update-shell` once if the installed commands are not yet on
-`PATH`. The `*-memory` sibling convention lets `shared-mind resume` discover
-the workspace from anywhere below the project tree. It verifies kernel and
-product integrity before returning a task-aware `SESSION_READY` context. The
+`PATH`. `setup` finds the current Git project, creates or reuses its conventional
+`<project>-memory` sibling, performs the first bounded cold start exactly once,
+installs the global Codex `shared-mind-setup` skill, verifies integrity, and
+returns `SETUP_READY` with resumable context. It is idempotent.
+
+After that one-time command, a new Codex session can be started with the natural
+language request `Shared Mind 초기설정해`. The globally installed skill invokes
+the same deterministic setup boundary and loads the returned Shared State; the
+user does not need to repeat paths or shell commands. Software must be installed
+once before any session can recognize the skill.
+
+The `*-memory` sibling convention also lets `shared-mind resume` discover the
+workspace from anywhere below the project tree. It verifies kernel and product
+integrity before returning a task-aware `SESSION_READY` context. The
 default EVIDENCE context is capped at 24 KiB so a cold start restores the
 continuity core without packing unrelated history up to the old 128 KiB
 target. Request the full resume ceiling explicitly when deeper evidence is
@@ -114,9 +124,9 @@ needed:
 $ shared-mind resume --budget-bytes 131072
 ```
 
-For this repository the existing workspace is `../shared-mind-memory`, so only
-the install and `shared-mind resume` commands are needed. Re-running `init` or
-`cold-start` is unnecessary.
+For this repository the existing workspace is `../shared-mind-memory`, so
+`shared-mind setup` reuses it without repeating cold start. Direct `init`,
+`cold-start`, and `resume` remain available as lower-level or advanced surfaces.
 
 ### Cold-start an existing project
 

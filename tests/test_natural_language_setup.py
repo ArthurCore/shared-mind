@@ -60,7 +60,7 @@ class NaturalLanguageSetupTest(unittest.TestCase):
         interface = (SKILL_ROOT / "agents" / "openai.yaml").read_text(
             encoding="utf-8"
         )
-        self.assertIn("display_name: Shared Mind Setup", interface)
+        self.assertIn('display_name: "Shared Mind Setup"', interface)
 
     def test_setup_creates_one_sibling_workspace_installs_skill_and_returns_context(
         self,
@@ -192,10 +192,13 @@ class NaturalLanguageSetupTest(unittest.TestCase):
         metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
         data_files = metadata["tool"]["setuptools"]["data-files"]
         packaged = data_files["share/shared-mind/skills/shared-mind-setup"]
+        packaged_agents = data_files[
+            "share/shared-mind/skills/shared-mind-setup/agents"
+        ]
 
         self.assertIn(".agents/skills/shared-mind-setup/SKILL.md", packaged)
         self.assertIn(
-            ".agents/skills/shared-mind-setup/agents/openai.yaml", packaged
+            ".agents/skills/shared-mind-setup/agents/openai.yaml", packaged_agents
         )
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         bootstrap = (ROOT / "docs" / "agent-bootstrap.md").read_text(

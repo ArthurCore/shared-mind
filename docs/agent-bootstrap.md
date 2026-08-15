@@ -10,6 +10,27 @@ $ uv tool install --editable '.[mcp]'
 
 Run `uv tool update-shell` once if the command is not yet on `PATH`.
 
+## Natural-language initial setup
+
+From a Git project, run the idempotent setup once:
+
+```console
+$ shared-mind setup
+```
+
+It creates or reuses the sibling `<project>-memory` workspace, performs a
+bounded deterministic cold start only when one has not completed, installs the
+global Codex `shared-mind-setup` skill, verifies product/kernel integrity, and
+returns one `SETUP_READY` JSON document with session context. It never creates
+Agent-specific state and never commits model output implicitly.
+
+Every later Codex session on this machine may use the natural-language request
+`Shared Mind 초기설정해`. The global skill runs the same command, requires
+`SETUP_READY` and valid integrity, then reads active WorkItems, decisions,
+questions, conflicts, and evidence references from `data.context`. A tool must
+be installed once before a new session can discover its skill; natural language
+cannot bootstrap software that is not present on the machine.
+
 ## Resume in one command
 
 Run this before proposing or changing project work:

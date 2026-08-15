@@ -580,6 +580,24 @@ RED/GREEN·실제 self-dogfooding evidence는
 [`docs/testing/dev-100-compact-resume.tdd.md`](docs/testing/dev-100-compact-resume.tdd.md)에
 기록한다.
 
+### DEV-101 — Natural-language Shared Mind Setup
+
+**상태: IN PROGRESS**
+
+- `Shared Mind 초기설정해` 같은 자연어 요청을 전역 Codex skill이 인식한다.
+- idempotent `shared-mind setup`은 현재 Git project를 찾고 기존 또는 sibling
+  Shared Mind workspace 하나만 사용한다.
+- 신규 workspace만 bounded deterministic cold start를 수행하고, 재시도는
+  canonical source/ledger 또는 product audit를 중복시키지 않는다.
+- setup은 skill 설치, product/kernel integrity 검증, active continuity와 evidence
+  pointer가 포함된 task-aware context 반환을 한 경계로 제공한다.
+- 사용자 수정 skill 충돌, project root 부재, partial cold-start는 fail closed하며
+  SQLite 직접 수정이나 Agent별 memory를 만들지 않는다.
+
+계약은 [`docs/DEV-101-natural-language-setup.md`](docs/DEV-101-natural-language-setup.md),
+RED/GREEN 및 fresh-session evidence는
+`docs/testing/dev-101-natural-language-setup.tdd.md`에 기록한다.
+
 ## 14. 구현된 인터페이스
 
 ```text
