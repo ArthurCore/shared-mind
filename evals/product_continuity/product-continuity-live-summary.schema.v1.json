@@ -80,49 +80,14 @@
       }
     },
     "comparison": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "report_version",
-        "reductions",
-        "meets_reduction_target",
-        "quality_preserved",
-        "schema_valid",
-        "passed"
-      ],
-      "properties": {
-        "report_version": {
-          "const": "product-continuity-live-comparison@1"
+      "oneOf": [
+        {
+          "$ref": "#/$defs/live_comparison_v1"
         },
-        "reductions": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["bytes", "tokens", "time_seconds"],
-          "properties": {
-            "bytes": {
-              "$ref": "#/$defs/fraction"
-            },
-            "tokens": {
-              "$ref": "#/$defs/fraction"
-            },
-            "time_seconds": {
-              "$ref": "#/$defs/fraction"
-            }
-          }
-        },
-        "meets_reduction_target": {
-          "type": "boolean"
-        },
-        "quality_preserved": {
-          "type": "boolean"
-        },
-        "schema_valid": {
-          "type": "boolean"
-        },
-        "passed": {
-          "type": "boolean"
+        {
+          "$ref": "#/$defs/live_comparison_v2"
         }
-      }
+      ]
     },
     "redaction_attestation": {
       "type": "object",
@@ -155,6 +120,96 @@
       "type": "number",
       "minimum": 0,
       "maximum": 1
+    },
+    "live_comparison_v1": {
+      "$ref": "#/$defs/live_comparison",
+      "properties": {
+        "report_version": {
+          "const": "product-continuity-live-comparison@1"
+        },
+        "reductions": {
+          "$ref": "#/$defs/clamped_reductions"
+        }
+      }
+    },
+    "live_comparison_v2": {
+      "$ref": "#/$defs/live_comparison",
+      "properties": {
+        "report_version": {
+          "const": "product-continuity-live-comparison@2"
+        },
+        "reductions": {
+          "$ref": "#/$defs/unclamped_reductions"
+        }
+      }
+    },
+    "live_comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_version",
+        "reductions",
+        "meets_reduction_target",
+        "quality_preserved",
+        "schema_valid",
+        "passed"
+      ],
+      "properties": {
+        "report_version": {
+          "type": "string"
+        },
+        "reductions": {
+          "type": "object"
+        },
+        "meets_reduction_target": {
+          "type": "boolean"
+        },
+        "quality_preserved": {
+          "type": "boolean"
+        },
+        "schema_valid": {
+          "type": "boolean"
+        },
+        "passed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "clamped_reductions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bytes", "tokens", "time_seconds"],
+      "properties": {
+        "bytes": {
+          "$ref": "#/$defs/fraction"
+        },
+        "tokens": {
+          "$ref": "#/$defs/fraction"
+        },
+        "time_seconds": {
+          "$ref": "#/$defs/fraction"
+        }
+      }
+    },
+    "unclamped_reductions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bytes", "tokens", "time_seconds"],
+      "properties": {
+        "bytes": {
+          "$ref": "#/$defs/unclamped_reduction"
+        },
+        "tokens": {
+          "$ref": "#/$defs/unclamped_reduction"
+        },
+        "time_seconds": {
+          "$ref": "#/$defs/unclamped_reduction"
+        }
+      }
+    },
+    "unclamped_reduction": {
+      "type": "number",
+      "exclusiveMaximum": 1
     },
     "component_version": {
       "type": "object",

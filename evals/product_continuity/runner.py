@@ -8,6 +8,7 @@ and the scenario's recorded resource metrics are evaluated independently.
 from __future__ import annotations
 
 import hashlib
+import math
 from collections.abc import Mapping
 from typing import Any
 
@@ -20,6 +21,12 @@ _DIMENSION_FIELDS = {
     "open_question": "open_questions",
     "actionable_work": "actionable_work_items",
 }
+
+LIVE_COMPARISON_V1 = "product-continuity-live-comparison@1"
+LIVE_COMPARISON_V2 = "product-continuity-live-comparison@2"
+_SUPPORTED_LIVE_COMPARISON_VERSIONS = frozenset(
+    (LIVE_COMPARISON_V1, LIVE_COMPARISON_V2)
+)
 
 
 def evaluate_scenario(
@@ -116,8 +123,24 @@ def sha256_bytes(value: bytes) -> str:
     return "sha256:" + hashlib.sha256(value).hexdigest()
 
 
-def live_summary_comparison(summary: Mapping[str, Any]) -> dict[str, Any]:
-    """Compare sanitized manual/context live arms without provider coupling."""
+def live_summary_comparison(
+    summary: Mapping[str, Any],
+    *,
+    comparison_version: str = LIVE_COMPARISON_V2,
+) -> dict[str, Any]:
+    """Compare sanitized live arms with explicitly versioned reduction semantics.
+
+    Version 1 retains its historical zero-to-one clamp so checked-in evidence
+    remains exactly reproducible.  Version 2 preserves negative reductions,
+    making a context arm that is slower or more expensive visible as a
+    regression instead of reporting it as zero improvement.
+    """
+
+    if comparison_version not in _SUPPORTED_LIVE_COMPARISON_VERSIONS:
+        raise ValueError(
+            "UNSUPPORTED_LIVE_COMPARISON_VERSION: "
+            f"{comparison_version!r}"
+        )
 
     arms = _mapping(summary["arms"], "arms")
     manual = _mapping(arms["manual_baseline"], "arms.manual_baseline")
@@ -129,10 +152,16 @@ def live_summary_comparison(summary: Mapping[str, Any]) -> dict[str, Any]:
         ("tokens", "input_tokens"),
         ("time_seconds", "elapsed_time_seconds"),
     ):
-        baseline = float(manual[input_name])
-        candidate = float(context[input_name])
+        baseline = _positive_live_metric(
+            manual[input_name], f"arms.manual_baseline.{input_name}"
+        )
+        candidate = _positive_live_metric(
+            context[input_name], f"arms.context_only.{input_name}"
+        )
         reduction = 1.0 - candidate / baseline
-        reductions[output_name] = round(max(0.0, min(1.0, reduction)), 12)
+        if comparison_version == LIVE_COMPARISON_V1:
+            reduction = max(0.0, min(1.0, reduction))
+        reductions[output_name] = round(reduction, 12)
 
     manual_report = _mapping(manual["report"], "arms.manual_baseline.report")
     context_report = _mapping(context["report"], "arms.context_only.report")
@@ -159,13 +188,26 @@ def live_summary_comparison(summary: Mapping[str, Any]) -> dict[str, Any]:
     )
 
     return {
-        "report_version": "product-continuity-live-comparison@1",
+        "report_version": comparison_version,
         "reductions": reductions,
         "meets_reduction_target": meets_reduction_target,
         "quality_preserved": quality_preserved,
         "schema_valid": schema_valid,
         "passed": passed,
     }
+
+
+def _positive_live_metric(value: Any, path: str) -> float:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(float(value))
+        or float(value) <= 0.0
+    ):
+        raise ValueError(
+            f"INVALID_LIVE_COMPARISON_METRIC: {path} must be finite and positive"
+        )
+    return float(value)
 
 
 def _metric_comparison(scenario: Mapping[str, Any]) -> dict[str, Any]:
