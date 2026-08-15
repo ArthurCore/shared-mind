@@ -102,3 +102,24 @@ returned the prior 130,997-byte context, while 131,073 returned `USAGE_ERROR`.
 - No commits were squashed or rewritten.
 - The branch is locally implemented and dogfooded but remains blocked on the
   loopback/dependency-audit/build gates described above. It has not been pushed.
+
+## Shared State capture and closeout
+
+Strict task trace `trace:dev-100-compact-resume-20260815-001` was captured into
+the same sibling workspace as immutable source revision
+`revision_d41448ef6a20ff29682b35cd4bd6e566`. The trace contains ten ordered
+TASK/TOOL/TEST/DECISION/RESULT/FAILURE events and produced no automatic
+canonical Draft.
+
+A separately validated, version-guarded Proposal moved
+`workitem_dev_100_compact_resume_001` from TODO v1 to BLOCKED v2 with the exact
+environmental blocker. After rebuilding disposable views/indexes:
+
+- `PRODUCT_INTEGRITY_VALID` covered 207 kernel entries, 11 derived artifacts,
+  the product audit chain, and Skill replay;
+- explicit ledger replay passed at head
+  `sha256:77903cb08e2ae1aea3d4dee8b17bc571b94d601ed0b84a9f896d948c6d2a1e2f`;
+- canonical state root was
+  `sha256:832d559794a3bb15721a439006c69c6c36c3285f453e204bcd324e0c04f93a44`;
+- the next default resume returned `SESSION_READY`, valid integrity, the BLOCKED
+  WorkItem and blocker, and 24,481 included bytes within the 24 KiB budget.
