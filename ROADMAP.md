@@ -563,6 +563,13 @@ test, documentation head `13834d9835a8bb552e89339e05e638925625dc76`의
 Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
 8개 job을 모두 통과했다.
 
+DEV-092는 signed offline report `@2`, explicit historical `@1` compatibility,
+451-test/83% local regression과 Shared Mind closeout을 완료했다. PR #11 source,
+test, documentation head `534db0d74d1520d4c8557b3462e4ff7fe44ef680`의
+[run 31873428269](https://github.com/ArthurCore/shared-mind/actions/runs/31873428269)은
+Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
+8개 job을 모두 통과했다.
+
 ## 16. Definition of Done
 
 DEV 작업은 다음 조건을 만족할 때 완료로 본다.

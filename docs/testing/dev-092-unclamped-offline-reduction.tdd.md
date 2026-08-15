@@ -64,3 +64,11 @@ next context hash: sha256:93226262eebe3453e47b2be6a834b6229c07ce31803de7aa88f55c
 `shared-mind-product verify` all passed. The next-session context was generated
 from the same state with a task-aware 8,192-token budget; the initial 4,096
 budget failed closed because the mandatory continuity payload did not fit.
+
+## Hosted evidence
+
+PR #11 source/test/documentation head
+`534db0d74d1520d4c8557b3462e4ff7fe44ef680` passed
+[GitHub Actions run 31873428269](https://github.com/ArthurCore/shared-mind/actions/runs/31873428269):
+Python 3.11, 3.12, and 3.13 full contract/coverage, Ubuntu/macOS/Windows
+determinism, quality/security, and fresh wheel smoke all succeeded.
