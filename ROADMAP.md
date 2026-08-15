@@ -2,11 +2,11 @@
 
 | 항목 | 값 |
 |---|---|
-| 문서 버전 | 1.13.0 |
+| 문서 버전 | 1.14.0 |
 | 기준일 | 2026-08-15 |
-| 상태 | DEV-029~095 완료 (hosted CI closeout 대기) |
+| 상태 | DEV-029~096 완료 (hosted CI closeout 대기) |
 | 대상 저장소 | `ArthurCore/shared-mind` |
-| 구현 브랜치 | `agent/dev-095-scenario-grounding-integrity` |
+| 구현 브랜치 | `agent/dev-096-candidate-response-integrity` |
 | 참고 프로젝트 | `TencentCloud/TencentDB-Agent-Memory` |
 
 ## 1. 제품 목표
@@ -487,6 +487,24 @@ RED/GREEN은
 [`docs/testing/dev-095-scenario-grounding-integrity.tdd.md`](docs/testing/dev-095-scenario-grounding-integrity.tdd.md)에
 기록한다.
 
+### DEV-096 — Candidate Response Contract Integrity
+
+**상태: DONE (local gates)**
+
+- candidate와 evaluator expected response에 동일한 pinned closed schema를
+  scorer 내부에서 적용한다.
+- unknown/private fields, missing fields, malformed ID/hash/status/bounds를
+  semantic scoring 전에 거부한다.
+- candidate는 `INVALID_CANDIDATE_RESPONSE`, evaluator expected response는
+  `INVALID_SCENARIO_CONTRACT`로 fail closed한다.
+- valid response와 grounded summary paraphrase는 유지한다.
+
+계약은
+[`docs/DEV-096-candidate-response-integrity.md`](docs/DEV-096-candidate-response-integrity.md),
+RED/GREEN은
+[`docs/testing/dev-096-candidate-response-integrity.tdd.md`](docs/testing/dev-096-candidate-response-integrity.tdd.md)에
+기록한다.
+
 ## 14. 구현된 인터페이스
 
 ```text
@@ -549,6 +567,9 @@ src/shared_mind/web_control.py
 - DEV-095 scenario grounding integrity: **7 RED→GREEN tests**, evaluation
   회귀 포함 **33 tests 통과**.
 - DEV-095 완료 전체 회귀: **470 tests, 0 failures, branch coverage 83%**.
+- DEV-096 candidate response integrity: **6 RED→GREEN tests**, evaluation
+  회귀 포함 **39 tests 통과**.
+- DEV-096 완료 전체 회귀: **476 tests, 0 failures, branch coverage 83%**.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.
@@ -652,6 +673,14 @@ DEV-095는 vacuous 또는 ungrounded scenario fixture가 100점을 받는 경로
 PR #14 첫 source/test/documentation head
 `8f868587acafe689a18dec79d852f0ff1713eb00`의
 [run 31875012327](https://github.com/ArthurCore/shared-mind/actions/runs/31875012327)은
+Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
+8개 job을 모두 통과했다.
+
+DEV-096은 unknown/private candidate fields와 malformed closed-schema values가
+100점을 유지하는 경로를 차단하고 476-test/83% local regression과 Shared Mind
+closeout을 완료했다. PR #15 첫 source/test/documentation head
+`62f360ee3b96ba516e878399ac793c0ea7184c60`의
+[run 31875521479](https://github.com/ArthurCore/shared-mind/actions/runs/31875521479)은
 Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
 8개 job을 모두 통과했다.
 

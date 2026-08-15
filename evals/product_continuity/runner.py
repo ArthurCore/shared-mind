@@ -8,9 +8,14 @@ and the scenario's recorded resource metrics are evaluated independently.
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 from collections.abc import Mapping
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
+
+from jsonschema import Draft202012Validator
 
 
 _DIMENSION_FIELDS = {
@@ -139,6 +144,10 @@ def evaluate_scenario(
         )
 
     expected, context = _scenario_contract(scenario)
+    _validate_response_contract(
+        response,
+        code="INVALID_CANDIDATE_RESPONSE",
+    )
     scoring = _scoring_contract(scenario.get("scoring"))
     weights = scoring["dimensions"]
     scenario_id_matches = response.get("scenario_id") == scenario.get("scenario_id")
@@ -257,6 +266,7 @@ def _scenario_contract(
         _invalid_scenario("expected_response scenario_id must match scenario_id")
     if expected.get("project_purpose") != purpose:
         _invalid_scenario("expected project purpose must match context purpose")
+    _validate_response_contract(expected, code="INVALID_SCENARIO_CONTRACT")
 
     for field in (
         "current_decisions",
@@ -321,6 +331,36 @@ def _context_continuity_records(
 
 def _invalid_scenario(message: str) -> None:
     raise ValueError(f"INVALID_SCENARIO_CONTRACT: {message}")
+
+
+@lru_cache(maxsize=1)
+def _response_validator() -> Draft202012Validator:
+    schema_path = Path(__file__).with_name(
+        "product-continuity-response.schema.v1.json"
+    )
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema)
+
+
+def _validate_response_contract(value: Any, *, code: str) -> None:
+    errors = sorted(
+        _response_validator().iter_errors(value),
+        key=lambda error: (
+            tuple(str(part) for part in error.absolute_path),
+            str(error.validator),
+        ),
+    )
+    if not errors:
+        return
+    error = errors[0]
+    location = "$"
+    for part in error.absolute_path:
+        location += f"[{part}]" if isinstance(part, int) else f".{part}"
+    raise ValueError(
+        f"{code}: {location} violates the closed response schema "
+        f"({error.validator})"
+    )
 
 
 def _scoring_contract(value: Any) -> Mapping[str, Any]:
