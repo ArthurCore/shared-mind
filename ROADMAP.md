@@ -582,7 +582,7 @@ RED/GREEN·실제 self-dogfooding evidence는
 
 ### DEV-101 — Natural-language Shared Mind Setup
 
-**상태: IN PROGRESS**
+**상태: DONE**
 
 - `Shared Mind 초기설정해` 같은 자연어 요청을 전역 Codex skill이 인식한다.
 - idempotent `shared-mind setup`은 현재 Git project를 찾고 기존 또는 sibling
@@ -596,7 +596,8 @@ RED/GREEN·실제 self-dogfooding evidence는
 
 계약은 [`docs/DEV-101-natural-language-setup.md`](docs/DEV-101-natural-language-setup.md),
 RED/GREEN 및 fresh-session evidence는
-`docs/testing/dev-101-natural-language-setup.tdd.md`에 기록한다.
+[`docs/testing/dev-101-natural-language-setup.tdd.md`](docs/testing/dev-101-natural-language-setup.tdd.md)에
+기록한다.
 
 ## 14. 구현된 인터페이스
 
