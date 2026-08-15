@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -189,6 +190,88 @@ class BenchmarkCertificationTest(unittest.TestCase):
                     result["context"]["context_rendered_bytes"],
                     result["context"]["budget_bytes"],
                 )
+
+    def test_database_evidence_hashes_with_bounded_streaming_reads(self) -> None:
+        from benchmarks import certify_100k
+
+        chunk_bytes = 1_048_576
+        payload = b"streaming-evidence\0" * 130_000
+        database = self.root / "streaming.sqlite3"
+        database.write_bytes(payload)
+
+        class RecordingReader:
+            def __init__(self) -> None:
+                self.handle = open(database, "rb")
+                self.read_sizes: list[int] = []
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                self.handle.close()
+
+            def fileno(self) -> int:
+                return self.handle.fileno()
+
+            def read(self, size: int = -1) -> bytes:
+                self.read_sizes.append(size)
+                return self.handle.read(size)
+
+        reader = RecordingReader()
+        with mock.patch.object(
+            Path, "read_bytes", side_effect=AssertionError("whole-file read")
+        ), mock.patch.object(Path, "open", return_value=reader):
+            evidence = certify_100k._database_evidence(database)
+
+        self.assertEqual(chunk_bytes, certify_100k.DATABASE_HASH_CHUNK_BYTES)
+        self.assertEqual(len(payload), evidence["size_bytes"])
+        self.assertEqual(
+            "sha256:" + hashlib.sha256(payload).hexdigest(), evidence["sha256"]
+        )
+        self.assertTrue(reader.read_sizes)
+        self.assertEqual({chunk_bytes}, set(reader.read_sizes))
+
+    def test_database_evidence_rejects_a_file_changed_during_hashing(self) -> None:
+        from benchmarks import certify_100k
+
+        database = self.root / "changing.sqlite3"
+        database.write_bytes(b"a" * 128)
+
+        class MutatingReader:
+            def __init__(self) -> None:
+                self.handle = open(database, "rb")
+                self.mutated = False
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                self.handle.close()
+
+            def fileno(self) -> int:
+                return self.handle.fileno()
+
+            def read(self, size: int = -1) -> bytes:
+                value = self.handle.read(size)
+                if not self.mutated:
+                    self.mutated = True
+                    with open(database, "ab") as changing:
+                        changing.write(b"changed")
+                return value
+
+        with mock.patch.object(Path, "open", return_value=MutatingReader()):
+            with self.assertRaises(certify_100k.CertificationError) as caught:
+                certify_100k._database_evidence(database)
+
+        self.assertEqual("DATABASE_CHANGED_DURING_HASH", caught.exception.code)
+
+    def test_database_evidence_rejects_non_regular_files(self) -> None:
+        from benchmarks import certify_100k
+
+        with self.assertRaises(certify_100k.CertificationError) as caught:
+            certify_100k._database_evidence(self.root)
+
+        self.assertEqual("DATABASE_NOT_REGULAR", caught.exception.code)
 
     def _validate(self, result: dict) -> None:
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
