@@ -17,7 +17,7 @@ from .product_store import ProductStore
 from .workspace import Workspace
 
 
-RETRIEVAL_INDEX_VERSION = "retrieval-index@1"
+RETRIEVAL_INDEX_VERSION = "retrieval-index@2"
 CODE_INDEX_VERSION = "python-code-index@1"
 
 
@@ -123,6 +123,7 @@ class RetrievalService:
                 "mode": "LEXICAL",
                 "results": lexical[:limit],
                 "ranker": "sqlite-fts5-bm25" if self.store.fts_enabled else "deterministic-token-count",
+                "retrieval_version": RETRIEVAL_INDEX_VERSION,
             }
         all_documents = [
             {
@@ -159,6 +160,7 @@ class RetrievalService:
             "query": query,
             "mode": "HYBRID_RRF",
             "results": results,
+            "retrieval_version": RETRIEVAL_INDEX_VERSION,
             "ranker": {
                 "lexical": "sqlite-fts5-bm25" if self.store.fts_enabled else "deterministic-token-count",
                 "vector": f"{vector_ranker.ranker_id}@{vector_ranker.ranker_version}",

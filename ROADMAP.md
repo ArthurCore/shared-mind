@@ -2,11 +2,11 @@
 
 | 항목 | 값 |
 |---|---|
-| 문서 버전 | 1.5.0 |
+| 문서 버전 | 1.6.0 |
 | 기준일 | 2026-08-15 |
-| 상태 | DEV-029~087 완료 |
+| 상태 | DEV-029~088 완료 |
 | 대상 저장소 | `ArthurCore/shared-mind` |
-| 구현 브랜치 | `agent/dev-087-context-reduction-eval` |
+| 구현 브랜치 | `agent/dev-088-literal-safe-search` |
 | 참고 프로젝트 | `TencentCloud/TencentDB-Agent-Memory` |
 
 ## 1. 제품 목표
@@ -340,6 +340,25 @@ RED/GREEN과 실제 paired measurement는
 기록한다. 실제 paired evidence와 전체 회귀를 통과한 뒤 기존 OpenQuestion을
 source-backed answer로 종료했다.
 
+### DEV-088 — Literal-safe Retrieval Queries
+
+**상태: DONE**
+
+- task ID, version, FTS operator, quote, parenthesis, punctuation과 Unicode를
+  advanced FTS syntax가 아닌 literal user text로 처리한다.
+- SQLite `unicode61` 경계에 맞춘 공통 token sequence를 FTS5와 dependency-free
+  fallback이 함께 사용한다.
+- punctuation-only query는 error가 아니라 빈 결과를 반환한다.
+- Python/CLI/product MCP 결과에 `retrieval-index@2`를 노출하고 동일한 ordered
+  result ID를 반환한다.
+- 실제 `../shared-mind-memory`에서 `DEV-088`, `schema 1.3`, operator/punctuation
+  검색을 재현하고 consolidate/verify까지 완료한다.
+
+계약은 [`docs/DEV-088-literal-safe-retrieval.md`](docs/DEV-088-literal-safe-retrieval.md),
+RED/GREEN과 self-dogfooding evidence는
+[`docs/testing/dev-088-literal-safe-retrieval.tdd.md`](docs/testing/dev-088-literal-safe-retrieval.tdd.md)에
+기록한다.
+
 ## 14. 구현된 인터페이스
 
 ```text
@@ -376,6 +395,9 @@ src/shared_mind/web_control.py
 - DEV-082~086 targeted continuity evaluation: **15 tests 통과**.
 - DEV-087 구현 전체 회귀: **428 tests, 0 failures, branch coverage 83%**.
 - DEV-087 paired context reduction: **11 tests**, 기존 연속성 포함 **26 tests 통과**.
+- DEV-088 구현 전체 회귀: **432 tests, 0 failures, branch coverage 83%**.
+- DEV-088 literal-safe retrieval: **4 tests**, 검색/인터페이스 회귀 포함
+  **33 tests 통과**.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.
@@ -417,6 +439,15 @@ DEV-087은 local regression/dogfooding과 Shared Mind closeout까지 완료했�
 [run 31867443975](https://github.com/ArthurCore/shared-mind/actions/runs/31867443975)는
 위 8개 job을 모두 통과했고 commit check 19개도 모두 성공했다.
 
+DEV-088은 432-test/83% local regression과 real Shared Mind dogfooding을
+완료했다. PR #7 source/test/documentation head
+`3db636a4579925a9badce97d189ce6669fb7ddd4`의
+[run 31869424469](https://github.com/ArthurCore/shared-mind/actions/runs/31869424469)은
+Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
+8개 job을 모두 통과했다. 같은 head의 push
+[run 31869406046](https://github.com/ArthurCore/shared-mind/actions/runs/31869406046)도
+8개 job을 모두 통과했다.
+
 ## 16. Definition of Done
 
 DEV 작업은 다음 조건을 만족할 때 완료로 본다.
@@ -451,7 +482,7 @@ DEV 작업은 다음 조건을 만족할 때 완료로 본다.
 
 ## 18. 이후 범위
 
-DEV-080~087은 완료됐다. 다음 항목은 이 단계 이후에도 현재 제품 범위에 포함하지
+DEV-080~088은 완료됐다. 다음 항목은 이 단계 이후에도 현재 제품 범위에 포함하지
 않는다.
 
 - multi-tenant cloud service와 distributed database.

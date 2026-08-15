@@ -143,6 +143,11 @@ $ shared-mind-product tool read_source_span \
     --arguments '{"revision_id":"revision_...","start_byte":0,"end_byte":200}'
 ```
 
+Search input is literal Unicode text under `retrieval-index@2`; task IDs such as
+`DEV-088`, dotted versions, operators, quotes, and punctuation are never
+interpreted as SQLite FTS syntax. Python, CLI, and product MCP responses expose
+the retrieval version with the ordered results.
+
 See the [Product guide](docs/product-guide.md) for the complete workflow.
 
 ## Authority and safety model

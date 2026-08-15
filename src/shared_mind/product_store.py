@@ -11,6 +11,7 @@ reconciled without pretending it is kernel truth.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -23,6 +24,8 @@ from .product_contract import validate_product_object
 
 PRODUCT_STORE_VERSION = 1
 PRODUCT_DATABASE_FILENAME = "product.sqlite3"
+
+_LITERAL_SEARCH_TOKEN = re.compile(r"[^\W_]+", flags=re.UNICODE)
 
 
 class ProductStoreError(Exception):
@@ -40,6 +43,23 @@ def utc_now() -> str:
         .replace(microsecond=0)
         .isoformat()
         .replace("+00:00", "Z")
+    )
+
+
+def _literal_search_tokens(query: str) -> tuple[str, ...]:
+    """Tokenize user text without exposing the FTS5 query language.
+
+    SQLite's default ``unicode61`` tokenizer treats punctuation such as ``-``
+    and ``.`` as separators.  Applying the same boundary before MATCH keeps
+    task IDs and version strings searchable while ensuring words such as OR,
+    quotes, parentheses, and punctuation remain data rather than FTS syntax.
+    """
+
+    return tuple(
+        dict.fromkeys(
+            match.group(0).casefold()
+            for match in _LITERAL_SEARCH_TOKEN.finditer(query)
+        )
     )
 
 
@@ -1316,6 +1336,9 @@ class ProductStore:
         normalized_query = query.strip()
         if not normalized_query:
             return []
+        tokens = _literal_search_tokens(normalized_query)
+        if not tokens:
+            return []
         kind_filter = ""
         values: list[Any] = []
         if kinds:
@@ -1323,16 +1346,19 @@ class ProductStore:
             kind_filter = f" AND d.kind IN ({placeholders})"
             values.extend(kinds)
         if self._fts_enabled:
-            # FTS MATCH does not accept bound column names, only the query is bound.
+            # Each token is quoted separately so user input can never become an
+            # FTS5 column selector, boolean operator, phrase delimiter, or
+            # grouping expression.  Adjacent quoted terms retain MATCH's
+            # implicit AND behavior.
+            fts_query = " ".join(f'"{token}"' for token in tokens)
             sql = (
                 "SELECT d.*, bm25(retrieval_fts) AS score "
                 "FROM retrieval_fts JOIN retrieval_documents d USING(document_id) "
                 f"WHERE retrieval_fts MATCH ?{kind_filter} "
                 "ORDER BY score, d.document_id LIMIT ?"
             )
-            rows = self.connection.execute(sql, [normalized_query, *values, limit]).fetchall()
+            rows = self.connection.execute(sql, [fts_query, *values, limit]).fetchall()
             return [self._search_row(row, score=-float(row["score"])) for row in rows]
-        tokens = sorted({token.casefold() for token in normalized_query.split() if token})
         rows = self.connection.execute(
             "SELECT * FROM retrieval_documents ORDER BY document_id"
         ).fetchall()

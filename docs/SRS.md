@@ -461,7 +461,7 @@ python3 contracts/validate_contract.py
 #     + 6 semantic cases + 7 continuity operations
 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
-# DEV-087 local Python 3.13 parallel runner: 428 tests, 0 failures
+# DEV-088 local Python 3.13 parallel runner: 432 tests, 0 failures
 # branch-enabled coverage total 83%
 ```
 
@@ -469,11 +469,17 @@ PR #5 GitHub Actions run
 [`31866492746`](https://github.com/ArthurCore/shared-mind/actions/runs/31866492746)은
 source/test HEAD `97d5811cf9ac852f076f76e5cff04f6d097e9567`에서 Python 3.11,
 3.12, 3.13 full coverage, Linux/macOS/Windows determinism, quality/security,
-fresh base/MCP wheel의 8개 job을 모두 통과했다. 위 DEV-087 428-test/83% 수치는
+fresh base/MCP wheel의 8개 job을 모두 통과했다. 위 DEV-088 432-test/83% 수치는
 local 결과다. 이후 PR #6 구현 head
 `58b6fb1b0a9a69f1e9cfe2d18da9405a82b0669b`의
 [`31867443975`](https://github.com/ArthurCore/shared-mind/actions/runs/31867443975)도
 같은 8개 job과 19개 commit check를 모두 통과했다.
+
+DEV-088 PR #7 head `3db636a4579925a9badce97d189ce6669fb7ddd4`의
+[`31869424469`](https://github.com/ArthurCore/shared-mind/actions/runs/31869424469)은
+같은 8개 hosted job을 모두 통과했으며, push run
+[`31869406046`](https://github.com/ArthurCore/shared-mind/actions/runs/31869406046)도
+8/8 성공했다.
 
 ### 13.2 요구사항 추적표
 
@@ -615,6 +621,8 @@ deny-by-default remote policy evaluator.
 | 완료(구성/계약) | DEV-026 | quality/security gate | coverage>=80, lint/type/audit/Bandit와 bounded input/path/SQL security |
 | 완료(local/POSIX 시험) | DEV-027 | process-kill/WAL durability | WAL+FULL synchronous, reader fast path, kill/recovery, corrupt WAL fail-closed |
 | 완료(local policy) | DEV-028 | remote identity/disclosure/source-scope policy | deny-by-default evaluator; live identity/network/disclosure transport 없음 |
+| 완료(dogfooding) | DEV-080~087 | self cold-start, session capture, continuity/memory/context evaluation | one Shared State의 실제 capture·zero-relearning·paired reduction evidence |
+| 완료 | DEV-088 | literal-safe retrieval query | task ID/version/operator/punctuation을 literal Unicode token으로 처리, `retrieval-index@2`, Python/CLI/MCP parity |
 
 ## 16. 시험 전략과 합격 기준
 
@@ -671,6 +679,12 @@ DEV-087은 같은 local Shared State에서 full baseline과 compact task-aware c
 공유하고, zero-relearning 품질이 유지된 경우에만 bytes/tokens/context-ready time
 감소를 인정한다. 이 local deterministic 측정은 provider별 live inference benchmark를
 대체하지 않으며 평가 report는 canonical truth가 아니다.
+
+DEV-088은 product search의 기본 query를 FTS query language가 아닌 literal Unicode
+text로 고정한다. hyphenated task ID, dotted version, boolean operator 단어, quote,
+parenthesis, punctuation과 SQL-looking text는 tokenizer input이며 FTS expression이
+아니다. FTS5와 dependency-free fallback은 같은 token sequence를 사용하고
+Python/CLI/product MCP는 `retrieval-index@2`를 함께 반환한다.
 
 ### 16.5 통합·릴리스·내구성 시험
 
