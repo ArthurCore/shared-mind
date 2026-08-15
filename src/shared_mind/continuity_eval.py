@@ -36,6 +36,7 @@ _CURRENT_STATUSES = frozenset(
         "IMMUTABLE",
         "TESTED",
         "APPROVED",
+        "DRAFT",
     }
 )
 _STALE_STATUSES = frozenset({"STALE", "EXPIRED"})

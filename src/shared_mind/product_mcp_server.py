@@ -250,22 +250,26 @@ _TOOL_DEFINITIONS = (
             {
                 "evaluation": {
                     "type": "string",
-                    "enum": ["ZERO_RELEARNING", "CONTEXT_QUALITY"],
+                    "enum": [
+                        "ZERO_RELEARNING",
+                        "MEMORY_POLLUTION",
+                        "MEMORY_LIFECYCLE",
+                        "CONFLICT_RESOLUTION",
+                        "CONTEXT_QUALITY"
+                    ],
                 },
                 "context": {"type": "object"},
                 "observation": {"type": "object"},
                 "expectation": {"type": "object"},
+                "memories": {"type": "array", "items": {"type": "object"}},
+                "expected_truth": {"type": "object"},
+                "confident_threshold": {"type": "number", "minimum": 0, "maximum": 1},
+                "before": {"type": "object"},
+                "after": {"type": "object"},
                 "elapsed_ms": {"type": "number", "minimum": 0},
                 "token_count": {"type": "integer", "minimum": 0},
             },
-            required=(
-                "evaluation",
-                "context",
-                "observation",
-                "expectation",
-                "elapsed_ms",
-                "token_count",
-            ),
+            required=("evaluation",),
         ),
         "readOnly": True,
     },
@@ -512,15 +516,19 @@ class ProductMcpApplication:
                 "COLD_START_COMPLETED",
             )
         if name == "continuity_evaluate":
-            context = values["context"]
-            observation = values["observation"]
-            expectation = values["expectation"]
-            if not all(
-                isinstance(item, Mapping)
-                for item in (context, observation, expectation)
-            ):
-                raise TypeError("context, observation, and expectation must be objects")
-            if values["evaluation"] == "ZERO_RELEARNING":
+            evaluation = values["evaluation"]
+            if evaluation in {"ZERO_RELEARNING", "CONTEXT_QUALITY"}:
+                context = values["context"]
+                observation = values["observation"]
+                expectation = values["expectation"]
+                if not all(
+                    isinstance(item, Mapping)
+                    for item in (context, observation, expectation)
+                ):
+                    raise TypeError(
+                        "context, observation, and expectation must be objects"
+                    )
+            if evaluation == "ZERO_RELEARNING":
                 return (
                     self.service.evaluate_zero_relearning(
                         context,
@@ -530,6 +538,34 @@ class ProductMcpApplication:
                         token_count=values["token_count"],
                     ),
                     "ZERO_RELEARNING_EVALUATED",
+                )
+            if evaluation == "MEMORY_POLLUTION":
+                memories = values["memories"]
+                expected_truth = values["expected_truth"]
+                if (
+                    isinstance(memories, (str, bytes))
+                    or not isinstance(memories, Sequence)
+                    or not isinstance(expected_truth, Mapping)
+                ):
+                    raise TypeError("memories must be an array and expected_truth an object")
+                return (
+                    self.service.evaluate_memory_pollution(
+                        memories,
+                        expected_truth=expected_truth,
+                        confident_threshold=float(values.get("confident_threshold", 0.9)),
+                    ),
+                    "MEMORY_POLLUTION_EVALUATED",
+                )
+            if evaluation == "MEMORY_LIFECYCLE":
+                return self.service.memory_lifecycle_inventory(), "MEMORY_LIFECYCLE_READY"
+            if evaluation == "CONFLICT_RESOLUTION":
+                before = values["before"]
+                after = values["after"]
+                if not isinstance(before, Mapping) or not isinstance(after, Mapping):
+                    raise TypeError("before and after must be objects")
+                return (
+                    self.service.evaluate_conflict_resolution(before, after),
+                    "CONFLICT_RESOLUTION_EVALUATED",
                 )
             return (
                 self.service.evaluate_context_quality(
