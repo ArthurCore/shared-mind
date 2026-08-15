@@ -1,24 +1,45 @@
 # Coding-agent bootstrap
 
 This guide is the operational contract for a coding agent entering an existing
-Shared Mind workspace. It assumes the `shared-mind` console command is installed
-and the shell is at the workspace root or below it.
+Shared Mind workspace. Install once from the project checkout; `uv` owns the
+isolated tool environment, so no virtualenv activation is required:
+
+```console
+$ uv tool install --editable '.[mcp]'
+```
+
+Run `uv tool update-shell` once if the command is not yet on `PATH`.
 
 ## Resume in one command
 
 Run this before proposing or changing project work:
 
 ```console
-$ shared-mind context --budget-tokens 4096
+$ shared-mind resume
 ```
 
-The command discovers `.shared-mind/workspace.json` by walking upward and emits
-exactly one JSON document. Require `ok: true` and `code: "CONTEXT_READY"`, then
-read `data.context`. The context contains current unconflicted claims, all open
-conflicts and their member claims, active decisions, open questions, actionable
-work items, the ledger sequence, the state root, and truncation metadata.
+The command first walks upward for `.shared-mind/workspace.json`; when invoked
+from a project checkout it also discovers the conventional sibling
+`<project>-memory` workspace. It verifies kernel and product integrity, then
+emits exactly one JSON document. Require `ok: true`, code `SESSION_READY`, and
+`data.integrity.valid: true`, then read `data.context`. The context contains
+current unconflicted claims, all open conflicts and their member claims, active
+decisions, open questions, actionable work items, the ledger sequence, the
+state root, and truncation metadata.
 
-If the response is `CONTEXT_BUDGET_TOO_SMALL`, increase the budget. Shared Mind
+An explicit task remains short:
+
+```console
+$ shared-mind resume "Review the authentication migration"
+```
+
+For custom selectors and budgets use the advanced command:
+
+```console
+$ shared-mind context --task "Review the authentication migration" --budget-tokens 4096
+```
+
+If the advanced context response is `CONTEXT_BUDGET_TOO_SMALL`, increase the budget. Shared Mind
 will not hide an open conflict, active decision, open question, or actionable
 work item merely to fit a requested budget. If truncation
 metadata lists omitted records, follow its projection references before making

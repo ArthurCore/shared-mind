@@ -108,7 +108,7 @@ git pull --ff-only
 ### 5.2 개발 설치
 
 ```bash
-python3 -m pip install -e .
+uv tool install --editable '.[mcp]'
 ```
 
 ### 5.3 Shared Mind memory workspace 생성

@@ -22,6 +22,12 @@ EXIT_CAPABILITY_UNAVAILABLE = 6
 EXIT_IO_ERROR = 7
 EXIT_INTERNAL_ERROR = 70
 
+DEFAULT_RESUME_TASK = "Continue the highest-priority unblocked project work."
+DEFAULT_RESUME_QUERY = (
+    "project purpose current decisions open questions active work conflicts evidence"
+)
+DEFAULT_RESUME_BUDGET_BYTES = 128 * 1024
+
 
 class CliUsageError(Exception):
     pass
@@ -72,6 +78,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     context_parser.add_argument("--budget-tokens", type=_positive_integer)
     context_parser.add_argument("--budget-bytes", type=_positive_integer)
+
+    resume_parser = commands.add_parser("resume")
+    resume_parser.add_argument("task", nargs="?", default=DEFAULT_RESUME_TASK)
+    resume_parser.add_argument("--query", default=DEFAULT_RESUME_QUERY)
+    resume_parser.add_argument(
+        "--depth", choices=("SUMMARY", "DETAIL", "EVIDENCE"), default="EVIDENCE"
+    )
+    resume_parser.add_argument(
+        "--budget-bytes", type=_positive_integer, default=DEFAULT_RESUME_BUDGET_BYTES
+    )
 
     conflict_parser = commands.add_parser("conflict")
     conflict_commands = conflict_parser.add_subparsers(
@@ -124,13 +140,19 @@ def main(
                 "WORKSPACE_INITIALIZED",
                 data=workspace.describe(),
             )
-        workspace = Workspace.open(arguments.workspace or Path.cwd())
+        workspace = (
+            Workspace.open(arguments.workspace)
+            if arguments.workspace is not None
+            else Workspace.discover(Path.cwd())
+        )
         if arguments.command == "source":
             return _source_command(workspace, arguments, output)
         if arguments.command == "proposal":
             return _proposal_command(workspace, arguments, output)
         if arguments.command == "context":
             return _context_command(workspace, arguments, output)
+        if arguments.command == "resume":
+            return _resume_command(workspace, arguments, output)
         if arguments.command == "conflict":
             return _conflict_command(workspace, arguments, output)
         if arguments.command == "replay":
@@ -401,6 +423,43 @@ def _context_command(
                 "subject": arguments.subject,
             },
         },
+    )
+
+
+def _resume_command(
+    workspace: Workspace, arguments: argparse.Namespace, output: TextIO
+) -> int:
+    service = ProductService(workspace)
+    try:
+        integrity = service.verify()
+        if not integrity["valid"]:
+            return _emit(
+                output,
+                False,
+                "PRODUCT_INTEGRITY_INVALID",
+                message="Product verification failed before session resume.",
+                data={"integrity": integrity},
+                exit_code=EXIT_INTEGRITY_ERROR,
+            )
+        context = service.context(
+            {
+                "task": arguments.task,
+                "purpose": None,
+                "query": arguments.query,
+                "references": [],
+                "depth": arguments.depth,
+                "budget_bytes": arguments.budget_bytes,
+                "budget_tokens": None,
+                "hints": {},
+            }
+        )
+    finally:
+        service.close()
+    return _emit(
+        output,
+        True,
+        "SESSION_READY",
+        data={"integrity": integrity, "context": context},
     )
 
 

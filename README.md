@@ -91,13 +91,24 @@ rewrite the kernel's factual ledger. See
 
 ## Quick start
 
-Shared Mind requires Python 3.11 or newer.
+Shared Mind uses `uv` for installation. `uv` selects a compatible Python 3.11+
+runtime and keeps the tool environment isolated; users do not create or
+activate a virtual environment.
 
 ```console
-$ python3 -m pip install -e .
-$ shared-mind init ./memory --purpose "Preserve this project's reasoning across AI sessions."
-$ cd ./memory
+$ uv tool install --editable '.[mcp]'
+$ shared-mind init ../my-project-memory --purpose "Preserve this project's reasoning across AI sessions."
+$ shared-mind resume
 ```
+
+Run `uv tool update-shell` once if the installed commands are not yet on
+`PATH`. The `*-memory` sibling convention lets `shared-mind resume` discover
+the workspace from anywhere below the project tree. It verifies kernel and
+product integrity before returning a task-aware `SESSION_READY` context.
+
+For this repository the existing workspace is `../shared-mind-memory`, so only
+the install and `shared-mind resume` commands are needed. Re-running `init` or
+`cold-start` is unnecessary.
 
 ### Cold-start an existing project
 
@@ -125,11 +136,11 @@ $ shared-mind-product build all
 ### Request task-aware context
 
 ```console
-$ shared-mind context \
-    --task "Review the authentication migration" \
-    --query "auth compatibility" \
-    --budget-bytes 32768
+$ shared-mind resume "Review the authentication migration"
 ```
+
+Use `shared-mind context` only when custom query, reference, depth, byte, or
+token-budget controls are required.
 
 The same state, request, selector version, and budget produce the same context
 regardless of which model or client made the request.
