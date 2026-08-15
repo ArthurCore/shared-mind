@@ -41,6 +41,12 @@ from .skills import (
     mark_skill_tested,
     revise_skill,
 )
+from .task_trace import (
+    TASK_TRACE_CAPTURE_VERSION,
+    TaskTraceError,
+    canonical_task_trace_bytes,
+    parse_task_trace,
+)
 from .workspace import Workspace, WorkspaceError
 
 
@@ -547,6 +553,23 @@ class ProductService:
         *,
         auto_commit_deterministic: bool = False,
     ) -> dict[str, Any]:
+        structured = self._translate(parse_task_trace, task_id, trace)
+        if structured is not None:
+            return self._post_structured_task_capture(
+                structured,
+                auto_commit_deterministic=auto_commit_deterministic,
+            )
+        return self._post_legacy_task_capture(
+            task_id, trace, auto_commit_deterministic=auto_commit_deterministic
+        )
+
+    def _post_legacy_task_capture(
+        self,
+        task_id: str,
+        trace: str | Mapping[str, Any] | Sequence[Any],
+        *,
+        auto_commit_deterministic: bool,
+    ) -> dict[str, Any]:
         safe_id = "".join(character for character in task_id if character.isalnum() or character in "._-")
         if not safe_id:
             raise ProductError("TASK_ID_INVALID", "task_id has no safe characters")
@@ -575,6 +598,152 @@ class ProductService:
             "commit": commit,
             "consolidation": consolidation,
         }
+
+    def _post_structured_task_capture(
+        self,
+        trace: Mapping[str, Any],
+        *,
+        auto_commit_deterministic: bool,
+    ) -> dict[str, Any]:
+        trace_id = str(trace["trace_id"])
+        content = canonical_task_trace_bytes(trace)
+        content_hash = sha256_bytes(content)
+        prior = self.store.get_task_capture_receipt(trace_id)
+        if prior is not None:
+            if prior["content_hash"] != content_hash:
+                raise ProductError(
+                    "TASK_TRACE_IMMUTABLE_CONFLICT",
+                    f"Trace identity {trace_id} is already bound to different bytes.",
+                )
+            return {
+                "task_id": trace["task_id"],
+                "capture_receipt": {**prior, "status": "UNCHANGED"},
+                "batch": self.store.get_batch(str(prior["batch_id"])),
+                "extraction": {
+                    "batch_id": prior["batch_id"],
+                    "draft_ids": [],
+                    "created": 0,
+                    "duplicates": 0,
+                    "failures": [],
+                    "status": "UNCHANGED",
+                },
+                "commit": {"committed": [], "failed": [], "skipped": []},
+                "consolidation": {"changed_artifact_ids": []},
+            }
+
+        trace_root = self.workspace.source_root / "task-traces"
+        destination = trace_root / f"{sha256_bytes(trace_id.encode('utf-8')).split(':', 1)[1][:32]}.jsonl"
+        existed = self._write_immutable_task_trace(destination, content)
+        try:
+            batch = self.ingest([], conversation_paths=[destination])
+            extraction = self.extract(batch["batch_id"])
+            commit = (
+                self.commit_batch_drafts(batch["batch_id"])
+                if auto_commit_deterministic
+                else {"committed": [], "failed": [], "skipped": extraction["draft_ids"]}
+            )
+            consolidation = self.incremental_consolidation()
+        except Exception:
+            # The immutable source file and any accepted kernel registration are
+            # intentionally retained. A retry reuses both identities and resumes
+            # extraction/consolidation without duplicating canonical history.
+            raise
+        item = batch["items"][0]
+        receipt = {
+            "object_type": "TASK_TRACE_CAPTURE_RECEIPT",
+            "capture_version": TASK_TRACE_CAPTURE_VERSION,
+            "trace_id": trace_id,
+            "task_id": trace["task_id"],
+            "session_id": trace["session_id"],
+            "status": "UNCHANGED" if existed or batch.get("reused") else "CAPTURED",
+            "content_hash": content_hash,
+            "source_revision_id": item["revision_id"],
+            "batch_id": batch["batch_id"],
+            "event_count": len(trace["events"]),
+            "event_types": sorted({event["event_type"] for event in trace["events"]}),
+            "started_at": trace["started_at"],
+            "ended_at": trace["ended_at"],
+            "destination": destination.relative_to(self.workspace.root).as_posix(),
+        }
+        issues = validate_product_object(receipt, "TaskTraceCaptureReceipt")
+        if issues:
+            raise ProductError(
+                "TASK_TRACE_RECEIPT_INVALID",
+                "Task trace receipt failed contract validation.",
+                data=issues,
+            )
+        with self.store.transaction():
+            current = self.store.get_task_capture_receipt(trace_id)
+            if current is not None:
+                if current["content_hash"] != content_hash:
+                    raise ProductError(
+                        "TASK_TRACE_IMMUTABLE_CONFLICT",
+                        f"Trace identity {trace_id} raced with different bytes.",
+                    )
+                receipt = {**current, "status": "UNCHANGED"}
+            else:
+                self.store.append_audit(
+                    "TASK_TRACE_CAPTURED",
+                    {"capture_receipt": receipt},
+                    object_id=trace_id,
+                    occurred_at=str(trace["ended_at"]),
+                )
+        return {
+            "task_id": trace["task_id"],
+            "capture_receipt": receipt,
+            "batch": batch,
+            "extraction": extraction,
+            "commit": commit,
+            "consolidation": consolidation,
+        }
+
+    @staticmethod
+    def _write_immutable_task_trace(destination: Path, content: bytes) -> bool:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if destination.exists():
+            try:
+                existing = destination.read_bytes()
+            except OSError as exc:
+                raise ProductError("TASK_TRACE_WRITE_FAILED", str(exc)) from exc
+            if existing != content:
+                raise ProductError(
+                    "TASK_TRACE_IMMUTABLE_CONFLICT",
+                    f"Task trace destination already contains different bytes: {destination}",
+                )
+            return True
+        temporary_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                dir=destination.parent,
+                prefix=".task-trace-",
+                suffix=".tmp",
+                delete=False,
+            ) as handle:
+                temporary_path = Path(handle.name)
+                handle.write(content)
+                handle.flush()
+                os.fsync(handle.fileno())
+            try:
+                os.link(temporary_path, destination)
+            except FileExistsError:
+                existing = destination.read_bytes()
+                if existing != content:
+                    raise ProductError(
+                        "TASK_TRACE_IMMUTABLE_CONFLICT",
+                        f"Task trace destination raced with different bytes: {destination}",
+                    )
+                return True
+            return False
+        except ProductError:
+            raise
+        except OSError as exc:
+            raise ProductError("TASK_TRACE_WRITE_FAILED", str(exc)) from exc
+        finally:
+            if temporary_path is not None:
+                try:
+                    temporary_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
     def incremental_consolidation(self) -> dict[str, Any]:
         before = {
@@ -1286,6 +1455,7 @@ class ProductService:
             MemoryViewError,
             RetrievalError,
             SkillError,
+            TaskTraceError,
             WorkspaceError,
         ) as exc:
             raise ProductError(

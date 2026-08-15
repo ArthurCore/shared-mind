@@ -383,6 +383,21 @@ class ProductStore:
             count += 1
         return {"valid": True, "count": count, "head_hash": previous}
 
+    def get_task_capture_receipt(self, trace_id: str) -> dict[str, Any] | None:
+        row = self.connection.execute(
+            """
+            SELECT payload FROM product_audit
+            WHERE event_type='TASK_TRACE_CAPTURED' AND object_id=?
+            ORDER BY seq DESC LIMIT 1
+            """,
+            (trace_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        payload = json.loads(row["payload"])
+        receipt = payload.get("capture_receipt")
+        return dict(receipt) if isinstance(receipt, Mapping) else None
+
     # ------------------------------------------------------------------
     # Product mutation proposals (shared procedural state)
 

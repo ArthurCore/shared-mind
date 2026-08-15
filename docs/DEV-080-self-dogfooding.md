@@ -222,8 +222,11 @@ Capture the completed task trace back into Shared Mind before ending the session
 실제 개발 작업이 끝나면 해당 세션의 trace를 다시 Shared Mind에 넣는다.
 
 ```bash
-shared-mind-product capture <task-id> <task-trace.jsonl> --auto-commit
+shared-mind-product capture <task-id> <task-trace.json> --auto-commit
 ```
+
+DEV-081부터 실제 session trace는
+[`TASK_TRACE` strict contract](DEV-081-real-session-capture.md)를 사용한다.
 
 그 후 다시 검증한다.
 

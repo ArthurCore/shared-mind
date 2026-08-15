@@ -13,6 +13,36 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PackageMetadataTest(unittest.TestCase):
+    def test_distribution_uses_the_standard_bsd_3_clause_license(self) -> None:
+        with (ROOT / "pyproject.toml").open("rb") as handle:
+            metadata = tomllib.load(handle)
+
+        license_path = ROOT / "LICENSE"
+        self.assertTrue(license_path.is_file())
+        license_text = license_path.read_text(encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+        self.assertEqual(
+            "BSD-3-Clause",
+            metadata["project"]["license"],
+        )
+        self.assertEqual(["LICENSE"], metadata["project"]["license-files"])
+        self.assertIn("setuptools>=77.0.3", metadata["build-system"]["requires"])
+        self.assertIn("Copyright (c) 2026 ArthurCore", license_text)
+        self.assertIn("All rights reserved", license_text)
+        self.assertIn(
+            "Redistribution and use in source and binary forms, with or without modification",
+            license_text,
+        )
+        self.assertIn(
+            "Neither the name of the copyright holder nor the names of its contributors",
+            license_text,
+        )
+        self.assertIn('THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"', license_text)
+        self.assertIn("## License", readme)
+        self.assertIn("BSD-3-Clause", readme)
+        self.assertIn("commercial use", readme)
+
     def test_installed_package_exposes_cli_and_default_contracts(self) -> None:
         with (ROOT / "pyproject.toml").open("rb") as handle:
             project = tomllib.load(handle)

@@ -302,8 +302,24 @@ def _dispatch(service: ProductService, args: argparse.Namespace) -> tuple[Any, s
             "COLD_START_COMPLETED",
         )
     if args.command == "capture":
-        trace_path = Path(args.trace)
-        trace: Any = trace_path.read_text(encoding="utf-8") if trace_path.is_file() else args.trace
+        trace_path = Path(args.trace).expanduser()
+        candidate = (
+            trace_path
+            if trace_path.is_absolute()
+            else service.workspace.root / trace_path
+        )
+        if candidate.is_file():
+            resolved = candidate.resolve()
+            try:
+                resolved.relative_to(service.workspace.root.resolve())
+            except ValueError as exc:
+                raise ProductError(
+                    "PATH_OUTSIDE_WORKSPACE",
+                    f"Task trace path is outside the workspace: {resolved}",
+                ) from exc
+            trace: Any = resolved.read_text(encoding="utf-8")
+        else:
+            trace = args.trace
         return (
             service.post_task_capture(
                 args.task_id, trace, auto_commit_deterministic=args.auto_commit
