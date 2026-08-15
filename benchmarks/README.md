@@ -47,7 +47,10 @@ PYTHONPATH=src python3 -m benchmarks.certify_100k \
 `certify_100k` creates a fresh current-schema fixture, verifies the complete
 ledger, explicitly replays to a second file, measures context, validates the
 strict `context-benchmark-certification@1` schema, and atomically writes a
-content-addressed no-clobber result.  The historical DEV-021 combined
+content-addressed no-clobber result. Database SHA-256 evidence is streamed from
+one stable regular-file descriptor in fixed 1MiB chunks; descriptor metadata
+drift fails closed, so memory does not grow with a 100k database. The historical
+DEV-021 combined
 `context-benchmark-result@2` remains migration/performance evidence; the fresh
 schema 1.3 certifications are recorded in
 [`results/dev-089-schema13-2026-08-15.md`](results/dev-089-schema13-2026-08-15.md).
