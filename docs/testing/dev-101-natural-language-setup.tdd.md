@@ -127,9 +127,19 @@ replay passed:
 - head hash
   `sha256:a69e9243f61dad51f1e3adb7f7704b21845d7c35d35691bdb4a8d372f95dad80`;
 - replay checked all 210 entries with no errors; and
-- the next setup context excluded completed DEV-101, retained the remaining
-  blocked DEV-100 WorkItem, and fit in 24,520 bytes of the default 24 KiB
-  budget.
+- the next setup context excluded completed DEV-101 and exposed the remaining
+  DEV-100 blocker for lifecycle review.
+
+That blocker referred only to environment-dependent gates which this same
+unrestricted run had now passed. A second version-guarded Proposal therefore
+moved DEV-100 from BLOCKED v2 to DONE v3 instead of carrying stale work into the
+next session. The final verified/replayed workspace is at ledger sequence 211,
+state root
+`sha256:31ea4717d7387041a8302fba7fe2b2c0edc8ff21cd5bb2505c61929539f7ed89`,
+and head hash
+`sha256:434e90ff51c8df44747eb9cc1af26bbeb06ed2d8f56f62c5e74d98e85f6f1679`.
+The final setup context has no stale active WorkItem and fits in 24,509 bytes of
+the default 24 KiB budget.
 
 ## Preserved boundaries
 

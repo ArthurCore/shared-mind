@@ -95,13 +95,18 @@ active DEV-100 WorkItem, and its projection/source pointers. The workspace had
 no open questions or conflicts to omit. Explicit `--budget-bytes 131072`
 returned the prior 130,997-byte context, while 131,073 returned `USAGE_ERROR`.
 
-## Merge evidence and known gap
+## Merge evidence and resolved gate
 
 - RED commits: `45d864d`, `f187bdd`
 - GREEN commit: `21e9222`
 - No commits were squashed or rewritten.
-- The branch is locally implemented and dogfooded but remains blocked on the
-  loopback/dependency-audit/build gates described above. It has not been pushed.
+- The branch was initially blocked on the loopback/dependency-audit/build gates
+  described above. DEV-101 later reran them in an unrestricted environment:
+  the 508-test branch-coverage suite included the loopback integration and
+  passed at 83%, strict dependency audit found no known vulnerabilities, and
+  isolated PEP 517 build, `twine check`, fresh uv wheel installation, and setup
+  smoke all passed. The canonical WorkItem therefore advanced from BLOCKED v2
+  to DONE v3 at ledger sequence 211.
 
 ## Shared State capture and closeout
 

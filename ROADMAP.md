@@ -561,7 +561,7 @@ RED/GREEN·uv tool install·실제 self-dogfooding evidence는
 
 ### DEV-100 — Compact Resume Context
 
-**상태: BLOCKED (implementation/dogfood GREEN; external gates required)**
+**상태: DONE**
 
 - 기본 `shared-mind resume` EVIDENCE budget을 24 KiB로 제한해 128 KiB를
   packing target이 아닌 explicit safety ceiling로 바꾼다.
@@ -810,8 +810,9 @@ State에 보존됐다. Hosted CI는 branch push/PR 전이므로 아직 주장하
 
 DEV-100은 24 KiB compact resume default와 explicit 128 KiB ceiling을 RED→GREEN
 구현하고 actual self-dogfooding에서 context bytes/token estimate를 81.27%
-줄였다. managed sandbox가 loopback bind와 dependency audit network를 막아
-canonical DONE closeout은 unsandboxed/hosted gate를 기다린다.
+줄였다. DEV-101의 unrestricted final regression에서 기존 blocker였던 loopback,
+strict dependency audit, isolated build/twine 및 fresh uv wheel smoke가 모두
+통과해 WorkItem을 DONE v3으로 정리했다.
 
 DEV-101은 `Shared Mind 초기설정해` 자연어 요청을 전역 Codex Skill과
 idempotent `shared-mind setup`으로 연결했다. stale disposable view와 mandatory
