@@ -5,6 +5,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from statistics import median
 
 from jsonschema import Draft202012Validator
 
@@ -27,6 +28,10 @@ REPORT_SCHEMA_PATH = (
     / "evals"
     / "shared_state_continuity"
     / "report.schema.v1.json"
+)
+EVALUATION_ROOT = REPORT_SCHEMA_PATH.parent
+SELF_DOGFOOD_RESULT_PATH = (
+    EVALUATION_ROOT / "results" / "dev-087-self-dogfood.v1.json"
 )
 
 
@@ -203,6 +208,65 @@ class PairedContextReductionRunnerTest(unittest.TestCase):
             )
             with self.assertRaises(FileExistsError):
                 run_paired_evaluation(*arguments, **keyword)
+
+    def test_checked_in_dev_087_evidence_is_grounded_and_schema_valid(self) -> None:
+        result = json.loads(SELF_DOGFOOD_RESULT_PATH.read_text(encoding="utf-8"))
+        fixture_names = {
+            "baseline_observation": "dev-087-observation.v1.json",
+            "candidate_observation": "dev-087-observation.v1.json",
+            "expectation": "dev-087-expectation.v1.json",
+            "thresholds": "dev-087-thresholds.v1.json",
+        }
+        fixtures = {
+            key: json.loads(
+                (EVALUATION_ROOT / "fixtures" / name).read_text(encoding="utf-8")
+            )
+            for key, name in fixture_names.items()
+        }
+        for key, document in fixtures.items():
+            self.assertEqual(sha256_json(document), result["input_hashes"][key])
+        self.assertRegex(
+            result["input_hashes"]["baseline_context"], r"^sha256:[0-9a-f]{64}$"
+        )
+        self.assertRegex(
+            result["input_hashes"]["candidate_context"], r"^sha256:[0-9a-f]{64}$"
+        )
+        report = result["report"]
+        self.assertTrue(result["passed"])
+        self.assertTrue(report["quality_preserved"])
+        self.assertGreaterEqual(report["reductions"]["context_bytes_reduction_rate"], 0.6)
+        self.assertGreaterEqual(report["reductions"]["context_tokens_reduction_rate"], 0.6)
+        self.assertGreaterEqual(
+            report["reductions"]["time_to_productive_action_reduction_rate"], 0.4
+        )
+        self.assertEqual(
+            report["baseline"]["kernel_state_root"],
+            report["candidate"]["kernel_state_root"],
+        )
+        schema = json.loads(REPORT_SCHEMA_PATH.read_text(encoding="utf-8"))
+        self.assertEqual([], list(Draft202012Validator(schema).iter_errors(report)))
+
+        measurement = json.loads(
+            (
+                EVALUATION_ROOT
+                / "fixtures"
+                / "dev-087-measurement.v1.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(9, len(measurement["baseline_samples_ms"]))
+        self.assertEqual(9, len(measurement["candidate_samples_ms"]))
+        self.assertEqual(
+            measurement["baseline_elapsed_ms"],
+            median(measurement["baseline_samples_ms"]),
+        )
+        self.assertEqual(
+            measurement["candidate_elapsed_ms"],
+            median(measurement["candidate_samples_ms"]),
+        )
+
+        serialized = SELF_DOGFOOD_RESULT_PATH.read_text(encoding="utf-8")
+        self.assertNotIn("/Users/", serialized)
+        self.assertNotIn("agent:codex", serialized)
 
 
 class PairedContextReductionInterfaceTest(ProductTestCase):
