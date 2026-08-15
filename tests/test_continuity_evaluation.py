@@ -3,6 +3,11 @@ from __future__ import annotations
 import io
 import json
 import unittest
+from pathlib import Path
+
+from jsonschema import Draft202012Validator
+
+from shared_mind.canonical import sha256_json
 
 from shared_mind.continuity_eval import (
     ContinuityEvaluationError,
@@ -24,6 +29,12 @@ QUESTION_IDS = ["question-wrong-memory"]
 CONFLICT_IDS = ["conflict-engine"]
 WORK_ITEM_ID = "workitem-dev-082"
 SOURCE_IDS = ["revision-bootstrap", "revision-architecture"]
+REPORT_SCHEMA_PATH = (
+    Path(__file__).parents[1]
+    / "evals"
+    / "shared_state_continuity"
+    / "report.schema.v1.json"
+)
 
 
 def expectation() -> dict:
@@ -83,9 +94,8 @@ def observation() -> dict:
 
 def context() -> dict:
     included = expectation()["critical_memory_ids"]
-    return {
+    document = {
         "context_version": "shared-task-context@1",
-        "context_hash": "sha256:" + "1" * 64,
         "kernel_state_root": "sha256:" + "2" * 64,
         "selection_trace": [
             {"id": item, "kind": "record", "included": True, "reasons": ["fixture"]}
@@ -95,6 +105,8 @@ def context() -> dict:
         "core_context": {"purpose": PURPOSE},
         "task_context": {},
     }
+    document["context_hash"] = sha256_json(document)
+    return document
 
 
 class ContinuityEvaluationUnitTest(unittest.TestCase):
@@ -269,6 +281,96 @@ class ContinuityEvaluationUnitTest(unittest.TestCase):
         with self.assertRaises(ContinuityEvaluationError) as caught:
             evaluate_memory_pollution([], expected_truth={})
         self.assertEqual("POLLUTION_INPUT_EMPTY", caught.exception.code)
+
+    def test_context_hash_tampering_is_rejected(self) -> None:
+        tampered = context()
+        tampered["budget"]["included_bytes"] += 1
+        with self.assertRaises(ContinuityEvaluationError) as caught:
+            evaluate_zero_relearning(
+                tampered, observation(), expectation(), elapsed_ms=1, token_count=1
+            )
+        self.assertEqual("CONTEXT_HASH_MISMATCH", caught.exception.code)
+
+    def test_all_report_types_validate_against_the_versioned_schema(self) -> None:
+        schema = json.loads(REPORT_SCHEMA_PATH.read_text(encoding="utf-8"))
+        Draft202012Validator.check_schema(schema)
+        validator = Draft202012Validator(schema)
+        reports = [
+            evaluate_zero_relearning(
+                context(), observation(), expectation(), elapsed_ms=1, token_count=1
+            ),
+            evaluate_memory_pollution(
+                [
+                    {
+                        "memory_id": "m-current",
+                        "semantic_key": "database",
+                        "value": "postgresql",
+                        "lifecycle": "CURRENT",
+                        "relevant": True,
+                        "confidence": 1.0,
+                    }
+                ],
+                expected_truth={"database": "postgresql"},
+            ),
+            classify_memory_lifecycle({"object_id": "m-current", "status": "ACTIVE"}),
+            benchmark_context_quality(
+                context(), observation(), expectation(), elapsed_ms=1, token_count=1
+            ),
+        ]
+        for report in reports:
+            with self.subTest(report=next(iter(report.values()))):
+                errors = sorted(validator.iter_errors(report), key=lambda item: list(item.path))
+                self.assertEqual([], errors)
+
+
+class ContinuityEvaluationRunnerTest(unittest.TestCase):
+    def test_runner_is_deterministic_and_refuses_to_clobber_changed_evidence(self) -> None:
+        from evals.shared_state_continuity.runner import run_evaluation
+
+        with self.subTest("first run"):
+            import tempfile
+
+            with tempfile.TemporaryDirectory(prefix="shared-mind-continuity-eval-") as raw:
+                root = Path(raw)
+                context_path = root / "context.json"
+                observation_path = root / "observation.json"
+                expectation_path = root / "expectation.json"
+                result_path = root / "result.json"
+                context_path.write_text(json.dumps(context()), encoding="utf-8")
+                observation_path.write_text(json.dumps(observation()), encoding="utf-8")
+                expectation_path.write_text(json.dumps(expectation()), encoding="utf-8")
+                first = run_evaluation(
+                    context_path,
+                    observation_path,
+                    expectation_path,
+                    result_path,
+                    elapsed_ms=1_250,
+                    token_count=2_048,
+                )
+                before = result_path.read_bytes()
+                second = run_evaluation(
+                    context_path,
+                    observation_path,
+                    expectation_path,
+                    result_path,
+                    elapsed_ms=1_250,
+                    token_count=2_048,
+                )
+                self.assertEqual(first, second)
+                self.assertEqual(before, result_path.read_bytes())
+
+                changed = observation()
+                changed["purpose"] = "wrong purpose"
+                observation_path.write_text(json.dumps(changed), encoding="utf-8")
+                with self.assertRaises(FileExistsError):
+                    run_evaluation(
+                        context_path,
+                        observation_path,
+                        expectation_path,
+                        result_path,
+                        elapsed_ms=1_250,
+                        token_count=2_048,
+                    )
 
 
 class ContinuityEvaluationInterfaceTest(ProductTestCase):
