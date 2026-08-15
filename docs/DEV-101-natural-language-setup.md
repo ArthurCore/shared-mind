@@ -33,6 +33,12 @@ or artifact provenance boundary.
 explicit memory root. `--no-cold-start` and `--no-install-skill` provide bounded
 automation/test surfaces without changing the default natural-language path.
 
+Setup starts with the compact 24 KiB context budget. If mandatory purpose,
+continuity, or open-conflict records cannot fit in the router's core share, it
+computes the minimum larger outer budget required by that core instead of
+packing toward 128 KiB. Requests above the unchanged 128 KiB safety ceiling
+still fail closed.
+
 ## Safety and idempotency
 
 - Repeated setup reuses the same workspace and leaves the canonical ledger head

@@ -6,7 +6,9 @@ import os
 import shutil
 import sysconfig
 import tempfile
+from collections.abc import Mapping
 from hashlib import sha256
+from math import ceil
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +20,7 @@ SETUP_VERSION = "natural-language-setup@1"
 SETUP_SKILL_NAME = "shared-mind-setup"
 DEFAULT_SETUP_TASK = "Continue the highest-priority unblocked project work."
 DEFAULT_SETUP_BUDGET_BYTES = 24 * 1024
+MAX_SETUP_BUDGET_BYTES = 128 * 1024
 _SKILL_FILES = ("SKILL.md", "agents/openai.yaml")
 
 
@@ -49,11 +52,7 @@ def setup_project(
     try:
         cold_start_completed = service.store.has_audit_event("COLD_START_COMPLETED")
         if cold_start and not cold_start_completed:
-            report = service.cold_start(
-                [project_root],
-                task=DEFAULT_SETUP_TASK,
-                budget_bytes=DEFAULT_SETUP_BUDGET_BYTES,
-            )
+            report = _cold_start_with_setup_budget(service, project_root)
             cold_start_result = {
                 "performed": True,
                 "batch_id": report["batch_id"],
@@ -88,21 +87,7 @@ def setup_project(
                 "Product verification failed during Shared Mind setup.",
                 data=integrity,
             )
-        context = service.context(
-            {
-                "task": DEFAULT_SETUP_TASK,
-                "purpose": None,
-                "query": (
-                    "project purpose current decisions open questions active work "
-                    "conflicts evidence"
-                ),
-                "references": [],
-                "depth": "EVIDENCE",
-                "budget_bytes": DEFAULT_SETUP_BUDGET_BYTES,
-                "budget_tokens": None,
-                "hints": {},
-            }
-        )
+        context = _setup_context(service)
     finally:
         service.close()
 
@@ -128,6 +113,59 @@ def _only_disposable_views_are_stale(integrity: dict[str, Any]) -> bool:
         and not integrity.get("artifact_provenance_issues")
         and not integrity.get("derived_views", {}).get("valid")
     )
+
+
+def _setup_context(service: ProductService) -> dict[str, Any]:
+    budget = DEFAULT_SETUP_BUDGET_BYTES
+    request = {
+        "task": DEFAULT_SETUP_TASK,
+        "purpose": None,
+        "query": (
+            "project purpose current decisions open questions active work "
+            "conflicts evidence"
+        ),
+        "references": [],
+        "depth": "EVIDENCE",
+        "budget_bytes": budget,
+        "budget_tokens": None,
+        "hints": {},
+    }
+    while True:
+        request["budget_bytes"] = budget
+        try:
+            return service.context(request)
+        except ProductError as exc:
+            budget = _next_setup_budget(exc, current=budget)
+
+
+def _cold_start_with_setup_budget(
+    service: ProductService, project_root: Path
+) -> dict[str, Any]:
+    budget = DEFAULT_SETUP_BUDGET_BYTES
+    while True:
+        try:
+            return service.cold_start(
+                [project_root],
+                task=DEFAULT_SETUP_TASK,
+                budget_bytes=budget,
+            )
+        except ProductError as exc:
+            budget = _next_setup_budget(exc, current=budget)
+
+
+def _next_setup_budget(exc: ProductError, *, current: int) -> int:
+    if exc.code != "CONTEXT_BUDGET_TOO_SMALL" or not isinstance(exc.data, Mapping):
+        raise exc
+    required = exc.data.get("required_bytes")
+    if isinstance(required, bool) or not isinstance(required, int) or required <= 0:
+        raise exc
+    if "mandatory purpose, continuity" in exc.message:
+        next_budget = ceil(required / 0.72)
+    else:
+        next_budget = required
+    if next_budget <= current or next_budget > MAX_SETUP_BUDGET_BYTES:
+        raise exc
+    return next_budget
 
 
 def _resolve_project_root(
