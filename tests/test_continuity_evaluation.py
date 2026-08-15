@@ -313,6 +313,36 @@ class ContinuityEvaluationUnitTest(unittest.TestCase):
                 expected_truth={"database": "postgresql"},
             ),
             classify_memory_lifecycle({"object_id": "m-current", "status": "ACTIVE"}),
+            evaluate_conflict_resolution(
+                {
+                    "conflict_id": "conflict-schema",
+                    "status": "OPEN",
+                    "episode": 1,
+                    "version": 1,
+                    "member_digest": "sha256:" + "7" * 64,
+                    "members": ["claim-a", "claim-b"],
+                    "resolution": None,
+                    "claims": {"claim-a": {"v": 1}, "claim-b": {"v": 1}},
+                },
+                {
+                    "conflict_id": "conflict-schema",
+                    "status": "RESOLVED",
+                    "episode": 1,
+                    "version": 2,
+                    "member_digest": "sha256:" + "7" * 64,
+                    "members": ["claim-a", "claim-b"],
+                    "claims": {"claim-a": {"v": 1}, "claim-b": {"v": 1}},
+                    "resolution": {
+                        "resolver": {"actor_type": "HUMAN", "actor_id": "human:test"},
+                        "selected_claim_ids": ["claim-a"],
+                        "rejected_claim_ids": ["claim-b"],
+                        "rationale": "Evidence supports claim-a.",
+                        "evidence_link_ids": ["evidence-a"],
+                        "decided_at": "2026-08-15T00:00:00Z",
+                        "resolution_epoch": 1,
+                    },
+                },
+            ),
             benchmark_context_quality(
                 context(), observation(), expectation(), elapsed_ms=1, token_count=1
             ),
