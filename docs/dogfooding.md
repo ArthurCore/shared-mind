@@ -113,14 +113,18 @@ Unknown fields are rejected. IDs and SHA-256 values must match the schema
 patterns, open-conflict status is exactly `OPEN`, and work-item status is one of
 `TODO`, `DOING`, or `BLOCKED`.
 
-The scorer output must validate against
-[`product-continuity-report.schema.v1.json`](../evals/product_continuity/product-continuity-report.schema.v1.json).
+New scorer output must validate against
+[`product-continuity-report.schema.v2.json`](../evals/product_continuity/product-continuity-report.schema.v2.json).
 Its required fields are `report_version`, `scenario_id`, `score`,
 `maximum_score`, `passed`, `fact_accuracy`, `open_conflict_member_recall`,
 `dimension_scores`, `penalty_codes`, and `metric_comparison`. The comparison
 contains per-resource reductions plus `meets_reduction_target` and
 `quality_preserved`. Resource inputs are separately constrained by
 [`product-continuity-metrics.schema.v1.json`](../evals/product_continuity/product-continuity-metrics.schema.v1.json).
+Report version 2 preserves negative resource regressions. Historical report
+version 1 is available only through explicit `report_version` selection and
+continues to validate against
+[`product-continuity-report.schema.v1.json`](../evals/product_continuity/product-continuity-report.schema.v1.json).
 
 If an explicitly approved live run produces a shareable summary, the sanitized
 artifact must validate against
@@ -169,7 +173,7 @@ response_schema = json.loads(
     (root / "product-continuity-response.schema.v1.json").read_text(encoding="utf-8")
 )
 report_schema = json.loads(
-    (root / "product-continuity-report.schema.v1.json").read_text(encoding="utf-8")
+    (root / "product-continuity-report.schema.v2.json").read_text(encoding="utf-8")
 )
 response = scenario["expected_response"]
 Draft202012Validator(response_schema).validate(response)
@@ -200,7 +204,7 @@ response_schema = json.loads(
     (root / "product-continuity-response.schema.v1.json").read_text(encoding="utf-8")
 )
 report_schema = json.loads(
-    (root / "product-continuity-report.schema.v1.json").read_text(encoding="utf-8")
+    (root / "product-continuity-report.schema.v2.json").read_text(encoding="utf-8")
 )
 candidate = json.loads(Path(os.environ["RESPONSE_PATH"]).read_text(encoding="utf-8"))
 Draft202012Validator(response_schema).validate(candidate)

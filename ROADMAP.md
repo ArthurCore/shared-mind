@@ -2,11 +2,11 @@
 
 | 항목 | 값 |
 |---|---|
-| 문서 버전 | 1.9.0 |
+| 문서 버전 | 1.10.0 |
 | 기준일 | 2026-08-15 |
-| 상태 | DEV-029~091 완료 |
+| 상태 | DEV-029~092 완료 |
 | 대상 저장소 | `ArthurCore/shared-mind` |
-| 구현 브랜치 | `agent/dev-091-unclamped-live-reduction` |
+| 구현 브랜치 | `agent/dev-092-unclamped-offline-reduction` |
 | 참고 프로젝트 | `TencentCloud/TencentDB-Agent-Memory` |
 
 ## 1. 제품 목표
@@ -419,6 +419,22 @@ RED/GREEN은
 [`docs/testing/dev-091-unclamped-live-reduction.tdd.md`](docs/testing/dev-091-unclamped-live-reduction.tdd.md)에
 기록한다.
 
+### DEV-092 — Unclamped Offline Evaluation Reductions
+
+**상태: DONE**
+
+- product-continuity scorer 기본 출력을 `product-continuity-report@2`로 올린다.
+- offline context가 baseline보다 비싸거나 느릴 때 signed 감소율을 보존한다.
+- explicit report `@1`은 기존 clamp와 v1 schema를 그대로 재현한다.
+- live-summary nested report도 version별 reduction 의미를 strict하게 검증한다.
+- unknown version과 비정상 metric은 stable error로 fail closed한다.
+
+계약은
+[`docs/DEV-092-unclamped-offline-reduction.md`](docs/DEV-092-unclamped-offline-reduction.md),
+RED/GREEN은
+[`docs/testing/dev-092-unclamped-offline-reduction.tdd.md`](docs/testing/dev-092-unclamped-offline-reduction.tdd.md)에
+기록한다.
+
 ## 14. 구현된 인터페이스
 
 ```text
@@ -469,6 +485,9 @@ src/shared_mind/web_control.py
 - DEV-091 unclamped live reduction: **4 RED→GREEN tests**, product-continuity
   회귀 포함 **18 tests 통과**.
 - DEV-091 완료 전체 회귀: **446 tests, 0 failures, branch coverage 83%**.
+- DEV-092 unclamped offline reduction: **4 RED tests**, final focused
+  **5 tests**, offline/live product-continuity 회귀 포함 **23 tests 통과**.
+- DEV-092 완료 전체 회귀: **451 tests, 0 failures, branch coverage 83%**.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.
