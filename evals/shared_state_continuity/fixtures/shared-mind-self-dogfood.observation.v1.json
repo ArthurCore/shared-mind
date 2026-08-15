@@ -1,0 +1,51 @@
+{
+  "observation_version": "zero-relearning-observation@1",
+  "purpose": "Preserve Shared Mind project reasoning and work state so any AI session can continue without re-explanation.",
+  "decision_ids": [
+    "decision_extract_2914c128b859b8c6d0d2c0d6",
+    "decision_extract_7dc191dfd1ba39f9124e51c5",
+    "decision_extract_9bb5bdfd8b479b9a058d6a74",
+    "decision_extract_abda017a680a99a91136c52b",
+    "decision_extract_b53638adf32574bd9b3d4daa",
+    "decision_extract_bc334a3c1766687fbbcf6657",
+    "decision_extract_fb62b6aa9763f9218533f515"
+  ],
+  "open_question_ids": [
+    "question_extract_46e0557ffa928807d60ad41a",
+    "question_extract_d310e581a0ae866d4c577d81",
+    "question_extract_d8e953e2d96c3292ae3e0849",
+    "question_extract_ed93cd0df2102e15488f3287"
+  ],
+  "conflict_ids": [],
+  "active_work_item_id": "workitem_extract_83c292866dfcfc397860b284",
+  "evidence_source_revision_ids": [
+    "revision_f409eb0fcd6020a05cd4c159fc5d9569"
+  ],
+  "memory_assertions": [
+    {
+      "memory_id": "one-shared-state",
+      "value": "All clients and sessions observe one canonical project state; only task-specific context views differ.",
+      "confidence": 1.0
+    },
+    {
+      "memory_id": "agent-loadout",
+      "value": "Agent Loadout was removed because Agent-specific memory partitions recreate knowledge fragmentation.",
+      "confidence": 1.0
+    },
+    {
+      "memory_id": "core-context",
+      "value": "Core Context is a disposable derived projection and never authoritative truth.",
+      "confidence": 1.0
+    },
+    {
+      "memory_id": "project-boundary",
+      "value": "Factual and project state mutates only through a validated kernel Proposal and append-only ledger.",
+      "confidence": 1.0
+    },
+    {
+      "memory_id": "skill-boundary",
+      "value": "Shared procedural Skill state mutates through a versioned ProductMutationProposal, receipt, audit hash chain, version guard, review, and replay.",
+      "confidence": 1.0
+    }
+  ]
+}

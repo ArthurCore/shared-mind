@@ -35,6 +35,10 @@ REPORT_SCHEMA_PATH = (
     / "shared_state_continuity"
     / "report.schema.v1.json"
 )
+SELF_DOGFOOD_ROOT = REPORT_SCHEMA_PATH.parent
+SELF_DOGFOOD_RESULT_PATH = (
+    SELF_DOGFOOD_ROOT / "results" / "dev-082-086-self-dogfood.v1.json"
+)
 
 
 def expectation() -> dict:
@@ -452,6 +456,51 @@ class ContinuityEvaluationRunnerTest(unittest.TestCase):
                         elapsed_ms=1_250,
                         token_count=2_048,
                     )
+
+    def test_checked_in_self_dogfood_result_is_grounded_and_schema_valid(self) -> None:
+        result = json.loads(SELF_DOGFOOD_RESULT_PATH.read_text(encoding="utf-8"))
+        expectation_document = json.loads(
+            (
+                SELF_DOGFOOD_ROOT
+                / "fixtures"
+                / "shared-mind-self-dogfood.expectation.v1.json"
+            ).read_text(encoding="utf-8")
+        )
+        observation_document = json.loads(
+            (
+                SELF_DOGFOOD_ROOT
+                / "fixtures"
+                / "shared-mind-self-dogfood.observation.v1.json"
+            ).read_text(encoding="utf-8")
+        )
+        zero = result["dev_082_zero_relearning"]["zero_relearning"]
+        self.assertEqual(sha256_json(expectation_document), zero["expectation_hash"])
+        self.assertEqual(sha256_json(observation_document), zero["observation_hash"])
+        self.assertTrue(result["overall_passed"])
+        self.assertTrue(result["dev_083_memory_pollution"]["detection_passed"])
+        self.assertFalse(result["dev_083_memory_pollution"]["passed"])
+        lifecycle = result["dev_084_memory_lifecycle"]
+        self.assertEqual(lifecycle["total"], sum(lifecycle["counts"].values()))
+        self.assertTrue(lifecycle["history_preserved"])
+        self.assertTrue(result["dev_085_conflict_resolution"]["ledger_verify"]["valid"])
+
+        schema = json.loads(REPORT_SCHEMA_PATH.read_text(encoding="utf-8"))
+        validator = Draft202012Validator(schema)
+        reports = (
+            zero,
+            result["dev_083_memory_pollution"],
+            result["dev_085_conflict_resolution"]["report"],
+            result["dev_086_context_quality"],
+        )
+        for report in reports:
+            candidate = dict(report)
+            candidate.pop("detection_passed", None)
+            with self.subTest(report=candidate.get("report_version")):
+                self.assertEqual([], list(validator.iter_errors(candidate)))
+
+        serialized = SELF_DOGFOOD_RESULT_PATH.read_text(encoding="utf-8")
+        self.assertNotIn("/Users/", serialized)
+        self.assertNotIn("agent:codex", serialized)
 
 
 class ContinuityEvaluationInterfaceTest(ProductTestCase):

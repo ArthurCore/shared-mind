@@ -1,0 +1,80 @@
+{
+  "expectation_version": "zero-relearning-expectation@1",
+  "purpose": "Preserve Shared Mind project reasoning and work state so any AI session can continue without re-explanation.",
+  "decision_ids": [
+    "decision_extract_2914c128b859b8c6d0d2c0d6",
+    "decision_extract_7dc191dfd1ba39f9124e51c5",
+    "decision_extract_9bb5bdfd8b479b9a058d6a74",
+    "decision_extract_abda017a680a99a91136c52b",
+    "decision_extract_b53638adf32574bd9b3d4daa",
+    "decision_extract_bc334a3c1766687fbbcf6657",
+    "decision_extract_fb62b6aa9763f9218533f515"
+  ],
+  "open_question_ids": [
+    "question_extract_46e0557ffa928807d60ad41a",
+    "question_extract_d310e581a0ae866d4c577d81",
+    "question_extract_d8e953e2d96c3292ae3e0849",
+    "question_extract_ed93cd0df2102e15488f3287"
+  ],
+  "conflict_ids": [],
+  "active_work_item_id": "workitem_extract_83c292866dfcfc397860b284",
+  "evidence_source_revision_ids": [
+    "revision_f409eb0fcd6020a05cd4c159fc5d9569"
+  ],
+  "critical_memory_ids": [
+    "decision_extract_2914c128b859b8c6d0d2c0d6",
+    "decision_extract_7dc191dfd1ba39f9124e51c5",
+    "decision_extract_9bb5bdfd8b479b9a058d6a74",
+    "decision_extract_abda017a680a99a91136c52b",
+    "decision_extract_b53638adf32574bd9b3d4daa",
+    "decision_extract_bc334a3c1766687fbbcf6657",
+    "decision_extract_fb62b6aa9763f9218533f515",
+    "question_extract_46e0557ffa928807d60ad41a",
+    "question_extract_d310e581a0ae866d4c577d81",
+    "question_extract_d8e953e2d96c3292ae3e0849",
+    "question_extract_ed93cd0df2102e15488f3287",
+    "revision_f409eb0fcd6020a05cd4c159fc5d9569",
+    "workitem_extract_83c292866dfcfc397860b284"
+  ],
+  "relevant_context_ids": [
+    "artifact_scenario-work-b3fcd8ba3ef2620d",
+    "decision_extract_2914c128b859b8c6d0d2c0d6",
+    "decision_extract_7dc191dfd1ba39f9124e51c5",
+    "decision_extract_9bb5bdfd8b479b9a058d6a74",
+    "decision_extract_abda017a680a99a91136c52b",
+    "decision_extract_fb62b6aa9763f9218533f515",
+    "decision_extract_bc334a3c1766687fbbcf6657",
+    "question_extract_46e0557ffa928807d60ad41a",
+    "question_extract_d310e581a0ae866d4c577d81",
+    "question_extract_d8e953e2d96c3292ae3e0849",
+    "question_extract_ed93cd0df2102e15488f3287",
+    "revision_f409eb0fcd6020a05cd4c159fc5d9569",
+    "workitem_extract_83c292866dfcfc397860b284",
+    "workitem_extract_a32be58f1a0626c95051377e",
+    "workitem_extract_aa0a56c4dbee6f1a7734bd3c",
+    "workitem_extract_d68a0ddeca5d25bf393e031e",
+    "workitem_extract_f7c4faaf2a176a56b53131f4",
+    "workitem_extract_fca1f704687a7c2a1ea3ff69",
+    "workitem_extract_af8e70df5b1676604bd9e799"
+  ],
+  "memory_truth": {
+    "one-shared-state": "All clients and sessions observe one canonical project state; only task-specific context views differ.",
+    "agent-loadout": "Agent Loadout was removed because Agent-specific memory partitions recreate knowledge fragmentation.",
+    "core-context": "Core Context is a disposable derived projection and never authoritative truth.",
+    "project-boundary": "Factual and project state mutates only through a validated kernel Proposal and append-only ledger.",
+    "skill-boundary": "Shared procedural Skill state mutates through a versioned ProductMutationProposal, receipt, audit hash chain, version guard, review, and replay."
+  },
+  "thresholds": {
+    "continuity_accuracy": 1.0,
+    "decision_recall": 1.0,
+    "open_question_recall": 1.0,
+    "conflict_recall": 1.0,
+    "evidence_traceability": 1.0,
+    "wrong_memory_rate": 0.0,
+    "missing_critical_memory_rate": 0.0,
+    "irrelevant_context_rate": 0.1,
+    "max_context_bytes": 65536,
+    "max_context_tokens": 16384,
+    "max_time_to_productive_action_ms": 300000
+  }
+}
