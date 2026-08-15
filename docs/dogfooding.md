@@ -97,6 +97,13 @@ unknown or secret-bearing settings, and nested private report fields fail with
 `INVALID_LIVE_SUMMARY` before a comparison is returned. Existing metric/report
 reason codes and historical comparison semantics remain stable.
 
+Scenario execution policy is an exact offline contract rather than descriptive
+metadata. Tests may not enable network access, the live client is disabled by
+default, and opt-in is pinned. Every adversarial case is a closed candidate
+response that must trigger exactly one declared supported penalty through the
+same penalty computation used by normal scoring. Private, duplicate, or
+ineffective vectors invalidate the scenario before scoring.
+
 The golden fixture records a manual baseline of 24,000 bytes, 6,000 tokens, and
 120 seconds, versus 9,720 bytes, 2,430 tokens, and 45 seconds for context-only
 handoff. Those fixture values represent reductions of 59.5%, 59.5%, and 62.5%

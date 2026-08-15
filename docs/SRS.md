@@ -461,7 +461,7 @@ python3 contracts/validate_contract.py
 #     + 6 semantic cases + 7 continuity operations
 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
-# DEV-097 local Python 3.13 parallel runner: 483 tests, 0 failures
+# DEV-098 local Python 3.13 parallel runner: 490 tests, 0 failures
 # branch-enabled coverage total 83%
 ```
 
@@ -524,6 +524,11 @@ DEV-097은 sanitized live-summary schema를 public comparison helper 내부에�
 [run 31875983194](https://github.com/ArthurCore/shared-mind/actions/runs/31875983194)은
 동일한 Python 3.11~3.13 coverage, 3-OS determinism, quality/security,
 fresh wheel의 8개 job을 모두 통과했다.
+
+DEV-098은 exact offline execution policy와 executable adversarial vector
+contract를 public scorer 내부에서 검증한다. local Python 3.13 parallel branch
+coverage는 490 tests / 0 failures / 83%이며 hosted 결과는 PR closeout 후
+기록한다.
 
 ### 13.2 요구사항 추적표
 
@@ -623,6 +628,8 @@ fresh wheel의 8개 job을 모두 통과했다.
   malformed IDs/hashes/status/bounds를 closed schema로 fail closed한다.
 - DEV-097은 live artifact의 provenance/version/hash/provider/redaction 및
   closed nested shape를 pass decision 전에 검증한다.
+- DEV-098은 evaluator policy와 adversarial case를 exact/closed contract로
+  검증하고 선언 penalty와 실제 penalty가 일치하도록 한다.
 
 ## 14. 개발 로드맵
 
@@ -705,6 +712,7 @@ deny-by-default remote policy evaluator.
 | 완료(local) | DEV-095 | scenario grounding integrity | exact scenario@1 boundary, non-vacuous dimensions, context-to-expected semantic grounding |
 | 완료(local) | DEV-096 | candidate response contract integrity | pinned closed schema, private/unknown field rejection, stable path-only errors |
 | 완료(local) | DEV-097 | live summary contract integrity | sanitized schema enforcement, pre-comparison optional output, secret/provenance fail-closed |
+| 완료(local) | DEV-098 | evaluator policy/adversarial integrity | exact offline policy, executable unique vectors, declared/effective penalty parity |
 
 ## 16. 시험 전략과 합격 기준
 
