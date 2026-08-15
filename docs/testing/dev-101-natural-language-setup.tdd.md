@@ -57,7 +57,7 @@ Result: 28 tests, 0 failures.
 The Python 3.13 parallel branch-coverage runner completed 63 test files:
 
 ```text
-TOTAL files=63 tests=508 failures=0 seconds=21.583
+TOTAL files=63 tests=508 failures=0 seconds=21.163
 TOTAL branch coverage=83%
 ```
 
