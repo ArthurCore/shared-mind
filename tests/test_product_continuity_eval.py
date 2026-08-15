@@ -19,7 +19,8 @@ RESPONSE_SCHEMA_PATH = (
     EVAL_ROOT / "product-continuity-response.schema.v1.json"
 )
 METRICS_SCHEMA_PATH = EVAL_ROOT / "product-continuity-metrics.schema.v1.json"
-REPORT_SCHEMA_PATH = EVAL_ROOT / "product-continuity-report.schema.v1.json"
+REPORT_SCHEMA_PATH = EVAL_ROOT / "product-continuity-report.schema.v2.json"
+REPORT_V1_SCHEMA_PATH = EVAL_ROOT / "product-continuity-report.schema.v1.json"
 LIVE_SUMMARY_SCHEMA_PATH = (
     EVAL_ROOT / "product-continuity-live-summary.schema.v1.json"
 )
@@ -33,10 +34,12 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
         cls.response_schema = cls._load_json(RESPONSE_SCHEMA_PATH)
         cls.metrics_schema = cls._load_json(METRICS_SCHEMA_PATH)
         cls.report_schema = cls._load_json(REPORT_SCHEMA_PATH)
+        cls.report_v1_schema = cls._load_json(REPORT_V1_SCHEMA_PATH)
         cls.live_summary_schema = cls._load_json(LIVE_SUMMARY_SCHEMA_PATH)
         cls.response_validator = cls._validator(cls.response_schema)
         cls.metrics_validator = cls._validator(cls.metrics_schema)
         cls.report_validator = cls._validator(cls.report_schema)
+        cls.report_v1_validator = cls._validator(cls.report_v1_schema)
         cls.live_summary_validator = cls._validator(cls.live_summary_schema)
 
     def test_fixture_schemas_and_every_candidate_response_are_valid(self) -> None:
@@ -52,6 +55,7 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
             self.response_schema,
             self.metrics_schema,
             self.report_schema,
+            self.report_v1_schema,
             self.live_summary_schema,
         ):
             Draft202012Validator.check_schema(schema)
@@ -333,7 +337,13 @@ class ProductContinuityEvalContractTest(unittest.TestCase):
                             summary["arms"][arm_name][metric_name],
                         )
                     report = summary["arms"][arm_name]["report"]
-                    self._assert_valid(self.report_validator, report)
+                    validator = (
+                        self.report_v1_validator
+                        if report["report_version"]
+                        == "product-continuity-report@1"
+                        else self.report_validator
+                    )
+                    self._assert_valid(validator, report)
                     self.assertEqual(100, report["score"])
                     self.assertTrue(report["passed"])
                     self.assertEqual(1.0, report["fact_accuracy"])
