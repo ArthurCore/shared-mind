@@ -205,14 +205,17 @@ class TaskTraceCaptureTest(ProductTestCase):
         )
         self.assertEqual(trace["started_at"], span["source_revision"]["captured_at"])
 
-    def test_roadmap_marks_dev_080_done_dev_081_in_progress_and_later_work_todo(self) -> None:
+    def test_roadmap_marks_dev_080_and_081_done_and_later_work_todo(self) -> None:
         roadmap = (Path(__file__).resolve().parents[1] / "ROADMAP.md").read_text(
             encoding="utf-8"
         )
         self.assertIn("DEV-080 — Shared Mind Self-Dogfooding", roadmap)
         self.assertIn("**상태: DONE**", roadmap)
         self.assertIn("DEV-081 — Real Session Capture", roadmap)
-        self.assertIn("**상태: NEXT / IN PROGRESS**", roadmap)
+        dev_081 = roadmap.split("### DEV-081 — Real Session Capture", 1)[1].split(
+            "### DEV-082~086", 1
+        )[0]
+        self.assertIn("**상태: DONE**", dev_081)
         for dev in range(82, 87):
             self.assertRegex(roadmap, rf"DEV-{dev:03d}[^\n]*TODO")
 

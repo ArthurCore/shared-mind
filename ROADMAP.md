@@ -4,7 +4,7 @@
 |---|---|
 | 문서 버전 | 1.3.0 |
 | 기준일 | 2026-08-15 |
-| 상태 | DEV-029~080 완료; DEV-081 NEXT / IN PROGRESS; DEV-082~086 TODO |
+| 상태 | DEV-029~081 완료; DEV-082~086 TODO |
 | 대상 저장소 | `ArthurCore/shared-mind` |
 | 구현 브랜치 | `agent/dev-081-session-capture` |
 | 참고 프로젝트 | `TencentCloud/TencentDB-Agent-Memory` |
@@ -287,7 +287,7 @@ flowchart LR
 
 ### DEV-081 — Real Session Capture
 
-**상태: NEXT / IN PROGRESS**
+**상태: DONE**
 
 - versioned, immutable task trace에 TASK/TOOL/RESULT/DECISION/FAILURE/TEST event를 보존한다.
 - 동일 trace 재전송은 canonical history와 audit를 늘리지 않고, 같은 trace ID의 다른
@@ -297,6 +297,10 @@ flowchart LR
 - 입력 timestamp와 event 순서를 그대로 보존하고 다음 새 세션에서 검색 및 source
   evidence drill-down이 가능해야 한다.
 - capture는 kernel Proposal source-registration boundary를 우회하지 않는다.
+
+완료 evidence는 [`docs/testing/dev-081-session-capture.tdd.md`](docs/testing/dev-081-session-capture.tdd.md)에
+기록했다. strict capture를 실제 `../shared-mind-memory`에 적용했고, 다음 fresh
+process에서 검색·source span·task-aware context로 복원했다.
 
 ### DEV-082~086
 
@@ -338,8 +342,9 @@ src/shared_mind/web_control.py
 ### 15.1 완료된 로컬 검증
 
 - kernel contract validator 통과.
-- product contract validator 통과: **11 positive fixtures + 10 negative fixtures**.
+- product contract validator 통과: **10 positive fixtures + 14 negative fixtures**.
 - DEV-080 완료 전체 회귀 기준선: **391 tests, 0 failures, branch coverage 82%**.
+- DEV-081 완료 전체 회귀: **401 tests, 0 failures, branch coverage 82%**.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.
