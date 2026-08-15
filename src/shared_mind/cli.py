@@ -26,7 +26,8 @@ DEFAULT_RESUME_TASK = "Continue the highest-priority unblocked project work."
 DEFAULT_RESUME_QUERY = (
     "project purpose current decisions open questions active work conflicts evidence"
 )
-DEFAULT_RESUME_BUDGET_BYTES = 128 * 1024
+DEFAULT_RESUME_BUDGET_BYTES = 24 * 1024
+MAX_RESUME_BUDGET_BYTES = 128 * 1024
 
 
 class CliUsageError(Exception):
@@ -86,7 +87,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--depth", choices=("SUMMARY", "DETAIL", "EVIDENCE"), default="EVIDENCE"
     )
     resume_parser.add_argument(
-        "--budget-bytes", type=_positive_integer, default=DEFAULT_RESUME_BUDGET_BYTES
+        "--budget-bytes",
+        type=_resume_budget_bytes,
+        default=DEFAULT_RESUME_BUDGET_BYTES,
     )
 
     conflict_parser = commands.add_parser("conflict")
@@ -560,6 +563,16 @@ def _positive_integer(value: str) -> int:
     parsed = int(value)
     if parsed <= 0:
         raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
+def _resume_budget_bytes(value: str) -> int:
+    parsed = _positive_integer(value)
+    if parsed > MAX_RESUME_BUDGET_BYTES:
+        raise argparse.ArgumentTypeError(
+            f"must not exceed {MAX_RESUME_BUDGET_BYTES} bytes; "
+            "use the context command for larger advanced requests"
+        )
     return parsed
 
 
