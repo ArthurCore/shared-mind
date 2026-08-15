@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import platform
 import sqlite3
+import stat
 import tempfile
 import time
 from pathlib import Path
@@ -15,13 +17,14 @@ from typing import Any, Mapping, Sequence
 from jsonschema import Draft202012Validator
 
 from shared_mind import Kernel
-from shared_mind.canonical import canonical_json, sha256_bytes, sha256_json
+from shared_mind.canonical import canonical_json, sha256_json
 
 from .context_100k import BENCHMARK_VERSION, run_context_benchmark
 from .fixture_builder import FIXTURE_VERSION, build_benchmark_fixture
 
 
 CERTIFICATION_VERSION = "context-benchmark-certification@1"
+DATABASE_HASH_CHUNK_BYTES = 1_048_576
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = ROOT / "contracts" / "atlas-predicate-registry.v1.json"
 SCHEMA_PATH = ROOT / "benchmarks" / "context-benchmark-certification.schema.v1.json"
@@ -232,10 +235,44 @@ def _kernel_snapshot(kernel: Kernel) -> dict[str, Any]:
 
 
 def _database_evidence(path: Path) -> dict[str, Any]:
-    content = path.read_bytes()
+    digest = hashlib.sha256()
+    size_bytes = 0
+    try:
+        with path.open("rb") as handle:
+            before = os.fstat(handle.fileno())
+            if not stat.S_ISREG(before.st_mode):
+                raise CertificationError(
+                    "DATABASE_NOT_REGULAR",
+                    "Benchmark database evidence must be a regular file.",
+                )
+            while chunk := handle.read(DATABASE_HASH_CHUNK_BYTES):
+                digest.update(chunk)
+                size_bytes += len(chunk)
+            after = os.fstat(handle.fileno())
+    except CertificationError:
+        raise
+    except IsADirectoryError as exc:
+        raise CertificationError(
+            "DATABASE_NOT_REGULAR",
+            "Benchmark database evidence must be a regular file.",
+        ) from exc
+    except OSError as exc:
+        raise CertificationError(
+            "DATABASE_EVIDENCE_UNAVAILABLE",
+            "Benchmark database could not be read for evidence hashing.",
+        ) from exc
+
+    identity_fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
+    before_identity = tuple(getattr(before, field) for field in identity_fields)
+    after_identity = tuple(getattr(after, field) for field in identity_fields)
+    if before_identity != after_identity or size_bytes != after.st_size:
+        raise CertificationError(
+            "DATABASE_CHANGED_DURING_HASH",
+            "Benchmark database changed while evidence was being hashed.",
+        )
     return {
-        "sha256": sha256_bytes(content),
-        "size_bytes": len(content),
+        "sha256": f"sha256:{digest.hexdigest()}",
+        "size_bytes": size_bytes,
     }
 
 
@@ -289,6 +326,7 @@ if __name__ == "__main__":
 
 __all__ = [
     "CERTIFICATION_VERSION",
+    "DATABASE_HASH_CHUNK_BYTES",
     "CertificationError",
     "certify_context_benchmark",
     "main",
