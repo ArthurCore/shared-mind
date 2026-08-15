@@ -117,7 +117,7 @@ def _only_disposable_views_are_stale(integrity: dict[str, Any]) -> bool:
 
 def _setup_context(service: ProductService) -> dict[str, Any]:
     budget = DEFAULT_SETUP_BUDGET_BYTES
-    request = {
+    request: dict[str, Any] = {
         "task": DEFAULT_SETUP_TASK,
         "purpose": None,
         "query": (
