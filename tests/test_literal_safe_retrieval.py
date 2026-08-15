@@ -5,6 +5,7 @@ import json
 
 from shared_mind.product_cli import main as product_cli_main
 from shared_mind.product_mcp_server import ProductMcpApplication
+from shared_mind.retrieval import RETRIEVAL_INDEX_VERSION
 
 from tests.product_support import ProductTestCase
 
@@ -47,6 +48,8 @@ class LiteralSafeRetrievalTest(ProductTestCase):
 
         self.assertTrue(self._source_ids(task))
         self.assertEqual(self._source_ids(task), self._source_ids(version))
+        self.assertEqual("retrieval-index@2", RETRIEVAL_INDEX_VERSION)
+        self.assertEqual(RETRIEVAL_INDEX_VERSION, task["retrieval_version"])
 
     def test_fts_operators_quotes_parentheses_and_symbols_never_escape_query_data(
         self,
@@ -100,6 +103,14 @@ class LiteralSafeRetrievalTest(ProductTestCase):
         self.assertFalse(mcp["isError"])
 
         expected = self._source_ids(python_result)
+        self.assertEqual("retrieval-index@2", python_result["retrieval_version"])
+        self.assertEqual(
+            python_result["retrieval_version"], cli["data"]["retrieval_version"]
+        )
+        self.assertEqual(
+            python_result["retrieval_version"],
+            mcp["structuredContent"]["data"]["retrieval_version"],
+        )
         self.assertEqual(
             expected,
             self._source_ids(cli["data"]),
