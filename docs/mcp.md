@@ -17,9 +17,11 @@ $ uv tool install --editable '.[mcp]'
 environment. No manual virtualenv creation or activation is required. Run
 `uv tool update-shell` once if `shared-mind-mcp` is not yet on `PATH`.
 
-The optional dependency is pinned to `mcp>=2,<3`. Keep that major-version pin
-when reproducing an environment because MCP transport APIs and generated schemas
-may change across major versions.
+The base distribution does not include the MCP SDK; the primary session install
+above deliberately selects the optional `mcp` extra. The optional dependency is
+pinned to `mcp>=2,<3`. Keep that major-version pin when reproducing an
+environment because MCP transport APIs and generated schemas may change across
+major versions.
 
 The supported release and fresh-wheel surface is MCP SDK v2. The legacy v1
 fallback is compatibility code exercised against a simulated SDK import and
