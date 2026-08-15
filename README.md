@@ -212,6 +212,14 @@ determinism subsets on Linux, macOS, and Windows; compile/lint/type/dependency/
 security gates; and fresh base/MCP wheel installation smoke tests. Product
 Scenario and retrieval determinism are included in the cross-platform subset.
 
+Shared-state continuity evaluation is available through ProductService, the
+`shared-mind-product metrics` commands, and the Product MCP
+`continuity_evaluate` tool. DEV-082~086 measure zero relearning, memory
+pollution, lifecycle, conflict-resolution preservation, and context quality;
+their reports are reproducible evidence rather than canonical truth. See
+[the evaluation contract](docs/DEV-082-086-continuity-evaluations.md) and
+[the RED/GREEN dogfooding evidence](docs/testing/dev-082-086-continuity-evaluations.tdd.md).
+
 The earlier kernel baseline is retained in
 [GitHub Actions run 31555504041](https://github.com/ArthurCore/shared-mind/actions/runs/31555504041).
 The DEV-081 product implementation branch passed all eight hosted CI jobs in

@@ -167,10 +167,23 @@ shared-mind-product catalog
 shared-mind-product review-queue
 shared-mind-product verify
 shared-mind-product metrics memory-quality
+shared-mind-product metrics zero-relearning ./context.json ./observation.json ./expectation.json \
+  --elapsed-ms 1250 --token-count 2048
+shared-mind-product metrics memory-pollution ./pollution.json
+shared-mind-product metrics lifecycle
+shared-mind-product metrics conflict-resolution ./before.json ./after.json
+shared-mind-product metrics context-quality ./context.json ./observation.json ./expectation.json \
+  --elapsed-ms 1250 --token-count 2048
 ```
 
 `verify` checks the kernel ledger, product audit chain, Skill replay, and a fresh
 canonical rebuild of managed derived views.
+
+The continuity commands are deterministic read-only evaluations. They measure
+zero-relearning recall, wrong-memory pollution, lifecycle eligibility, conflict
+resolution preservation, and context quality without converting an evaluation
+answer into canonical state. The same operations are available through
+`ProductService` and the Product MCP `continuity_evaluate` tool.
 
 ## 9. Backup and restore
 

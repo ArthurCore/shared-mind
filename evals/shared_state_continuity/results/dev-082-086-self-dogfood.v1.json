@@ -1,0 +1,144 @@
+{
+  "result_version": "shared-mind-self-dogfood-continuity@1",
+  "recorded_at": "2026-08-15T02:07:47Z",
+  "repository_head": "95f8cd787eb75a4c3964aac95771b84e0ccfbe96",
+  "workspace": {
+    "path_policy": "external sibling workspace; absolute path intentionally omitted",
+    "ledger_sequence": 149,
+    "kernel_state_root": "sha256:3027b43940910ed61577c9921533487e11f4e16e82d39bb497572dea1a562408",
+    "integrity": "PRODUCT_INTEGRITY_VALID"
+  },
+  "dev_082_zero_relearning": {
+    "artifact_version": "shared-state-continuity-run@1",
+    "input_hashes": {
+      "context": "sha256:74f6342b68bec609292d40ddbd3381d1b480df5555dc857d8b9213d0d2970279",
+      "expectation": "sha256:ce0b10535f3920ab4699c724954e20dc2a35c9a633f8f17f23c9cc8c2038f459",
+      "observation": "sha256:6b842f1ea467af60b752fb92577998e49f64184d7e9f200a602af66cd40e9d88"
+    },
+    "zero_relearning": {
+      "report_version": "zero-relearning-eval@1",
+      "evaluator_version": "shared-state-continuity-evaluator@1",
+      "context_hash": "sha256:0c3f97dd9e54488a5e292343c7fc8c5d38db7808457d324978385934b45e6623",
+      "kernel_state_root": "sha256:3027b43940910ed61577c9921533487e11f4e16e82d39bb497572dea1a562408",
+      "expectation_hash": "sha256:ce0b10535f3920ab4699c724954e20dc2a35c9a633f8f17f23c9cc8c2038f459",
+      "observation_hash": "sha256:6b842f1ea467af60b752fb92577998e49f64184d7e9f200a602af66cd40e9d88",
+      "metrics": {
+        "continuity_accuracy": 1.0,
+        "decision_recall": 1.0,
+        "open_question_recall": 1.0,
+        "conflict_recall": 1.0,
+        "evidence_traceability": 1.0,
+        "wrong_memory_rate": 0.0,
+        "missing_critical_memory_rate": 0.0,
+        "irrelevant_context_rate": 0.09523809523809523,
+        "context_bytes": 65516,
+        "context_tokens": 16379,
+        "time_to_productive_action_ms": 157000
+      },
+      "missing_critical_ids": [],
+      "wrong_memory_ids": [],
+      "irrelevant_context_ids": [
+        "revision_00fce4cefd9b5d675fc55e48a9b99abf",
+        "revision_10ffc9d5a022dbedda09cadd62a281bf"
+      ],
+      "failures": [],
+      "passed": true
+    },
+    "measurement": {
+      "time_start": "2026-08-15T01:53:42Z",
+      "productive_action": "RED checkpoint d587f8d25d61fe0dcb6a7d3b6f2c5585ad58cd17 at 2026-08-15T01:56:19Z",
+      "context_build_elapsed_ns": 901506458,
+      "token_count_method": "ceil(UTF-8 context bytes / 4), utf8-bytes-token-estimator@1"
+    },
+    "passed": true
+  },
+  "dev_083_memory_pollution": {
+    "report_version": "memory-pollution-eval@1",
+    "input_hash": "sha256:e055046ec036549c6379bb95762414c74744fde8c7b5d8436cc395a247cb9b2b",
+    "metrics": {
+      "duplicate_memory_rate": 0.2,
+      "irrelevant_memory_rate": 0.2,
+      "stale_memory_rate": 0.2,
+      "wrong_memory_rate": 0.4,
+      "confidently_wrong_memory_rate": 0.2
+    },
+    "duplicate_memory_ids": ["duplicate-one-state"],
+    "irrelevant_memory_ids": ["irrelevant-lunch"],
+    "stale_memory_ids": ["stale-agent-loadout"],
+    "wrong_memory_ids": ["stale-agent-loadout", "wrong-core-truth"],
+    "confidently_wrong_memory_ids": ["wrong-core-truth"],
+    "failures": [
+      "DUPLICATE_MEMORY",
+      "IRRELEVANT_MEMORY",
+      "STALE_MEMORY",
+      "WRONG_MEMORY",
+      "CONFIDENTLY_WRONG_MEMORY"
+    ],
+    "passed": false,
+    "detection_passed": true
+  },
+  "dev_084_memory_lifecycle": {
+    "inventory_version": "memory-lifecycle-inventory@1",
+    "kernel_state_root": "sha256:3027b43940910ed61577c9921533487e11f4e16e82d39bb497572dea1a562408",
+    "counts": {
+      "CURRENT": 176,
+      "STALE": 2,
+      "SUPERSEDED": 0,
+      "COMPLETED": 2
+    },
+    "total": 180,
+    "historical_ids": [
+      "artifact_scenario-work-35b64b5f2c525223",
+      "artifact_scenario-work-95944f36b5c2fd24",
+      "workitem_extract_a32be58f1a0626c95051377e",
+      "workitem_extract_aa0a56c4dbee6f1a7734bd3c"
+    ],
+    "inventory_hash": "sha256:d0d567eda296b6da67facbd5c6410526bf9206dc2039cb15f19d8e6e65744ba0",
+    "history_preserved": true,
+    "passed": true
+  },
+  "dev_085_conflict_resolution": {
+    "canonical_commit_outcome": "COMMITTED",
+    "ledger_sequence": 4,
+    "report": {
+      "report_version": "conflict-resolution-eval@1",
+      "before_hash": "sha256:13c5f9470e95457b68361b424e1ecb13c0429657cc0ceb8db20110954d1785f7",
+      "after_hash": "sha256:6bc61958b3669142ef409c92d39907abd3d96d0dc3246086f4e0cf5d88888bd5",
+      "metrics": {
+        "original_claim_preservation": 1.0,
+        "member_partition_complete": true,
+        "rationale_preserved": true,
+        "evidence_link_count": 1
+      },
+      "failures": [],
+      "passed": true
+    },
+    "ledger_verify": {
+      "valid": true,
+      "checked_entries": 4,
+      "head_hash": "sha256:0b77a4e1e8377afdd8a0e7065eef094d68c4836fa6b974e3f6d2660d20c1be21",
+      "state_root": "sha256:e191adbfff45868eadd0ed467dd1a3c7373f82c5d90d42f569f8d8dc0e4edb25",
+      "errors": []
+    },
+    "passed": true
+  },
+  "dev_086_context_quality": {
+    "report_version": "context-quality-benchmark@1",
+    "evaluator_version": "shared-state-continuity-evaluator@1",
+    "context_hash": "sha256:0c3f97dd9e54488a5e292343c7fc8c5d38db7808457d324978385934b45e6623",
+    "kernel_state_root": "sha256:3027b43940910ed61577c9921533487e11f4e16e82d39bb497572dea1a562408",
+    "continuity_report_hash": "sha256:ad39dde3adf340ed2c7d27e542e5a4855107ca41cec7c84a7b19dc31296d355c",
+    "metrics": {
+      "relevant_recall": 1.0,
+      "missing_critical_memory_rate": 0.0,
+      "irrelevant_context_rate": 0.09523809523809523,
+      "evidence_traceability": 1.0,
+      "context_bytes": 65516,
+      "context_tokens": 16379,
+      "time_to_productive_action_ms": 157000
+    },
+    "failures": [],
+    "passed": true
+  },
+  "overall_passed": true
+}

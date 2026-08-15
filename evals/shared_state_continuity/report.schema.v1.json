@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shared-mind.local/evals/shared-state-continuity/report/v1",
+  "title": "Shared Mind continuity evaluation report v1",
+  "oneOf": [
+    {"$ref": "#/$defs/ZeroRelearningReport"},
+    {"$ref": "#/$defs/MemoryPollutionReport"},
+    {"$ref": "#/$defs/MemoryLifecycleReport"},
+    {"$ref": "#/$defs/ConflictResolutionReport"},
+    {"$ref": "#/$defs/ContextQualityReport"}
+  ],
+  "$defs": {
+    "Hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "Rate": {"type": "number", "minimum": 0, "maximum": 1},
+    "StringList": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
+    "ZeroMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "continuity_accuracy", "decision_recall", "open_question_recall",
+        "conflict_recall", "evidence_traceability", "wrong_memory_rate",
+        "missing_critical_memory_rate", "irrelevant_context_rate",
+        "context_bytes", "context_tokens", "time_to_productive_action_ms"
+      ],
+      "properties": {
+        "continuity_accuracy": {"$ref": "#/$defs/Rate"},
+        "decision_recall": {"$ref": "#/$defs/Rate"},
+        "open_question_recall": {"$ref": "#/$defs/Rate"},
+        "conflict_recall": {"$ref": "#/$defs/Rate"},
+        "evidence_traceability": {"$ref": "#/$defs/Rate"},
+        "wrong_memory_rate": {"$ref": "#/$defs/Rate"},
+        "missing_critical_memory_rate": {"$ref": "#/$defs/Rate"},
+        "irrelevant_context_rate": {"$ref": "#/$defs/Rate"},
+        "context_bytes": {"type": "integer", "minimum": 0},
+        "context_tokens": {"type": ["integer", "null"], "minimum": 0},
+        "time_to_productive_action_ms": {"type": "number", "minimum": 0}
+      }
+    },
+    "ZeroRelearningReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_version", "evaluator_version", "context_hash",
+        "kernel_state_root", "expectation_hash", "observation_hash", "metrics",
+        "missing_critical_ids", "wrong_memory_ids", "irrelevant_context_ids",
+        "failures", "passed"
+      ],
+      "properties": {
+        "report_version": {"const": "zero-relearning-eval@1"},
+        "evaluator_version": {"const": "shared-state-continuity-evaluator@1"},
+        "context_hash": {"$ref": "#/$defs/Hash"},
+        "kernel_state_root": {"$ref": "#/$defs/Hash"},
+        "expectation_hash": {"$ref": "#/$defs/Hash"},
+        "observation_hash": {"$ref": "#/$defs/Hash"},
+        "metrics": {"$ref": "#/$defs/ZeroMetrics"},
+        "missing_critical_ids": {"$ref": "#/$defs/StringList"},
+        "wrong_memory_ids": {"$ref": "#/$defs/StringList"},
+        "irrelevant_context_ids": {"$ref": "#/$defs/StringList"},
+        "failures": {"$ref": "#/$defs/StringList"},
+        "passed": {"type": "boolean"}
+      }
+    },
+    "MemoryPollutionReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_version", "input_hash", "metrics", "duplicate_memory_ids",
+        "irrelevant_memory_ids", "stale_memory_ids", "wrong_memory_ids",
+        "confidently_wrong_memory_ids", "failures", "passed"
+      ],
+      "properties": {
+        "report_version": {"const": "memory-pollution-eval@1"},
+        "input_hash": {"$ref": "#/$defs/Hash"},
+        "metrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "duplicate_memory_rate", "irrelevant_memory_rate", "stale_memory_rate",
+            "wrong_memory_rate", "confidently_wrong_memory_rate"
+          ],
+          "properties": {
+            "duplicate_memory_rate": {"$ref": "#/$defs/Rate"},
+            "irrelevant_memory_rate": {"$ref": "#/$defs/Rate"},
+            "stale_memory_rate": {"$ref": "#/$defs/Rate"},
+            "wrong_memory_rate": {"$ref": "#/$defs/Rate"},
+            "confidently_wrong_memory_rate": {"$ref": "#/$defs/Rate"}
+          }
+        },
+        "duplicate_memory_ids": {"$ref": "#/$defs/StringList"},
+        "irrelevant_memory_ids": {"$ref": "#/$defs/StringList"},
+        "stale_memory_ids": {"$ref": "#/$defs/StringList"},
+        "wrong_memory_ids": {"$ref": "#/$defs/StringList"},
+        "confidently_wrong_memory_ids": {"$ref": "#/$defs/StringList"},
+        "failures": {"$ref": "#/$defs/StringList"},
+        "passed": {"type": "boolean"}
+      }
+    },
+    "MemoryLifecycleReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lifecycle_version", "object_id", "status", "lifecycle",
+        "eligible_for_current_context", "preserve_history"
+      ],
+      "properties": {
+        "lifecycle_version": {"const": "memory-lifecycle@1"},
+        "object_id": {"type": "string", "minLength": 1},
+        "status": {"type": "string", "minLength": 1},
+        "lifecycle": {"enum": ["CURRENT", "STALE", "SUPERSEDED", "COMPLETED"]},
+        "eligible_for_current_context": {"type": "boolean"},
+        "preserve_history": {"const": true}
+      }
+    },
+    "ConflictResolutionReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["report_version", "before_hash", "after_hash", "metrics", "failures", "passed"],
+      "properties": {
+        "report_version": {"const": "conflict-resolution-eval@1"},
+        "before_hash": {"$ref": "#/$defs/Hash"},
+        "after_hash": {"$ref": "#/$defs/Hash"},
+        "metrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "original_claim_preservation", "member_partition_complete",
+            "rationale_preserved", "evidence_link_count"
+          ],
+          "properties": {
+            "original_claim_preservation": {"$ref": "#/$defs/Rate"},
+            "member_partition_complete": {"type": "boolean"},
+            "rationale_preserved": {"type": "boolean"},
+            "evidence_link_count": {"type": "integer", "minimum": 0}
+          }
+        },
+        "failures": {"$ref": "#/$defs/StringList"},
+        "passed": {"type": "boolean"}
+      }
+    },
+    "ContextQualityReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "report_version", "evaluator_version", "context_hash",
+        "kernel_state_root", "continuity_report_hash", "metrics", "failures", "passed"
+      ],
+      "properties": {
+        "report_version": {"const": "context-quality-benchmark@1"},
+        "evaluator_version": {"const": "shared-state-continuity-evaluator@1"},
+        "context_hash": {"$ref": "#/$defs/Hash"},
+        "kernel_state_root": {"$ref": "#/$defs/Hash"},
+        "continuity_report_hash": {"$ref": "#/$defs/Hash"},
+        "metrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "relevant_recall", "missing_critical_memory_rate",
+            "irrelevant_context_rate", "evidence_traceability", "context_bytes",
+            "context_tokens", "time_to_productive_action_ms"
+          ],
+          "properties": {
+            "relevant_recall": {"$ref": "#/$defs/Rate"},
+            "missing_critical_memory_rate": {"$ref": "#/$defs/Rate"},
+            "irrelevant_context_rate": {"$ref": "#/$defs/Rate"},
+            "evidence_traceability": {"$ref": "#/$defs/Rate"},
+            "context_bytes": {"type": "integer", "minimum": 0},
+            "context_tokens": {"type": ["integer", "null"], "minimum": 0},
+            "time_to_productive_action_ms": {"type": "number", "minimum": 0}
+          }
+        },
+        "failures": {"$ref": "#/$defs/StringList"},
+        "passed": {"type": "boolean"}
+      }
+    }
+  }
+}

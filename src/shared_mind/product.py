@@ -14,6 +14,14 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Mapping, Sequence
 
 from .canonical import canonical_json, sha256_bytes, sha256_json
+from .continuity_eval import (
+    ContinuityEvaluationError,
+    benchmark_context_quality,
+    classify_memory_lifecycle,
+    evaluate_conflict_resolution,
+    evaluate_memory_pollution,
+    evaluate_zero_relearning,
+)
 from .memory_views import ContextRouter, MemoryViewBuilder, MemoryViewError
 from .product_contract import validate_product_object
 from .product_ingest import (
@@ -1319,6 +1327,140 @@ class ProductService:
             "context_bytes": responses[0]["budget"]["included_bytes"],
             "omitted": responses[0]["budget"]["omitted"],
         }
+
+    def evaluate_zero_relearning(
+        self,
+        context: Mapping[str, Any],
+        observation: Mapping[str, Any],
+        expectation: Mapping[str, Any],
+        *,
+        elapsed_ms: int | float,
+        token_count: int | None = None,
+    ) -> dict[str, Any]:
+        """Evaluate a fresh-session observation without mutating Shared State."""
+
+        try:
+            return evaluate_zero_relearning(
+                context,
+                observation,
+                expectation,
+                elapsed_ms=elapsed_ms,
+                token_count=token_count,
+            )
+        except ContinuityEvaluationError as exc:
+            raise ProductError(
+                exc.code,
+                exc.message,
+                data={"path": exc.path},
+            ) from exc
+
+    def evaluate_context_quality(
+        self,
+        context: Mapping[str, Any],
+        observation: Mapping[str, Any],
+        expectation: Mapping[str, Any],
+        *,
+        elapsed_ms: int | float,
+        token_count: int | None = None,
+    ) -> dict[str, Any]:
+        """Run the DEV-086 benchmark over the same immutable evaluation input."""
+
+        try:
+            return benchmark_context_quality(
+                context,
+                observation,
+                expectation,
+                elapsed_ms=elapsed_ms,
+                token_count=token_count,
+            )
+        except ContinuityEvaluationError as exc:
+            raise ProductError(
+                exc.code,
+                exc.message,
+                data={"path": exc.path},
+            ) from exc
+
+    def evaluate_memory_pollution(
+        self,
+        memories: Sequence[Mapping[str, Any]],
+        *,
+        expected_truth: Mapping[str, str],
+        confident_threshold: float = 0.9,
+    ) -> dict[str, Any]:
+        """Measure selected-memory pollution without persisting the report."""
+
+        try:
+            return evaluate_memory_pollution(
+                memories,
+                expected_truth=expected_truth,
+                confident_threshold=confident_threshold,
+            )
+        except ContinuityEvaluationError as exc:
+            raise ProductError(
+                exc.code,
+                exc.message,
+                data={"path": exc.path},
+            ) from exc
+
+    def memory_lifecycle_inventory(self) -> dict[str, Any]:
+        """Classify canonical, derived, and shared-Skill records from one state."""
+
+        projection = self.views.projection()
+        candidates: list[dict[str, Any]] = [
+            dict(record) for record in self.views.atomic_records(projection)
+        ]
+        candidates.extend(dict(item) for item in self.store.list_artifacts())
+        for skill in self.store.list_skills():
+            candidate = dict(skill)
+            candidate["object_id"] = f"{skill['skill_id']}@{skill['version']}"
+            candidates.append(candidate)
+        try:
+            entries = [classify_memory_lifecycle(item) for item in candidates]
+        except ContinuityEvaluationError as exc:
+            raise ProductError(
+                exc.code,
+                exc.message,
+                data={"path": exc.path},
+            ) from exc
+        entries.sort(key=lambda item: (item["lifecycle"], item["object_id"]))
+        counts = {
+            lifecycle: sum(item["lifecycle"] == lifecycle for item in entries)
+            for lifecycle in ("CURRENT", "STALE", "SUPERSEDED", "COMPLETED")
+        }
+        return {
+            "inventory_version": "memory-lifecycle-inventory@1",
+            "kernel_state_root": projection["state_root"],
+            "entries": entries,
+            "counts": counts,
+            "total": len(entries),
+            "current_ids": sorted(
+                item["object_id"]
+                for item in entries
+                if item["eligible_for_current_context"]
+            ),
+            "historical_ids": sorted(
+                item["object_id"]
+                for item in entries
+                if not item["eligible_for_current_context"]
+            ),
+            "inventory_hash": sha256_json(entries),
+        }
+
+    def evaluate_conflict_resolution(
+        self,
+        before: Mapping[str, Any],
+        after: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        """Evaluate an explicit conflict transition without applying it."""
+
+        try:
+            return evaluate_conflict_resolution(before, after)
+        except ContinuityEvaluationError as exc:
+            raise ProductError(
+                exc.code,
+                exc.message,
+                data={"path": exc.path},
+            ) from exc
 
     def skill_reuse_benchmark(
         self,

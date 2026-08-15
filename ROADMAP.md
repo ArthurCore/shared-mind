@@ -2,11 +2,11 @@
 
 | 항목 | 값 |
 |---|---|
-| 문서 버전 | 1.3.0 |
+| 문서 버전 | 1.4.0 |
 | 기준일 | 2026-08-15 |
-| 상태 | DEV-029~081 완료; DEV-082~086 TODO |
+| 상태 | DEV-029~086 완료 |
 | 대상 저장소 | `ArthurCore/shared-mind` |
-| 구현 브랜치 | `agent/dev-081-session-capture` |
+| 구현 브랜치 | `agent/dev-082-086-continuity-evals` |
 | 참고 프로젝트 | `TencentCloud/TencentDB-Agent-Memory` |
 
 ## 1. 제품 목표
@@ -304,14 +304,22 @@ process에서 검색·source span·task-aware context로 복원했다.
 
 ### DEV-082~086
 
-- [ ] **DEV-082 — Zero-Relearning Evaluation — TODO**: fresh session의 continuity accuracy,
+- [x] **DEV-082 — Zero-Relearning Evaluation — DONE**: fresh session의 continuity accuracy,
   decision/open-question/conflict recall, evidence traceability와 productive-action 시간을 자동 측정한다.
-- [ ] **DEV-083 — Memory Pollution / Wrong Memory Evaluation — TODO**: duplicate, irrelevant,
-  stale, confidently wrong memory를 측정한다.
-- [ ] **DEV-084 — Memory Lifecycle — TODO**: stale, superseded, completed, current를 구분한다.
-- [ ] **DEV-085 — Conflict Resolution Workflow — TODO**: 원 conflicting Claims와 해결 rationale을 보존한다.
-- [ ] **DEV-086 — Context Quality Benchmark — TODO**: relevant recall, missing critical memory,
+- [x] **DEV-083 — Memory Pollution / Wrong Memory Evaluation — DONE**: duplicate, irrelevant,
+  stale, wrong, confidently wrong memory를 서로 구분해 fail closed한다.
+- [x] **DEV-084 — Memory Lifecycle — DONE**: current, stale, superseded, completed를 구분하면서
+  non-current record의 history를 보존한다.
+- [x] **DEV-085 — Conflict Resolution Workflow — DONE**: 원 conflicting Claims, episode/member
+  digest, selected/rejected partition, rationale와 evidence를 보존한다.
+- [x] **DEV-086 — Context Quality Benchmark — DONE**: relevant recall, missing critical memory,
   irrelevant context, evidence traceability, bytes/tokens와 time-to-action을 측정한다.
+
+구현 계약과 acceptance는
+[`docs/DEV-082-086-continuity-evaluations.md`](docs/DEV-082-086-continuity-evaluations.md),
+RED/GREEN·전체 회귀·실제 dogfooding evidence는
+[`docs/testing/dev-082-086-continuity-evaluations.tdd.md`](docs/testing/dev-082-086-continuity-evaluations.tdd.md)에
+기록한다. 평가 결과는 immutable evidence일 뿐 canonical truth가 아니다.
 
 ## 14. 구현된 인터페이스
 
@@ -345,6 +353,8 @@ src/shared_mind/web_control.py
 - product contract validator 통과: **10 positive fixtures + 14 negative fixtures**.
 - DEV-080 완료 전체 회귀 기준선: **391 tests, 0 failures, branch coverage 82%**.
 - DEV-081 완료 전체 회귀: **401 tests, 0 failures, branch coverage 82%**.
+- DEV-082~086 완료 전체 회귀: **417 tests, 0 failures, branch coverage 82%**.
+- DEV-082~086 targeted continuity evaluation: **15 tests 통과**.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.
@@ -360,7 +370,11 @@ src/shared_mind/web_control.py
 Actions runner access가 복구됐다. PR #4의 구현 head
 `b52b7257a5b8b11f1949fe6272217d67970f7a16`에서
 [GitHub Actions run 31857557825](https://github.com/ArthurCore/shared-mind/actions/runs/31857557825)가
-성공했고, 아래 8개 job이 모두 실제 step을 실행해 통과했다.
+성공했고, 최종 documentation head `ac90490a37393f8d3065ea926acd3b40dbf922d6`도
+[run 31859364496](https://github.com/ArthurCore/shared-mind/actions/runs/31859364496)에서
+아래 8개 job을 모두 통과한 뒤 main에 병합됐다. DEV-082~086
+branch는 아직 push/PR 전이므로 hosted 결과가 없으며, 위 417-test/82% 수치는 로컬
+Python 3.13 검증 결과다.
 
 1. Python 3.11 contract + full branch coverage: **PASS**.
 2. Python 3.12 contract + full branch coverage: **PASS**.
@@ -408,8 +422,7 @@ DEV 작업은 다음 조건을 만족할 때 완료로 본다.
 
 ## 18. 이후 범위
 
-DEV-080은 완료됐고 DEV-081~086은 위 Milestone 13에서 순차 수행한다. 다음 항목은
-DEV-086 이후에도 현재 제품 범위에 포함하지 않는다.
+DEV-080~086은 완료됐다. 다음 항목은 DEV-086 이후에도 현재 제품 범위에 포함하지 않는다.
 
 - multi-tenant cloud service와 distributed database.
 - 조직/팀 RBAC와 외부 identity provider.

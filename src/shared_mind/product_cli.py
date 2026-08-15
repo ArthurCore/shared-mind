@@ -43,6 +43,20 @@ def _positive(value: str) -> int:
     return parsed
 
 
+def _non_negative_number(value: str) -> int | float:
+    parsed: int | float = float(value) if any(mark in value for mark in ".eE") else int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("value must be non-negative")
+    return parsed
+
+
+def _non_negative_integer(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("value must be non-negative")
+    return parsed
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = JsonArgumentParser(prog="shared-mind-product")
     parser.add_argument(
@@ -166,6 +180,32 @@ def build_parser() -> argparse.ArgumentParser:
     cold_benchmark.add_argument("handoff")
     cold_benchmark.add_argument("manual_explanation")
     cold_benchmark.add_argument("--expected-id", action="append", default=[])
+    zero_relearning = metrics_commands.add_parser("zero-relearning")
+    zero_relearning.add_argument("context")
+    zero_relearning.add_argument("observation")
+    zero_relearning.add_argument("expectation")
+    zero_relearning.add_argument(
+        "--elapsed-ms", type=_non_negative_number, required=True
+    )
+    zero_relearning.add_argument(
+        "--token-count", type=_non_negative_integer, required=True
+    )
+    memory_pollution = metrics_commands.add_parser("memory-pollution")
+    memory_pollution.add_argument("input")
+    metrics_commands.add_parser("lifecycle")
+    conflict_resolution = metrics_commands.add_parser("conflict-resolution")
+    conflict_resolution.add_argument("before")
+    conflict_resolution.add_argument("after")
+    context_quality = metrics_commands.add_parser("context-quality")
+    context_quality.add_argument("context")
+    context_quality.add_argument("observation")
+    context_quality.add_argument("expectation")
+    context_quality.add_argument(
+        "--elapsed-ms", type=_non_negative_number, required=True
+    )
+    context_quality.add_argument(
+        "--token-count", type=_non_negative_integer, required=True
+    )
     return parser
 
 
@@ -395,6 +435,60 @@ def _dispatch(service: ProductService, args: argparse.Namespace) -> tuple[Any, s
                 ),
                 "ROUTING_METRICS_READY",
             )
+        if args.metrics_command == "zero-relearning":
+            return (
+                service.evaluate_zero_relearning(
+                    _load_workspace_json(service, args.context),
+                    _load_workspace_json(service, args.observation),
+                    _load_workspace_json(service, args.expectation),
+                    elapsed_ms=args.elapsed_ms,
+                    token_count=args.token_count,
+                ),
+                "ZERO_RELEARNING_EVALUATED",
+            )
+        if args.metrics_command == "memory-pollution":
+            input_document = _load_workspace_json(service, args.input)
+            memories = input_document.get("memories")
+            expected_truth = input_document.get("expected_truth")
+            if (
+                isinstance(memories, (str, bytes))
+                or not isinstance(memories, Sequence)
+                or not isinstance(expected_truth, Mapping)
+            ):
+                raise ProductCliUsageError(
+                    "memory-pollution input requires memories and expected_truth"
+                )
+            return (
+                service.evaluate_memory_pollution(
+                    memories,
+                    expected_truth=expected_truth,
+                    confident_threshold=float(
+                        input_document.get("confident_threshold", 0.9)
+                    ),
+                ),
+                "MEMORY_POLLUTION_EVALUATED",
+            )
+        if args.metrics_command == "lifecycle":
+            return service.memory_lifecycle_inventory(), "MEMORY_LIFECYCLE_READY"
+        if args.metrics_command == "conflict-resolution":
+            return (
+                service.evaluate_conflict_resolution(
+                    _load_workspace_json(service, args.before),
+                    _load_workspace_json(service, args.after),
+                ),
+                "CONFLICT_RESOLUTION_EVALUATED",
+            )
+        if args.metrics_command == "context-quality":
+            return (
+                service.evaluate_context_quality(
+                    _load_workspace_json(service, args.context),
+                    _load_workspace_json(service, args.observation),
+                    _load_workspace_json(service, args.expectation),
+                    elapsed_ms=args.elapsed_ms,
+                    token_count=args.token_count,
+                ),
+                "CONTEXT_QUALITY_EVALUATED",
+            )
         return (
             service.cold_start_benchmark(
                 _load_json_argument(args.handoff),
@@ -414,6 +508,16 @@ def _workspace_paths(service: ProductService, values: Sequence[str]) -> list[Pat
         path = Path(value).expanduser()
         resolved.append(path if path.is_absolute() else service.workspace.root / path)
     return resolved
+
+
+def _load_workspace_json(service: ProductService, value: str) -> Mapping[str, Any]:
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = service.workspace.root / path
+    parsed = service.workspace.load_json(path)
+    if not isinstance(parsed, Mapping):
+        raise ProductCliUsageError("JSON argument must be an object")
+    return parsed
 
 
 def _load_json_argument(value: str) -> Mapping[str, Any]:
