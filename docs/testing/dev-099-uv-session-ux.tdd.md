@@ -93,3 +93,36 @@ The next one-command session context hash is
 | a nested project path finds its `<project>-memory` sibling | `test_workspace_discovery_finds_the_project_sibling_memory` |
 | one command verifies and returns a task-aware session | `test_resume_is_one_command_from_the_project_tree` |
 | invalid integrity prevents context generation | `test_resume_fails_closed_before_context_when_integrity_is_invalid` |
+
+## Post-release boundary regression
+
+The first interactive cold-start with an explicit task exposed a serialization
+boundary defect: a 131,072-byte request failed because the final response was
+131,075 bytes. Selection itself respected the budget, but the decimal growth of
+the final `omitted` and `trace_omitted` counters added three bytes after the
+selection loop had finished. The kernel and product integrity checks remained
+valid; only context delivery failed closed.
+
+RED was fixed in commit `d29db78` by
+`test_context_drops_optional_trace_when_final_counters_cross_budget`. GREEN in
+commit `f1c3ab9` re-stabilizes the final serialized size while dropping only
+optional `selection_trace` entries. Selected records, mandatory references, and
+canonical state are unchanged.
+
+```console
+PYTHONPATH=src python3 -m unittest \
+  tests.test_memory_views_product tests.test_session_ux -v
+# Ran 12 tests ... OK
+
+uv run --python 3.13 --extra quality \
+  python tools/run_parallel_coverage.py
+# 62 files, 496 tests, 0 failures, 83% branch coverage
+```
+
+The exact previously failing command then returned `SESSION_READY` with 203
+verified ledger entries and 130,932 included bytes within the 131,072-byte
+budget. It reported 171 omitted candidates and 167 omitted trace entries. The
+context hash was
+`sha256:1951bb6202f941b97a13729a2578848560678d9fa389b80b6fc9ec6558463f3d`.
+Both contract validators, compileall, Ruff, configured mypy, Bandit, strict
+third-party dependency audit, and `git diff --check` passed under Python 3.13.
