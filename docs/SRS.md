@@ -461,7 +461,7 @@ python3 contracts/validate_contract.py
 #     + 6 semantic cases + 7 continuity operations
 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
-# DEV-088 local Python 3.13 parallel runner: 432 tests, 0 failures
+# DEV-089 local Python 3.13 parallel runner: 439 tests, 0 failures
 # branch-enabled coverage total 83%
 ```
 
@@ -469,7 +469,7 @@ PR #5 GitHub Actions run
 [`31866492746`](https://github.com/ArthurCore/shared-mind/actions/runs/31866492746)은
 source/test HEAD `97d5811cf9ac852f076f76e5cff04f6d097e9567`에서 Python 3.11,
 3.12, 3.13 full coverage, Linux/macOS/Windows determinism, quality/security,
-fresh base/MCP wheel의 8개 job을 모두 통과했다. 위 DEV-088 432-test/83% 수치는
+fresh base/MCP wheel의 8개 job을 모두 통과했다. 위 DEV-089 439-test/83% 수치는
 local 결과다. 이후 PR #6 구현 head
 `58b6fb1b0a9a69f1e9cfe2d18da9405a82b0669b`의
 [`31867443975`](https://github.com/ArthurCore/shared-mind/actions/runs/31867443975)도
@@ -495,7 +495,7 @@ DEV-088 PR #7 head `3db636a4579925a9badce97d189ce6669fb7ddd4`의
 | FR-053 | 완료 | optional MCP v2 server, fixed allowlist, CLI/service parity, Codex project config, approved live Codex seq1/Claude seq2 MCP artifact with verify/replay parity and silent overwrite 0 |
 | FR-054 | local source-only 완료 | AtomicStrata/Qarinah/SwarmVault bytes adapters와 atomic failure conformance; live vendor connector는 없음 |
 | NFR-001~007 | 완료 | version/hash pin, append-only receipts, rollback, WAL durability, replay, local-first audit trail |
-| NFR-008 | 완료(환경 회귀 주의) | post-index 100k history-heavy p95 2.707 ms, optimized hot-active p95 1.653288 s; exact output/replay parity |
+| NFR-008 | 완료(환경 회귀 주의) | historical schema 1.2와 fresh schema 1.3 100k를 모두 인증; current-schema history-heavy p95 4.7165 ms, hot-active p95 1.6767885 s, exact verify/replay parity |
 | NFR-009~012 | 완료(아래 제한 포함) | hard byte/token budget, optional exact-token adapter, path/SQL boundary, stable CLI codes |
 
 ### 13.3 명시적 제한과 호환성 경계
@@ -550,6 +550,13 @@ DEV-088 PR #7 head `3db636a4579925a9badce97d189ce6669fb7ddd4`의
   ledger와 receipt 각 100,000건, head sequence/hash, state root가 모두 일치했다.
   이전 471.903초 측정은 full suite와 CPU가 경합한 contaminated timing으로 raw
   artifact에만 보존하며 성능 주장에는 사용하지 않는다.
+- DEV-089는 위 historical schema 1.2 경계를 별도 보존하면서 fresh schema 1.3
+  fixture를 두 profile 모두 새로 생성했다. 각 profile은 ledger/receipt 100,000건,
+  receipt schema `["1.3.0"]`, verifier 0 errors, explicit file replay exact parity를
+  기록했다. 50-sample p95는 history-heavy 4.7165ms/950 bytes, hot-active
+  1.6767885s/2,928 bytes다. strict result schema와 self-hash는 checked-in unit
+  test가 검증한다. 결과는 macOS 15.0.1 arm64, Python 3.13.2, SQLite 3.45.3의
+  machine-specific certification이며 모든 환경의 latency를 보장하지 않는다.
 
 ## 14. 개발 로드맵
 
@@ -623,6 +630,7 @@ deny-by-default remote policy evaluator.
 | 완료(local policy) | DEV-028 | remote identity/disclosure/source-scope policy | deny-by-default evaluator; live identity/network/disclosure transport 없음 |
 | 완료(dogfooding) | DEV-080~087 | self cold-start, session capture, continuity/memory/context evaluation | one Shared State의 실제 capture·zero-relearning·paired reduction evidence |
 | 완료 | DEV-088 | literal-safe retrieval query | task ID/version/operator/punctuation을 literal Unicode token으로 처리, `retrieval-index@2`, Python/CLI/MCP parity |
+| 완료(현재 환경 인증) | DEV-089 | fresh schema 1.3 100k certification | one-command create/verify/replay/measure, strict evidence schema/self-hash, 두 profile p95 2초 이내 |
 
 ## 16. 시험 전략과 합격 기준
 

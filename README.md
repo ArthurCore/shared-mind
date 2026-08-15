@@ -233,9 +233,12 @@ including Python 3.11–3.13 branch coverage, three-OS determinism, quality and
 security gates, and fresh base/MCP wheel installation.
 
 The checked-in [DEV-021 benchmark evidence](benchmarks/results/dev-021-2026-08-11.md)
-continues to cover the 100k-entry kernel context path. Product-level cold-start,
-routing, retrieval, Skill reuse, and integrity evaluations are executable in
-the product test suite.
+retains the historical schema 1.2 performance and migration baseline. The
+[DEV-089 certification](benchmarks/results/dev-089-schema13-2026-08-15.md)
+adds fresh schema 1.3 history-heavy and hot-active 100k fixtures, complete
+verify/replay parity, a strict content-addressed result schema, and 50-sample
+context p95 evidence. Product-level cold-start, routing, retrieval, Skill reuse,
+and integrity evaluations are executable in the product test suite.
 
 ## License
 
