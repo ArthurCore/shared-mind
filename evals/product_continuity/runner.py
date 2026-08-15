@@ -47,6 +47,56 @@ _SCORING_FIELDS = frozenset(
         "penalties",
     }
 )
+_SCENARIO_FIELDS = frozenset(
+    {
+        "scenario_version",
+        "scenario_id",
+        "description",
+        "response_schema",
+        "metrics_schema",
+        "report_schema",
+        "execution_policy",
+        "context",
+        "expected_response",
+        "adversarial_cases",
+        "scoring",
+        "metrics",
+    }
+)
+_SCENARIO_PINS = {
+    "scenario_version": "product-continuity-scenario@1",
+    "response_schema": "product-continuity-response.schema.v1.json",
+    "metrics_schema": "product-continuity-metrics.schema.v1.json",
+    "report_schema": "product-continuity-report.schema.v2.json",
+}
+_CONTEXT_FIELDS = frozenset(
+    {
+        "context_pack_version",
+        "evaluation_scenario_id",
+        "projection_version",
+        "ledger_seq",
+        "state_root",
+        "purpose",
+        "purpose_missing",
+        "current_claims",
+        "open_conflicts",
+        "decisions",
+        "open_questions",
+        "work_items",
+        "truncation",
+    }
+)
+_EXPECTED_RESPONSE_FIELDS = frozenset(
+    {
+        "scenario_id",
+        "project_purpose",
+        "current_decisions",
+        "settled_claims",
+        "open_conflicts",
+        "open_questions",
+        "actionable_work_items",
+    }
+)
 
 LIVE_COMPARISON_V1 = "product-continuity-live-comparison@1"
 LIVE_COMPARISON_V2 = "product-continuity-live-comparison@2"
@@ -88,8 +138,7 @@ def evaluate_scenario(
             f"{report_version!r}"
         )
 
-    expected = _mapping(scenario["expected_response"], "expected_response")
-    context = _mapping(scenario["context"], "context")
+    expected, context = _scenario_contract(scenario)
     scoring = _scoring_contract(scenario.get("scoring"))
     weights = scoring["dimensions"]
     scenario_id_matches = response.get("scenario_id") == scenario.get("scenario_id")
@@ -172,6 +221,106 @@ def evaluate_scenario(
         "penalty_codes": penalty_codes,
         "metric_comparison": metric_comparison,
     }
+
+
+def _scenario_contract(
+    scenario: Mapping[str, Any],
+) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    if set(scenario) != _SCENARIO_FIELDS:
+        _invalid_scenario("scenario must use the exact product-continuity field set")
+    for field, expected_pin in _SCENARIO_PINS.items():
+        if scenario.get(field) != expected_pin:
+            _invalid_scenario(f"{field} must equal {expected_pin!r}")
+    if not isinstance(scenario.get("description"), str) or not scenario[
+        "description"
+    ].strip():
+        _invalid_scenario("description must be a non-empty string")
+    scenario_id = scenario.get("scenario_id")
+    if not isinstance(scenario_id, str) or not scenario_id.strip():
+        _invalid_scenario("scenario_id must be a non-empty string")
+
+    context = scenario.get("context")
+    if not isinstance(context, Mapping) or set(context) != _CONTEXT_FIELDS:
+        _invalid_scenario("context must use the exact scenario@1 field set")
+    if context.get("evaluation_scenario_id") != scenario_id:
+        _invalid_scenario("context evaluation_scenario_id must match scenario_id")
+    if context.get("purpose_missing") is not False:
+        _invalid_scenario("context purpose must be present")
+    purpose = context.get("purpose")
+    if not isinstance(purpose, str) or not purpose.strip():
+        _invalid_scenario("context purpose must be a non-empty string")
+
+    expected = scenario.get("expected_response")
+    if not isinstance(expected, Mapping) or set(expected) != _EXPECTED_RESPONSE_FIELDS:
+        _invalid_scenario("expected_response must use the exact response field set")
+    if expected.get("scenario_id") != scenario_id:
+        _invalid_scenario("expected_response scenario_id must match scenario_id")
+    if expected.get("project_purpose") != purpose:
+        _invalid_scenario("expected project purpose must match context purpose")
+
+    for field in (
+        "current_decisions",
+        "settled_claims",
+        "open_conflicts",
+        "open_questions",
+        "actionable_work_items",
+    ):
+        value = expected.get(field)
+        if (
+            not isinstance(value, list)
+            or not value
+            or any(not isinstance(item, Mapping) for item in value)
+        ):
+            _invalid_scenario(f"expected_response.{field} must be non-empty records")
+
+    if expected["current_decisions"] != _context_continuity_records(
+        context.get("decisions"),
+        fields=("decision_id", "title", "conclusion", "rationale"),
+        path="context.decisions",
+    ):
+        _invalid_scenario("expected decisions must match context decisions")
+    if not _settled_claims_match(context, expected):
+        _invalid_scenario("expected settled claims must match context claims")
+    if not _open_conflicts_match(context, expected):
+        _invalid_scenario("expected open conflicts must match context conflicts")
+    if expected["open_questions"] != _context_continuity_records(
+        context.get("open_questions"),
+        fields=("question_id", "question"),
+        path="context.open_questions",
+    ):
+        _invalid_scenario("expected open questions must match context questions")
+    if expected["actionable_work_items"] != _context_continuity_records(
+        context.get("work_items"),
+        fields=("work_item_id", "status", "description"),
+        path="context.work_items",
+    ):
+        _invalid_scenario("expected work items must match context work items")
+    return expected, context
+
+
+def _context_continuity_records(
+    value: Any,
+    *,
+    fields: tuple[str, ...],
+    path: str,
+) -> list[dict[str, Any]]:
+    if not isinstance(value, list) or not value:
+        _invalid_scenario(f"{path} must be non-empty records")
+    normalized: list[dict[str, Any]] = []
+    for index, record in enumerate(value):
+        if not isinstance(record, Mapping):
+            _invalid_scenario(f"{path}[{index}] must be a mapping")
+        document = record.get("document")
+        if not isinstance(document, Mapping) or any(
+            field not in document for field in fields
+        ):
+            _invalid_scenario(f"{path}[{index}].document is incomplete")
+        normalized.append({field: document[field] for field in fields})
+    return normalized
+
+
+def _invalid_scenario(message: str) -> None:
+    raise ValueError(f"INVALID_SCENARIO_CONTRACT: {message}")
 
 
 def _scoring_contract(value: Any) -> Mapping[str, Any]:
