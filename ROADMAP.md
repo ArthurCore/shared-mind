@@ -2,11 +2,11 @@
 
 | 항목 | 값 |
 |---|---|
-| 문서 버전 | 1.11.0 |
+| 문서 버전 | 1.12.0 |
 | 기준일 | 2026-08-15 |
-| 상태 | DEV-029~093 완료 |
+| 상태 | DEV-029~094 완료 (hosted CI closeout 대기) |
 | 대상 저장소 | `ArthurCore/shared-mind` |
-| 구현 브랜치 | `agent/dev-093-evaluation-input-integrity` |
+| 구현 브랜치 | `agent/dev-094-scoring-contract-integrity` |
 | 참고 프로젝트 | `TencentCloud/TencentDB-Agent-Memory` |
 
 ## 1. 제품 목표
@@ -453,6 +453,23 @@ RED/GREEN은
 [`docs/testing/dev-093-evaluation-input-integrity.tdd.md`](docs/testing/dev-093-evaluation-input-integrity.tdd.md)에
 기록한다.
 
+### DEV-094 — Scoring Contract Integrity
+
+**상태: DONE (local gates)**
+
+- evaluator-side scoring object의 exact field set과 typed constants를 scorer
+  내부에서 직접 검증한다.
+- 100-point maximum/pass threshold, `1.0` quality threshold, six dimension
+  weights, three positive penalties의 drift를 허용하지 않는다.
+- boolean/NaN/누락/추가/약화 입력은 `INVALID_SCORING_CONTRACT`로 fail closed한다.
+- valid golden report와 explicit historical report behavior는 유지한다.
+
+계약은
+[`docs/DEV-094-scoring-contract-integrity.md`](docs/DEV-094-scoring-contract-integrity.md),
+RED/GREEN은
+[`docs/testing/dev-094-scoring-contract-integrity.tdd.md`](docs/testing/dev-094-scoring-contract-integrity.tdd.md)에
+기록한다.
+
 ## 14. 구현된 인터페이스
 
 ```text
@@ -509,6 +526,9 @@ src/shared_mind/web_control.py
 - DEV-093 evaluation input integrity: **6 RED→GREEN tests**, continuity
   evaluation 회귀 포함 **29 tests 통과**.
 - DEV-093 완료 전체 회귀: **457 tests, 0 failures, branch coverage 83%**.
+- DEV-094 scoring contract integrity: **6 RED→GREEN tests**, product-continuity
+  evaluation 회귀 포함 **35 tests 통과**.
+- DEV-094 완료 전체 회귀: **463 tests, 0 failures, branch coverage 83%**.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.
@@ -598,6 +618,11 @@ PR #12 source, test, documentation head
 [run 31873909032](https://github.com/ArthurCore/shared-mind/actions/runs/31873909032)은
 Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
 8개 job을 모두 통과했다.
+
+DEV-094는 evaluator-side scoring weights, penalties, pass/quality thresholds를
+exact typed constants로 고정해 scoring-policy drift를 fail closed하고
+463-test/83% local regression을 완료했다. Shared Mind closeout과 hosted CI
+근거는 PR 완료 시 이 절에 추가한다.
 
 ## 16. Definition of Done
 

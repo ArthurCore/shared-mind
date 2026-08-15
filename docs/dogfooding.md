@@ -69,6 +69,13 @@ Safety failures produce explicit penalty codes:
 | `HALLUCINATED_ID` | 25 | The response introduced an ID not grounded in context. |
 | `OMITTED_CONFLICT_MEMBER` | 25 | At least one open-conflict member was not exposed. |
 
+The public scorer treats this evaluator-side scoring table as a pinned
+contract, not caller-controlled policy. Its top-level fields, typed 100-point
+maximum and passing threshold, `1.0` quality thresholds, six dimension
+weights, and three positive penalties must match exactly. Missing, extra,
+boolean, NaN, weakened, or otherwise changed values fail closed with
+`INVALID_SCORING_CONTRACT` before any pass decision is computed.
+
 The golden fixture records a manual baseline of 24,000 bytes, 6,000 tokens, and
 120 seconds, versus 9,720 bytes, 2,430 tokens, and 45 seconds for context-only
 handoff. Those fixture values represent reductions of 59.5%, 59.5%, and 62.5%
