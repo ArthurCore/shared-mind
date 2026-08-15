@@ -469,8 +469,11 @@ PR #5 GitHub Actions run
 [`31866492746`](https://github.com/ArthurCore/shared-mind/actions/runs/31866492746)은
 source/test HEAD `97d5811cf9ac852f076f76e5cff04f6d097e9567`에서 Python 3.11,
 3.12, 3.13 full coverage, Linux/macOS/Windows determinism, quality/security,
-fresh base/MCP wheel의 8개 job을 모두 통과했다. DEV-087 수치는 아직 push 전
-local 결과이며 해당 branch의 hosted 결과는 PR에서 별도로 확인한다.
+fresh base/MCP wheel의 8개 job을 모두 통과했다. 위 DEV-087 428-test/83% 수치는
+local 결과다. 이후 PR #6 구현 head
+`58b6fb1b0a9a69f1e9cfe2d18da9405a82b0669b`의
+[`31867443975`](https://github.com/ArthurCore/shared-mind/actions/runs/31867443975)도
+같은 8개 job과 19개 commit check를 모두 통과했다.
 
 ### 13.2 요구사항 추적표
 

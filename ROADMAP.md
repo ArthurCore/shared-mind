@@ -393,12 +393,12 @@ Actions runner access가 복구됐다. PR #4의 구현 head
 [GitHub Actions run 31857557825](https://github.com/ArthurCore/shared-mind/actions/runs/31857557825)가
 성공했고, 최종 documentation head `ac90490a37393f8d3065ea926acd3b40dbf922d6`도
 [run 31859364496](https://github.com/ArthurCore/shared-mind/actions/runs/31859364496)에서
-아래 8개 job을 모두 통과한 뒤 main에 병합됐다. DEV-082~086
-   branch는 PR #5 head `97d5811cf9ac852f076f76e5cff04f6d097e9567`의
-   [run 31866492746](https://github.com/ArthurCore/shared-mind/actions/runs/31866492746)에서
-   같은 8개 job을 통과하고 merge commit
-   `d358912c2fbd9dfcc22f1f74883319e6db59f856`로 main에 병합됐다. 위
-   417-test/82% 수치는 병합 전 로컬 Python 3.13 검증 결과다.
+아래 8개 job을 모두 통과한 뒤 main에 병합됐다. DEV-082~086 branch는 PR #5
+head `97d5811cf9ac852f076f76e5cff04f6d097e9567`의
+[run 31866492746](https://github.com/ArthurCore/shared-mind/actions/runs/31866492746)에서
+같은 8개 job을 통과하고 merge commit
+`d358912c2fbd9dfcc22f1f74883319e6db59f856`로 main에 병합됐다. 위
+417-test/82% 수치는 병합 전 로컬 Python 3.13 검증 결과다.
 
 1. Python 3.11 contract + full branch coverage: **PASS**.
 2. Python 3.12 contract + full branch coverage: **PASS**.
@@ -412,8 +412,10 @@ Actions runner access가 복구됐다. PR #4의 구현 head
 기존 billing/spending-limit 표시는 해소된 외부 runner-access incident였으며 현재
 구현 또는 merge blocker가 아니다.
 
-DEV-087은 local regression/dogfooding과 Shared Mind closeout까지 완료했으며, 이
-브랜치의 hosted 결과는 push/PR 후 기록한다.
+DEV-087은 local regression/dogfooding과 Shared Mind closeout까지 완료했다. PR #6
+구현 head `58b6fb1b0a9a69f1e9cfe2d18da9405a82b0669b`의
+[run 31867443975](https://github.com/ArthurCore/shared-mind/actions/runs/31867443975)는
+위 8개 job을 모두 통과했고 commit check 19개도 모두 성공했다.
 
 ## 16. Definition of Done
 
