@@ -1297,6 +1297,20 @@ class ProductService:
 
 def _artifact_verification_document(artifact: Mapping[str, Any]) -> dict[str, Any]:
     provenance = artifact.get("provenance", {})
+    normalized_provenance = {
+        "builder_version": provenance.get("builder_version"),
+        "member_object_ids": provenance.get("member_object_ids", []),
+        "member_dependency_digests": provenance.get(
+            "member_dependency_digests", {}
+        ),
+    }
+    # Scenario dependencies are deliberately local.  An unrelated canonical
+    # mutation must not rewrite every Scenario merely to advance this
+    # historical build root, so it is not part of Scenario equivalence.
+    if artifact["artifact_type"] != "SCENARIO":
+        normalized_provenance["kernel_state_root"] = provenance.get(
+            "kernel_state_root"
+        )
     return {
         "artifact_id": artifact["artifact_id"],
         "artifact_type": artifact["artifact_type"],
@@ -1306,14 +1320,7 @@ def _artifact_verification_document(artifact: Mapping[str, Any]) -> dict[str, An
         "dependency_digest": artifact["dependency_digest"],
         "builder_version": artifact["builder_version"],
         "document": artifact["document"],
-        "provenance": {
-            "kernel_state_root": provenance.get("kernel_state_root"),
-            "builder_version": provenance.get("builder_version"),
-            "member_object_ids": provenance.get("member_object_ids", []),
-            "member_dependency_digests": provenance.get(
-                "member_dependency_digests", {}
-            ),
-        },
+        "provenance": normalized_provenance,
     }
 
 
