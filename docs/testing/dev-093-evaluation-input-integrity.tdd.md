@@ -75,3 +75,11 @@ next context hash: sha256:86b43a54d3403f67fd51020c9766b4f12d87d4b7e29e26cbfcfd5d
 `shared-mind replay --verify`, product consolidation, and
 `PRODUCT_INTEGRITY_VALID` all passed. The next task-aware context contains no
 active WorkItem or OpenQuestion.
+
+## Hosted evidence
+
+PR #12 source/test/documentation head
+`4f64e72e443a55043d56bf465d748d3a467e94f0` passed
+[GitHub Actions run 31873909032](https://github.com/ArthurCore/shared-mind/actions/runs/31873909032):
+Python 3.11, 3.12, and 3.13 full contract/coverage, Ubuntu/macOS/Windows
+determinism, quality/security, and fresh wheel smoke all succeeded.

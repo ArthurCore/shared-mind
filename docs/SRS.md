@@ -487,6 +487,12 @@ DEV-092 PR #11 source/test/documentation head
 Python 3.11~3.13 full coverage, Linux/macOS/Windows determinism,
 quality/security, fresh wheel의 8개 hosted job을 모두 통과했다.
 
+DEV-093 PR #12 source/test/documentation head
+`4f64e72e443a55043d56bf465d748d3a467e94f0`의
+[`31873909032`](https://github.com/ArthurCore/shared-mind/actions/runs/31873909032)은
+동일한 Python 3.11~3.13 coverage, 3-OS determinism, quality/security,
+fresh wheel의 8개 hosted job을 모두 통과했다.
+
 ### 13.2 요구사항 추적표
 
 | 요구사항 | 상태 | 주 증거 |
