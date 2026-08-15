@@ -70,6 +70,18 @@ def setup_project(
             }
 
         integrity = service.verify()
+        if _only_disposable_views_are_stale(integrity):
+            repair = service.incremental_consolidation()
+            consolidation = {
+                "performed": True,
+                "changed_artifact_ids": repair["changed_artifact_ids"],
+            }
+            integrity = service.verify()
+        else:
+            consolidation = {
+                "performed": False,
+                "changed_artifact_ids": [],
+            }
         if not integrity["valid"]:
             raise ProductError(
                 "PRODUCT_INTEGRITY_INVALID",
@@ -100,10 +112,22 @@ def setup_project(
         "workspace": workspace.root.as_posix(),
         "workspace_created": workspace_created,
         "cold_start": cold_start_result,
+        "consolidation": consolidation,
         "codex_skill": skill,
         "integrity": integrity,
         "context": context,
     }
+
+
+def _only_disposable_views_are_stale(integrity: dict[str, Any]) -> bool:
+    return bool(
+        not integrity.get("valid")
+        and integrity.get("kernel", {}).get("valid")
+        and integrity.get("product_audit", {}).get("valid")
+        and integrity.get("skill_replay", {}).get("valid")
+        and not integrity.get("artifact_provenance_issues")
+        and not integrity.get("derived_views", {}).get("valid")
+    )
 
 
 def _resolve_project_root(

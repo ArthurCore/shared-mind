@@ -24,6 +24,11 @@ Without explicit paths, setup requires a Git project, then:
 6. verifies kernel ledger, product audit, Skill replay, and derived views; and
 7. returns `SETUP_READY` with the compact task-aware context.
 
+If canonical state advanced while only disposable derived views became stale,
+setup runs deterministic incremental consolidation and verifies again. It never
+uses this repair path for an invalid kernel ledger, product audit, Skill replay,
+or artifact provenance boundary.
+
 `--project` supports an explicit non-Git project. `--workspace` selects an
 explicit memory root. `--no-cold-start` and `--no-install-skill` provide bounded
 automation/test surfaces without changing the default natural-language path.
