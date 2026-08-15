@@ -32,6 +32,20 @@ PRODUCT_CONTINUITY_REPORT_V2 = "product-continuity-report@2"
 _SUPPORTED_PRODUCT_CONTINUITY_REPORT_VERSIONS = frozenset(
     (PRODUCT_CONTINUITY_REPORT_V1, PRODUCT_CONTINUITY_REPORT_V2)
 )
+PRODUCT_CONTINUITY_METRICS_V1 = "product-continuity-metrics@1"
+_OFFLINE_METRIC_FIELDS = frozenset(
+    {
+        "metric_version",
+        "minimum_reduction_fraction",
+        "manual_baseline",
+        "context_only",
+        "quality",
+    }
+)
+_RESOURCE_METRIC_FIELDS = frozenset({"bytes", "tokens", "time_seconds"})
+_QUALITY_METRIC_FIELDS = frozenset(
+    {"fact_accuracy", "open_conflict_member_recall"}
+)
 
 
 def evaluate_scenario(
@@ -182,12 +196,17 @@ def live_summary_comparison(
 
     manual_report = _mapping(manual["report"], "arms.manual_baseline.report")
     context_report = _mapping(context["report"], "arms.context_only.report")
+    manual_quality = _live_report_quality(
+        manual_report, "arms.manual_baseline.report"
+    )
+    context_quality = _live_report_quality(
+        context_report, "arms.context_only.report"
+    )
     quality_preserved = (
-        int(context_report["score"]) >= int(manual_report["score"])
-        and float(context_report["fact_accuracy"])
-        >= float(manual_report["fact_accuracy"])
-        and float(context_report["open_conflict_member_recall"])
-        >= float(manual_report["open_conflict_member_recall"])
+        context_quality["score"] >= manual_quality["score"]
+        and context_quality["fact_accuracy"] >= manual_quality["fact_accuracy"]
+        and context_quality["open_conflict_member_recall"]
+        >= manual_quality["open_conflict_member_recall"]
     )
     schema_valid = (
         manual.get("schema_validation") == "PASS"
@@ -197,8 +216,8 @@ def live_summary_comparison(
         reduction >= 0.5 for reduction in reductions.values()
     )
     passed = (
-        bool(manual_report["passed"])
-        and bool(context_report["passed"])
+        manual_quality["passed"]
+        and context_quality["passed"]
         and schema_valid
         and quality_preserved
         and meets_reduction_target
@@ -227,15 +246,74 @@ def _positive_live_metric(value: Any, path: str) -> float:
     return float(value)
 
 
+def _live_report_quality(
+    report: Mapping[str, Any], path: str
+) -> dict[str, int | float | bool]:
+    version = report.get("report_version")
+    if version not in _SUPPORTED_PRODUCT_CONTINUITY_REPORT_VERSIONS:
+        raise ValueError(
+            f"INVALID_LIVE_REPORT_VERSION: {path}.report_version must be a "
+            "supported product-continuity report version"
+        )
+    passed = report.get("passed")
+    if not isinstance(passed, bool):
+        raise ValueError(
+            f"INVALID_LIVE_REPORT_PASSED: {path}.passed must be boolean"
+        )
+    score = report.get("score")
+    if (
+        isinstance(score, bool)
+        or not isinstance(score, int)
+        or not 0 <= score <= 100
+    ):
+        raise ValueError(
+            f"INVALID_LIVE_REPORT_QUALITY: {path}.score must be an integer "
+            "between zero and 100"
+        )
+    return {
+        "passed": passed,
+        "score": score,
+        "fact_accuracy": _quality_fraction(
+            report.get("fact_accuracy"),
+            f"{path}.fact_accuracy",
+            "INVALID_LIVE_REPORT_QUALITY",
+        ),
+        "open_conflict_member_recall": _quality_fraction(
+            report.get("open_conflict_member_recall"),
+            f"{path}.open_conflict_member_recall",
+            "INVALID_LIVE_REPORT_QUALITY",
+        ),
+    }
+
+
 def _metric_comparison(
     scenario: Mapping[str, Any],
     *,
     report_version: str,
 ) -> dict[str, Any]:
     metrics = _mapping(scenario["metrics"], "metrics")
+    if set(metrics) != _OFFLINE_METRIC_FIELDS:
+        raise ValueError(
+            "INVALID_OFFLINE_METRICS_SHAPE: metrics must use the exact "
+            "product-continuity-metrics@1 field set"
+        )
+    if metrics.get("metric_version") != PRODUCT_CONTINUITY_METRICS_V1:
+        raise ValueError(
+            "INVALID_OFFLINE_METRIC_VERSION: metrics.metric_version must be "
+            "product-continuity-metrics@1"
+        )
     baseline = _mapping(metrics["manual_baseline"], "metrics.manual_baseline")
     context_only = _mapping(metrics["context_only"], "metrics.context_only")
-    minimum = float(metrics["minimum_reduction_fraction"])
+    if set(baseline) != _RESOURCE_METRIC_FIELDS or set(context_only) != (
+        _RESOURCE_METRIC_FIELDS
+    ):
+        raise ValueError(
+            "INVALID_OFFLINE_METRICS_SHAPE: resource metrics must contain "
+            "exactly bytes, tokens, and time_seconds"
+        )
+    minimum = _offline_reduction_threshold(
+        metrics["minimum_reduction_fraction"]
+    )
 
     reductions = {}
     for name in ("bytes", "tokens", "time_seconds"):
@@ -251,15 +329,25 @@ def _metric_comparison(
         reductions[name] = round(reduction, 12)
 
     quality = _mapping(metrics["quality"], "metrics.quality")
+    if set(quality) != {"manual_baseline", "context_only"}:
+        raise ValueError(
+            "INVALID_OFFLINE_QUALITY_METRICS: metrics.quality must contain "
+            "exactly manual_baseline and context_only"
+        )
     baseline_quality = _mapping(
         quality["manual_baseline"], "metrics.quality.manual_baseline"
     )
     context_quality = _mapping(
         quality["context_only"], "metrics.quality.context_only"
     )
+    baseline_values = _offline_quality_metrics(
+        baseline_quality, "metrics.quality.manual_baseline"
+    )
+    context_values = _offline_quality_metrics(
+        context_quality, "metrics.quality.context_only"
+    )
     quality_preserved = all(
-        float(context_quality[name]) >= float(value)
-        for name, value in baseline_quality.items()
+        context_values[name] >= value for name, value in baseline_values.items()
     )
 
     return {
@@ -281,6 +369,47 @@ def _positive_offline_metric(value: Any, path: str) -> float:
         raise ValueError(
             f"INVALID_OFFLINE_COMPARISON_METRIC: {path} must be finite and positive"
         )
+    return float(value)
+
+
+def _offline_reduction_threshold(value: Any) -> float:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(float(value))
+        or float(value) != 0.5
+    ):
+        raise ValueError(
+            "INVALID_OFFLINE_REDUCTION_THRESHOLD: "
+            "metrics.minimum_reduction_fraction must be 0.5"
+        )
+    return float(value)
+
+
+def _offline_quality_metrics(
+    value: Mapping[str, Any], path: str
+) -> dict[str, float]:
+    if set(value) != _QUALITY_METRIC_FIELDS:
+        raise ValueError(
+            f"INVALID_OFFLINE_QUALITY_METRICS: {path} must contain exactly "
+            "fact_accuracy and open_conflict_member_recall"
+        )
+    return {
+        name: _quality_fraction(
+            value[name], f"{path}.{name}", "INVALID_OFFLINE_QUALITY_METRICS"
+        )
+        for name in sorted(_QUALITY_METRIC_FIELDS)
+    }
+
+
+def _quality_fraction(value: Any, path: str, code: str) -> float:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(float(value))
+        or not 0.0 <= float(value) <= 1.0
+    ):
+        raise ValueError(f"{code}: {path} must be a finite number from zero to one")
     return float(value)
 
 

@@ -461,7 +461,7 @@ python3 contracts/validate_contract.py
 #     + 6 semantic cases + 7 continuity operations
 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
-# DEV-092 local Python 3.13 parallel runner: 451 tests, 0 failures
+# DEV-093 local Python 3.13 parallel runner: 457 tests, 0 failures
 # branch-enabled coverage total 83%
 ```
 
@@ -469,7 +469,7 @@ PR #5 GitHub Actions run
 [`31866492746`](https://github.com/ArthurCore/shared-mind/actions/runs/31866492746)은
 source/test HEAD `97d5811cf9ac852f076f76e5cff04f6d097e9567`에서 Python 3.11,
 3.12, 3.13 full coverage, Linux/macOS/Windows determinism, quality/security,
-fresh base/MCP wheel의 8개 job을 모두 통과했다. 위 DEV-092 451-test/83% 수치는
+fresh base/MCP wheel의 8개 job을 모두 통과했다. 위 DEV-093 457-test/83% 수치는
 local 결과다. 이후 PR #6 구현 head
 `58b6fb1b0a9a69f1e9cfe2d18da9405a82b0669b`의
 [`31867443975`](https://github.com/ArthurCore/shared-mind/actions/runs/31867443975)도
@@ -486,6 +486,12 @@ DEV-092 PR #11 source/test/documentation head
 [`31873428269`](https://github.com/ArthurCore/shared-mind/actions/runs/31873428269)은
 Python 3.11~3.13 full coverage, Linux/macOS/Windows determinism,
 quality/security, fresh wheel의 8개 hosted job을 모두 통과했다.
+
+DEV-093 PR #12 source/test/documentation head
+`4f64e72e443a55043d56bf465d748d3a467e94f0`의
+[`31873909032`](https://github.com/ArthurCore/shared-mind/actions/runs/31873909032)은
+동일한 Python 3.11~3.13 coverage, 3-OS determinism, quality/security,
+fresh wheel의 8개 hosted job을 모두 통과했다.
 
 ### 13.2 요구사항 추적표
 
@@ -573,6 +579,9 @@ quality/security, fresh wheel의 8개 hosted job을 모두 통과했다.
 - DEV-092는 deterministic offline scorer의 기본 report를 `@2`로 올려 signed
   resource regression을 보존한다. report `@1`은 explicit compatibility 경로로
   기존 clamp와 strict schema를 유지한다.
+- DEV-093은 public offline/live comparison helper 안에서 version, exact field
+  shape, boolean pass, bounded score, finite quality fraction을 검증해 caller가
+  schema validation을 생략해도 malformed evaluation input을 fail closed한다.
 
 ## 14. 개발 로드맵
 
@@ -650,6 +659,7 @@ deny-by-default remote policy evaluator.
 | 완료 | DEV-090 | streaming benchmark evidence hashing | fixed 1MiB chunks, descriptor drift fail-closed, real 503MiB source/replay SHA parity |
 | 완료 | DEV-091 | unclamped live evaluation reductions | signed comparison@2 regressions, explicit comparison@1 artifact compatibility, malformed metric fail-closed |
 | 완료 | DEV-092 | unclamped offline evaluation reductions | signed report@2 regressions, explicit report@1 schema compatibility, nested live-summary dispatch |
+| 완료(local) | DEV-093 | evaluation input integrity | empty quality/NaN/truthy-string/version drift fail-closed, valid/historical output preservation |
 
 ## 16. 시험 전략과 합격 기준
 

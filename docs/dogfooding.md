@@ -125,6 +125,11 @@ Report version 2 preserves negative resource regressions. Historical report
 version 1 is available only through explicit `report_version` selection and
 continues to validate against
 [`product-continuity-report.schema.v1.json`](../evals/product_continuity/product-continuity-report.schema.v1.json).
+The public scorer also enforces `product-continuity-metrics@1` internally:
+exact resource/quality fields, the pinned 0.5 threshold, and finite quality
+fractions from zero to one. An empty quality object, NaN, boolean numeric value,
+or version drift therefore fails closed even if a caller omitted separate JSON
+Schema validation.
 
 If an explicitly approved live run produces a shareable summary, the sanitized
 artifact must validate against
@@ -141,6 +146,9 @@ arm remains visible as a negative number. Historical checked-in summaries keep
 `product-continuity-live-comparison@1`; reproduce them by passing that version
 explicitly to `live_summary_comparison`. Version 1's zero clamp is retained only
 for exact historical compatibility and must not be used for new evidence.
+The comparison helper independently validates each nested report version,
+boolean `passed`, integer score from zero to 100, and finite bounded quality
+metrics before computing quality preservation.
 
 ## Offline reproduction
 
