@@ -503,8 +503,11 @@ fresh wheel의 8개 hosted job을 모두 통과했다.
 
 DEV-095는 scenario@1 exact shape/version/schema pins와 context-to-expected
 grounding을 scorer 내부에서 검증한다. local Python 3.13 parallel branch
-coverage는 470 tests / 0 failures / 83%이며 hosted 결과는 PR closeout 후
-기록한다.
+coverage는 470 tests / 0 failures / 83%다. PR #14 첫 documentation head
+`8f868587acafe689a18dec79d852f0ff1713eb00`의
+[`31875012327`](https://github.com/ArthurCore/shared-mind/actions/runs/31875012327)은
+동일한 Python 3.11~3.13 coverage, 3-OS determinism, quality/security,
+fresh wheel의 8개 hosted job을 모두 통과했다.
 
 ### 13.2 요구사항 추적표
 

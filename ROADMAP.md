@@ -648,8 +648,12 @@ Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
 8개 job을 모두 통과했다.
 
 DEV-095는 vacuous 또는 ungrounded scenario fixture가 100점을 받는 경로를
-차단하고 470-test/83% local regression을 완료했다. Shared Mind closeout과
-hosted CI 근거는 PR 완료 시 이 절에 추가한다.
+차단하고 470-test/83% local regression과 Shared Mind closeout을 완료했다.
+PR #14 첫 source/test/documentation head
+`8f868587acafe689a18dec79d852f0ff1713eb00`의
+[run 31875012327](https://github.com/ArthurCore/shared-mind/actions/runs/31875012327)은
+Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
+8개 job을 모두 통과했다.
 
 ## 16. Definition of Done
 
