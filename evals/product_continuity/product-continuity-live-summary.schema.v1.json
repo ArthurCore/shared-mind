@@ -211,6 +211,10 @@
       "type": "number",
       "exclusiveMaximum": 1
     },
+    "signed_reduction": {
+      "type": "number",
+      "maximum": 1
+    },
     "component_version": {
       "type": "object",
       "additionalProperties": false,
@@ -276,7 +280,10 @@
       ],
       "properties": {
         "report_version": {
-          "const": "product-continuity-report@1"
+          "enum": [
+            "product-continuity-report@1",
+            "product-continuity-report@2"
+          ]
         },
         "scenario_id": {
           "type": "string",
@@ -369,13 +376,13 @@
               "required": ["bytes", "tokens", "time_seconds"],
               "properties": {
                 "bytes": {
-                  "$ref": "#/$defs/fraction"
+                  "$ref": "#/$defs/signed_reduction"
                 },
                 "tokens": {
-                  "$ref": "#/$defs/fraction"
+                  "$ref": "#/$defs/signed_reduction"
                 },
                 "time_seconds": {
-                  "$ref": "#/$defs/fraction"
+                  "$ref": "#/$defs/signed_reduction"
                 }
               }
             },
@@ -387,7 +394,34 @@
             }
           }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "report_version": {
+                "const": "product-continuity-report@1"
+              }
+            },
+            "required": ["report_version"]
+          },
+          "then": {
+            "properties": {
+              "metric_comparison": {
+                "properties": {
+                  "reductions": {
+                    "properties": {
+                      "bytes": {"minimum": 0},
+                      "tokens": {"minimum": 0},
+                      "time_seconds": {"minimum": 0}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

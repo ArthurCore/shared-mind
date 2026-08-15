@@ -4,7 +4,7 @@
   "description": "A context-only handoff must preserve purpose, grounded settled knowledge, unresolved contradiction, and actionable continuity.",
   "response_schema": "product-continuity-response.schema.v1.json",
   "metrics_schema": "product-continuity-metrics.schema.v1.json",
-  "report_schema": "product-continuity-report.schema.v1.json",
+  "report_schema": "product-continuity-report.schema.v2.json",
   "execution_policy": {
     "default_mode": "OFFLINE_GOLDEN",
     "network_allowed_in_tests": false,

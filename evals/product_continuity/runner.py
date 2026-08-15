@@ -27,12 +27,26 @@ LIVE_COMPARISON_V2 = "product-continuity-live-comparison@2"
 _SUPPORTED_LIVE_COMPARISON_VERSIONS = frozenset(
     (LIVE_COMPARISON_V1, LIVE_COMPARISON_V2)
 )
+PRODUCT_CONTINUITY_REPORT_V1 = "product-continuity-report@1"
+PRODUCT_CONTINUITY_REPORT_V2 = "product-continuity-report@2"
+_SUPPORTED_PRODUCT_CONTINUITY_REPORT_VERSIONS = frozenset(
+    (PRODUCT_CONTINUITY_REPORT_V1, PRODUCT_CONTINUITY_REPORT_V2)
+)
 
 
 def evaluate_scenario(
-    scenario: Mapping[str, Any], response: Mapping[str, Any]
+    scenario: Mapping[str, Any],
+    response: Mapping[str, Any],
+    *,
+    report_version: str = PRODUCT_CONTINUITY_REPORT_V2,
 ) -> dict[str, Any]:
     """Return a schema-shaped deterministic report for one offline response."""
+
+    if report_version not in _SUPPORTED_PRODUCT_CONTINUITY_REPORT_VERSIONS:
+        raise ValueError(
+            "UNSUPPORTED_PRODUCT_CONTINUITY_REPORT_VERSION: "
+            f"{report_version!r}"
+        )
 
     expected = _mapping(scenario["expected_response"], "expected_response")
     context = _mapping(scenario["context"], "context")
@@ -91,7 +105,10 @@ def evaluate_scenario(
 
     fact_accuracy = sum(dimension_matches.values()) / len(dimension_matches)
     fact_accuracy = round(fact_accuracy, 12)
-    metric_comparison = _metric_comparison(scenario)
+    metric_comparison = _metric_comparison(
+        scenario,
+        report_version=report_version,
+    )
     passed = (
         score >= int(scoring["passing_score"])
         and fact_accuracy >= float(scoring["required_fact_accuracy"])
@@ -104,7 +121,7 @@ def evaluate_scenario(
     )
 
     return {
-        "report_version": "product-continuity-report@1",
+        "report_version": report_version,
         "scenario_id": str(scenario["scenario_id"]),
         "score": score,
         "maximum_score": maximum_score,
@@ -210,7 +227,11 @@ def _positive_live_metric(value: Any, path: str) -> float:
     return float(value)
 
 
-def _metric_comparison(scenario: Mapping[str, Any]) -> dict[str, Any]:
+def _metric_comparison(
+    scenario: Mapping[str, Any],
+    *,
+    report_version: str,
+) -> dict[str, Any]:
     metrics = _mapping(scenario["metrics"], "metrics")
     baseline = _mapping(metrics["manual_baseline"], "metrics.manual_baseline")
     context_only = _mapping(metrics["context_only"], "metrics.context_only")
@@ -218,8 +239,16 @@ def _metric_comparison(scenario: Mapping[str, Any]) -> dict[str, Any]:
 
     reductions = {}
     for name in ("bytes", "tokens", "time_seconds"):
-        raw_reduction = 1.0 - float(context_only[name]) / float(baseline[name])
-        reductions[name] = round(max(0.0, min(1.0, raw_reduction)), 12)
+        baseline_value = _positive_offline_metric(
+            baseline[name], f"metrics.manual_baseline.{name}"
+        )
+        context_value = _positive_offline_metric(
+            context_only[name], f"metrics.context_only.{name}"
+        )
+        reduction = 1.0 - context_value / baseline_value
+        if report_version == PRODUCT_CONTINUITY_REPORT_V1:
+            reduction = max(0.0, min(1.0, reduction))
+        reductions[name] = round(reduction, 12)
 
     quality = _mapping(metrics["quality"], "metrics.quality")
     baseline_quality = _mapping(
@@ -240,6 +269,19 @@ def _metric_comparison(scenario: Mapping[str, Any]) -> dict[str, Any]:
         ),
         "quality_preserved": quality_preserved,
     }
+
+
+def _positive_offline_metric(value: Any, path: str) -> float:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(float(value))
+        or float(value) <= 0.0
+    ):
+        raise ValueError(
+            f"INVALID_OFFLINE_COMPARISON_METRIC: {path} must be finite and positive"
+        )
+    return float(value)
 
 
 def _open_conflict_member_recall(
