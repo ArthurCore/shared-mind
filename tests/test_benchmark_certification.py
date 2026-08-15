@@ -14,6 +14,16 @@ from shared_mind.canonical import canonical_json, sha256_json
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "benchmarks" / "context-benchmark-certification.schema.v1.json"
+RESULTS = {
+    "history-heavy": ROOT
+    / "benchmarks"
+    / "results"
+    / "dev-089-schema13-history-heavy-2026-08-15.json",
+    "hot-active": ROOT
+    / "benchmarks"
+    / "results"
+    / "dev-089-schema13-hot-active-2026-08-15.json",
+}
 
 
 class BenchmarkCertificationTest(unittest.TestCase):
@@ -150,6 +160,35 @@ class BenchmarkCertificationTest(unittest.TestCase):
                 )
 
         self.assertEqual("SCHEMA_VERSION_MISMATCH", caught.exception.code)
+
+    def test_checked_in_fresh_schema_1_3_certifications_are_complete(self) -> None:
+        for profile, result_path in RESULTS.items():
+            with self.subTest(profile=profile):
+                self.assertTrue(result_path.is_file())
+                result = json.loads(result_path.read_text(encoding="utf-8"))
+                self._validate(result)
+                self.assertTrue(result["certified"])
+                self.assertEqual(profile, result["profile"])
+                self.assertEqual(100_000, result["requested_ledger_entries"])
+                self.assertEqual("1.3.0", result["schema_version"])
+                self.assertEqual("1.3.0", result["fixture"]["schema_version"])
+                self.assertEqual(100_000, result["fixture"]["ledger_entries"])
+                self.assertEqual(100_000, result["verification"]["checked_entries"])
+                self.assertEqual([], result["verification"]["errors"])
+                self.assertTrue(result["replay"]["parity"])
+                self.assertEqual(
+                    result["replay"]["source"], result["replay"]["target"]
+                )
+                self.assertEqual(
+                    ["1.3.0"],
+                    result["replay"]["source"]["receipt_schema_versions"],
+                )
+                self.assertEqual(50, result["context"]["latency"]["sample_count"])
+                self.assertTrue(result["context"]["target_met"])
+                self.assertLessEqual(
+                    result["context"]["context_rendered_bytes"],
+                    result["context"]["budget_bytes"],
+                )
 
     def _validate(self, result: dict) -> None:
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
