@@ -440,7 +440,13 @@ DEV-087은 local regression/dogfooding과 Shared Mind closeout까지 완료했�
 위 8개 job을 모두 통과했고 commit check 19개도 모두 성공했다.
 
 DEV-088은 432-test/83% local regression과 real Shared Mind dogfooding을
-완료했다. Hosted result는 현재 branch의 PR run이 끝난 뒤 이 절에 고정한다.
+완료했다. PR #7 source/test/documentation head
+`3db636a4579925a9badce97d189ce6669fb7ddd4`의
+[run 31869424469](https://github.com/ArthurCore/shared-mind/actions/runs/31869424469)은
+Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
+8개 job을 모두 통과했다. 같은 head의 push
+[run 31869406046](https://github.com/ArthurCore/shared-mind/actions/runs/31869406046)도
+8개 job을 모두 통과했다.
 
 ## 16. Definition of Done
 

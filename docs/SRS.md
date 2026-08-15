@@ -475,6 +475,12 @@ local 결과다. 이후 PR #6 구현 head
 [`31867443975`](https://github.com/ArthurCore/shared-mind/actions/runs/31867443975)도
 같은 8개 job과 19개 commit check를 모두 통과했다.
 
+DEV-088 PR #7 head `3db636a4579925a9badce97d189ce6669fb7ddd4`의
+[`31869424469`](https://github.com/ArthurCore/shared-mind/actions/runs/31869424469)은
+같은 8개 hosted job을 모두 통과했으며, push run
+[`31869406046`](https://github.com/ArthurCore/shared-mind/actions/runs/31869406046)도
+8/8 성공했다.
+
 ### 13.2 요구사항 추적표
 
 | 요구사항 | 상태 | 주 증거 |

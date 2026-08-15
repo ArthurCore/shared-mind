@@ -93,6 +93,15 @@ Additional gates:
 - product contract: 10 typed fixtures, 14 negative cases — PASS;
 - compileall, Ruff, configured mypy scope, Bandit, and `git diff --check` — PASS.
 
+Hosted evidence on head `3db636a4579925a9badce97d189ce6669fb7ddd4`:
+
+- PR run
+  [`31869424469`](https://github.com/ArthurCore/shared-mind/actions/runs/31869424469):
+  8/8 jobs PASS;
+- push run
+  [`31869406046`](https://github.com/ArthurCore/shared-mind/actions/runs/31869406046):
+  8/8 jobs PASS.
+
 ## Real self-dogfooding
 
 The same external workspace used by prior Codex and Claude sessions was kept:
