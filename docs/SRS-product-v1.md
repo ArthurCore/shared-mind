@@ -140,6 +140,8 @@ FACT_CONFLICT/TRANSACTION_CONFLICT, ledger/replay 원칙은 변경하지 않는�
 | DEV-061~067 | `retrieval.py`, FTS/RRF/link/code/on-demand tools | `test_product_retrieval.py`, interface tool tests |
 | DEV-068~072 | catalog/queue/web/verify/backup/restore | `test_product_governance_eval.py`, interface tests |
 | DEV-073~079 | capture/consolidation/telemetry/metrics/benchmarks | governance and product retrieval evaluations |
+| DEV-080~081 | self cold-start and immutable real-session task trace | `test_self_dogfooding.py`, `test_task_trace_capture.py` |
+| DEV-082~086 | zero-relearning, pollution, lifecycle, conflict, context-quality evaluations | `test_continuity_evaluation.py`, retained self-dogfood evidence |
 
 ## 7. Definition of Done
 
