@@ -66,3 +66,11 @@ and product audit head
 `sha256:1c6665100bbdf697d42c6ae18efaeb6c6771e16c01cd0e5a0aa8623b2a15cfb4`.
 The next-session context has no active WorkItem or OpenQuestion and hash
 `sha256:b6ceed1c5dbf6c2b05a4a44d1d445a0f8e1e97cb550bf27707b0d042bb510fb7`.
+
+## Hosted evidence
+
+PR #10 implementation/documentation head
+`13834d9835a8bb552e89339e05e638925625dc76` passed
+[GitHub Actions run 31872892729](https://github.com/ArthurCore/shared-mind/actions/runs/31872892729):
+Python 3.11, 3.12, and 3.13 full contract/coverage, Ubuntu/macOS/Windows
+determinism, quality/security, and fresh wheel smoke all succeeded.

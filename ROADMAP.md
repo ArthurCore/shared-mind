@@ -537,6 +537,13 @@ push [run 31872301244](https://github.com/ArthurCore/shared-mind/actions/runs/31
 [run 31872310697](https://github.com/ArthurCore/shared-mind/actions/runs/31872310697)의
 actions/python 분석도 통과했다.
 
+DEV-091은 signed live comparison `@2`, explicit historical `@1` compatibility,
+446-test/83% local regression과 Shared Mind closeout을 완료했다. PR #10 source,
+test, documentation head `13834d9835a8bb552e89339e05e638925625dc76`의
+[run 31872892729](https://github.com/ArthurCore/shared-mind/actions/runs/31872892729)은
+Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
+8개 job을 모두 통과했다.
+
 ## 16. Definition of Done
 
 DEV 작업은 다음 조건을 만족할 때 완료로 본다.
