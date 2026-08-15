@@ -677,8 +677,12 @@ Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
 8개 job을 모두 통과했다.
 
 DEV-096은 unknown/private candidate fields와 malformed closed-schema values가
-100점을 유지하는 경로를 차단하고 476-test/83% local regression을 완료했다.
-Shared Mind closeout과 hosted CI 근거는 PR 완료 시 이 절에 추가한다.
+100점을 유지하는 경로를 차단하고 476-test/83% local regression과 Shared Mind
+closeout을 완료했다. PR #15 첫 source/test/documentation head
+`62f360ee3b96ba516e878399ac793c0ea7184c60`의
+[run 31875521479](https://github.com/ArthurCore/shared-mind/actions/runs/31875521479)은
+Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
+8개 job을 모두 통과했다.
 
 ## 16. Definition of Done
 

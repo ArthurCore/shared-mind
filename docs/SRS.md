@@ -511,7 +511,11 @@ fresh wheel의 8개 hosted job을 모두 통과했다.
 
 DEV-096은 candidate와 evaluator expected response의 pinned closed schema를
 public scorer 내부에서 검증한다. local Python 3.13 parallel branch coverage는
-476 tests / 0 failures / 83%이며 hosted 결과는 PR closeout 후 기록한다.
+476 tests / 0 failures / 83%다. PR #15 첫 source/test/documentation head
+`62f360ee3b96ba516e878399ac793c0ea7184c60`의 hosted
+[run 31875521479](https://github.com/ArthurCore/shared-mind/actions/runs/31875521479)은
+동일한 Python 3.11~3.13 coverage, 3-OS determinism, quality/security,
+fresh wheel의 8개 job을 모두 통과했다.
 
 ### 13.2 요구사항 추적표
 
