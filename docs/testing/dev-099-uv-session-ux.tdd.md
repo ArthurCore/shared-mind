@@ -126,3 +126,14 @@ context hash was
 `sha256:1951bb6202f941b97a13729a2578848560678d9fa389b80b6fc9ec6558463f3d`.
 Both contract validators, compileall, Ruff, configured mypy, Bandit, strict
 third-party dependency audit, and `git diff --check` passed under Python 3.13.
+
+The follow-up work was captured into the same external Shared State as
+`trace:dev-099-resume-budget-boundary-20260815-001`, backed by source revision
+`revision_067567e4e70d9c91d222240dc53513f2`. Product integrity and explicit
+ledger replay then passed at 204 entries, head
+`sha256:8e8bebef09c1c1c42cfba4cbf9b95af2de9647318c494a4a82b59138758c782e`,
+and state root
+`sha256:33be1e9dd39e5129e557c4eb9a88f8f98a8a1943b984dffb4a0fbff67c5f1e10`.
+A final fresh `resume` returned `SESSION_READY` at 130,997/131,072 bytes with
+context hash
+`sha256:4be7d64b327b2e3bd209efa42372c72005d2bd00953147e7454c9641d42fecc2`.
