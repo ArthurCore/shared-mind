@@ -34,6 +34,7 @@ TOOL_NAMES = (
     "skill_mark_tested",
     "skill_approve",
     "cold_start",
+    "continuity_evaluate",
     "product_verify",
 )
 
@@ -238,6 +239,35 @@ _TOOL_DEFINITIONS = (
             required=("paths",),
         ),
         "readOnly": False,
+    },
+    {
+        "name": "continuity_evaluate",
+        "description": (
+            "Deterministically score a fresh-session observation against one "
+            "Shared State context without mutating canonical memory."
+        ),
+        "inputSchema": _object_schema(
+            {
+                "evaluation": {
+                    "type": "string",
+                    "enum": ["ZERO_RELEARNING", "CONTEXT_QUALITY"],
+                },
+                "context": {"type": "object"},
+                "observation": {"type": "object"},
+                "expectation": {"type": "object"},
+                "elapsed_ms": {"type": "number", "minimum": 0},
+                "token_count": {"type": "integer", "minimum": 0},
+            },
+            required=(
+                "evaluation",
+                "context",
+                "observation",
+                "expectation",
+                "elapsed_ms",
+                "token_count",
+            ),
+        ),
+        "readOnly": True,
     },
     {
         "name": "product_verify",
@@ -480,6 +510,36 @@ class ProductMcpApplication:
                     budget_bytes=int(values.get("budget_bytes", 64 * 1024)),
                 ),
                 "COLD_START_COMPLETED",
+            )
+        if name == "continuity_evaluate":
+            context = values["context"]
+            observation = values["observation"]
+            expectation = values["expectation"]
+            if not all(
+                isinstance(item, Mapping)
+                for item in (context, observation, expectation)
+            ):
+                raise TypeError("context, observation, and expectation must be objects")
+            if values["evaluation"] == "ZERO_RELEARNING":
+                return (
+                    self.service.evaluate_zero_relearning(
+                        context,
+                        observation,
+                        expectation,
+                        elapsed_ms=values["elapsed_ms"],
+                        token_count=values["token_count"],
+                    ),
+                    "ZERO_RELEARNING_EVALUATED",
+                )
+            return (
+                self.service.evaluate_context_quality(
+                    context,
+                    observation,
+                    expectation,
+                    elapsed_ms=values["elapsed_ms"],
+                    token_count=values["token_count"],
+                ),
+                "CONTEXT_QUALITY_EVALUATED",
             )
         report = self.service.verify()
         return report, "PRODUCT_INTEGRITY_VALID" if report["valid"] else "PRODUCT_INTEGRITY_INVALID"

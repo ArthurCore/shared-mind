@@ -14,6 +14,11 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Mapping, Sequence
 
 from .canonical import canonical_json, sha256_bytes, sha256_json
+from .continuity_eval import (
+    ContinuityEvaluationError,
+    benchmark_context_quality,
+    evaluate_zero_relearning,
+)
 from .memory_views import ContextRouter, MemoryViewBuilder, MemoryViewError
 from .product_contract import validate_product_object
 from .product_ingest import (
@@ -1319,6 +1324,58 @@ class ProductService:
             "context_bytes": responses[0]["budget"]["included_bytes"],
             "omitted": responses[0]["budget"]["omitted"],
         }
+
+    def evaluate_zero_relearning(
+        self,
+        context: Mapping[str, Any],
+        observation: Mapping[str, Any],
+        expectation: Mapping[str, Any],
+        *,
+        elapsed_ms: int | float,
+        token_count: int | None = None,
+    ) -> dict[str, Any]:
+        """Evaluate a fresh-session observation without mutating Shared State."""
+
+        try:
+            return evaluate_zero_relearning(
+                context,
+                observation,
+                expectation,
+                elapsed_ms=elapsed_ms,
+                token_count=token_count,
+            )
+        except ContinuityEvaluationError as exc:
+            raise ProductError(
+                exc.code,
+                exc.message,
+                data={"path": exc.path},
+            ) from exc
+
+    def evaluate_context_quality(
+        self,
+        context: Mapping[str, Any],
+        observation: Mapping[str, Any],
+        expectation: Mapping[str, Any],
+        *,
+        elapsed_ms: int | float,
+        token_count: int | None = None,
+    ) -> dict[str, Any]:
+        """Run the DEV-086 benchmark over the same immutable evaluation input."""
+
+        try:
+            return benchmark_context_quality(
+                context,
+                observation,
+                expectation,
+                elapsed_ms=elapsed_ms,
+                token_count=token_count,
+            )
+        except ContinuityEvaluationError as exc:
+            raise ProductError(
+                exc.code,
+                exc.message,
+                data={"path": exc.path},
+            ) from exc
 
     def skill_reuse_benchmark(
         self,
