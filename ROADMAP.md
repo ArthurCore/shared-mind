@@ -733,8 +733,12 @@ Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
 8개 job을 모두 통과했다.
 
 DEV-098은 ignored execution policy와 ineffective adversarial vector가 100점을
-유지하는 경로를 차단하고 490-test/83% local regression을 완료했다. Shared
-Mind closeout과 hosted CI 근거는 PR 완료 시 이 절에 추가한다.
+유지하는 경로를 차단하고 490-test/83% local regression과 Shared Mind
+closeout을 완료했다. PR #17 첫 source/test/documentation head
+`9e4142f93ddacecfdbc1babaee72f8b57a25ab82`의
+[run 31876421867](https://github.com/ArthurCore/shared-mind/actions/runs/31876421867)은
+Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
+8개 job을 모두 통과했다.
 
 ## 16. Definition of Done
 

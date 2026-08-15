@@ -63,4 +63,8 @@ product verify:    PRODUCT_INTEGRITY_VALID
 next context:      sha256:d14cf034b411126fd75d024b81dc3e065a718815d3fef3b5cd0d15e16b0f7ad7
 ```
 
-Hosted CI evidence is appended after the PR head is published.
+PR #17 first source/test/documentation head
+`9e4142f93ddacecfdbc1babaee72f8b57a25ab82` passed all eight jobs in hosted
+[run 31876421867](https://github.com/ArthurCore/shared-mind/actions/runs/31876421867):
+Python 3.11, 3.12, and 3.13 contract/coverage; Linux, macOS, and Windows
+determinism; quality/security; and fresh base/MCP wheel smoke.
