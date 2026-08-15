@@ -214,13 +214,20 @@ Scenario and retrieval determinism are included in the cross-platform subset.
 
 The earlier kernel baseline is retained in
 [GitHub Actions run 31555504041](https://github.com/ArthurCore/shared-mind/actions/runs/31555504041).
-The product implementation branch has local contract, regression, coverage,
-packaging, and product-evaluation evidence. Hosted branch CI is currently
-unable to allocate runners because the repository account's Actions billing or
-spending limit blocks jobs before checkout; this is an external execution
-blocker rather than a test result.
+The DEV-081 product implementation branch passed all eight hosted CI jobs in
+[GitHub Actions run 31856420461](https://github.com/ArthurCore/shared-mind/actions/runs/31856420461),
+including Python 3.11–3.13 branch coverage, three-OS determinism, quality and
+security gates, and fresh base/MCP wheel installation.
 
 The checked-in [DEV-021 benchmark evidence](benchmarks/results/dev-021-2026-08-11.md)
 continues to cover the 100k-entry kernel context path. Product-level cold-start,
 routing, retrieval, Skill reuse, and integrity evaluations are executable in
 the product test suite.
+
+## License
+
+Shared Mind is licensed under the
+[BSD 3-Clause License](LICENSE) (`BSD-3-Clause`). Redistribution, modification,
+and commercial use are permitted when the copyright notice, license conditions,
+and disclaimer are retained. The names of the copyright holder and contributors
+may not be used to endorse derived products without prior written permission.
