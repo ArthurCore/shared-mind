@@ -2,11 +2,11 @@
 
 | 항목 | 값 |
 |---|---|
-| 문서 버전 | 1.7.0 |
+| 문서 버전 | 1.8.0 |
 | 기준일 | 2026-08-15 |
-| 상태 | DEV-029~089 완료 |
+| 상태 | DEV-029~090 완료 |
 | 대상 저장소 | `ArthurCore/shared-mind` |
-| 구현 브랜치 | `agent/dev-089-schema13-benchmark-certification` |
+| 구현 브랜치 | `agent/dev-090-streaming-benchmark-hash` |
 | 참고 프로젝트 | `TencentCloud/TencentDB-Agent-Memory` |
 
 ## 1. 제품 목표
@@ -382,6 +382,26 @@ RED/GREEN은
 [`benchmarks/results/dev-089-schema13-2026-08-15.md`](benchmarks/results/dev-089-schema13-2026-08-15.md)에
 기록한다.
 
+### DEV-090 — Streaming Benchmark Evidence Hashing
+
+**상태: DONE**
+
+- certification source/replay SHA-256을 whole-file allocation 대신 고정 1MiB
+  chunk로 계산한다.
+- 같은 open descriptor의 dev/inode/size/mtime/ctime과 byte count를 전후 비교해
+  hashing 중 변경을 fail closed한다.
+- directory/special/unreadable input은 stable reason code로 거부한다.
+- 보존된 527,572,992-byte DEV-089 source/replay의 SHA/size가 checked-in
+  certification과 exact parity임을 확인했다.
+- 두 파일 first pass의 Python peak allocation은 약 2.11MiB, max RSS는 약
+  39.5MiB로 파일 크기에 비례하는 allocation을 제거했다.
+
+계약은
+[`docs/DEV-090-streaming-benchmark-evidence.md`](docs/DEV-090-streaming-benchmark-evidence.md),
+RED/GREEN과 actual-file evidence는
+[`docs/testing/dev-090-streaming-benchmark-evidence.tdd.md`](docs/testing/dev-090-streaming-benchmark-evidence.tdd.md)에
+기록한다.
+
 ## 14. 구현된 인터페이스
 
 ```text
@@ -426,6 +446,9 @@ src/shared_mind/web_control.py
 - DEV-089 fresh schema 1.3 100k: 두 profile 모두 ledger/receipt 1:1,
   verifier/replay exact parity와 50-sample p95 2초 이내 통과.
 - DEV-089 완료 전체 회귀: **439 tests, 0 failures, branch coverage 83%**.
+- DEV-090 streaming evidence hashing: **3 RED→GREEN tests**, benchmark/projection
+  회귀 포함 **31 tests 통과**, real 503MiB source/replay SHA/size exact parity.
+- DEV-090 완료 전체 회귀: **442 tests, 0 failures, branch coverage 83%**.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.
@@ -484,6 +507,14 @@ DEV-089은 fresh schema 1.3 두 profile의 100k one-command certification과
 각각 Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel
 8개 job을 모두 통과했다. CodeQL
 [run 31871755515](https://github.com/ArthurCore/shared-mind/actions/runs/31871755515)의
+actions/python 분석도 통과했다.
+
+DEV-090은 bounded streaming evidence hash, 503MiB real-file parity,
+442-test/83% local regression과 Shared Mind closeout을 완료했다. PR #9 첫 head의
+[run 31872311320](https://github.com/ArthurCore/shared-mind/actions/runs/31872311320)과
+push [run 31872301244](https://github.com/ArthurCore/shared-mind/actions/runs/31872301244)는
+각각 8개 CI job을 모두 통과했다. CodeQL
+[run 31872310697](https://github.com/ArthurCore/shared-mind/actions/runs/31872310697)의
 actions/python 분석도 통과했다.
 
 ## 16. Definition of Done
