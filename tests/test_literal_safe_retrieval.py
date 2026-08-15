@@ -14,7 +14,7 @@ LITERAL_SEARCH_SOURCE = """\
 # Literal retrieval evidence
 
 DEV-088 makes task identifiers searchable without exposing FTS syntax.
-The current compatibility target is schema 1.3 and retrieval-index@1.
+The current compatibility target is schema 1.3 and retrieval-index@2.
 OR, NOT, and NEAR are ordinary words in this source rather than query operators.
 Quoted, parenthesized, C++, and Korean task label 한글-검색 are evidence text.
 """
