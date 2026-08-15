@@ -168,6 +168,32 @@ class NaturalLanguageSetupTest(unittest.TestCase):
             self.assertTrue(resumed["data"]["integrity"]["valid"])
             self.assertEqual(receipt.ledger_seq, resumed["data"]["context"]["ledger_sequence"])
 
+    def test_setup_expands_only_to_the_minimum_budget_required_by_continuity(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self._project(root)
+            (project / "README.md").write_text(
+                "# Atlas\n\n"
+                + "\n".join(
+                    f"WORK: P1 | Preserve mandatory setup task number {index:02d}."
+                    for index in range(40)
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            exit_code, result = self._run_setup(project, root / "codex-home")
+
+            self.assertEqual(EXIT_OK, exit_code, result)
+            budget = result["data"]["context"]["budget"]["budget_bytes"]
+            self.assertGreater(budget, 24 * 1024)
+            self.assertLess(budget, 128 * 1024)
+            self.assertEqual(
+                40, len(result["data"]["context"]["core_context"]["work_items"])
+            )
+
     def test_setup_fails_closed_on_an_unmanaged_conflicting_global_skill(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
