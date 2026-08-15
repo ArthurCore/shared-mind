@@ -461,7 +461,7 @@ python3 contracts/validate_contract.py
 #     + 6 semantic cases + 7 continuity operations
 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
-# DEV-094 local Python 3.13 parallel runner: 463 tests, 0 failures
+# DEV-095 local Python 3.13 parallel runner: 470 tests, 0 failures
 # branch-enabled coverage total 83%
 ```
 
@@ -500,6 +500,11 @@ documentation head `3051f9986ac6e867cb6ef4949a609fc161e3e616`의
 [`31874440698`](https://github.com/ArthurCore/shared-mind/actions/runs/31874440698)은
 동일한 Python 3.11~3.13 coverage, 3-OS determinism, quality/security,
 fresh wheel의 8개 hosted job을 모두 통과했다.
+
+DEV-095는 scenario@1 exact shape/version/schema pins와 context-to-expected
+grounding을 scorer 내부에서 검증한다. local Python 3.13 parallel branch
+coverage는 470 tests / 0 failures / 83%이며 hosted 결과는 PR closeout 후
+기록한다.
 
 ### 13.2 요구사항 추적표
 
@@ -593,6 +598,8 @@ fresh wheel의 8개 hosted job을 모두 통과했다.
 - DEV-094는 evaluator-side scoring field set, typed 100-point thresholds,
   required quality `1.0`, six dimension weights, and three positive penalties를
   exact contract로 검증해 scoring policy drift를 fail closed한다.
+- DEV-095는 vacuous scenario, identity/purpose drift, empty dimensions, and
+  ungrounded expected records를 `INVALID_SCENARIO_CONTRACT`로 fail closed한다.
 
 ## 14. 개발 로드맵
 
@@ -672,6 +679,7 @@ deny-by-default remote policy evaluator.
 | 완료 | DEV-092 | unclamped offline evaluation reductions | signed report@2 regressions, explicit report@1 schema compatibility, nested live-summary dispatch |
 | 완료(local) | DEV-093 | evaluation input integrity | empty quality/NaN/truthy-string/version drift fail-closed, valid/historical output preservation |
 | 완료(local) | DEV-094 | scoring contract integrity | exact typed thresholds/weights/penalties, weakened policy fail-closed, golden output preservation |
+| 완료(local) | DEV-095 | scenario grounding integrity | exact scenario@1 boundary, non-vacuous dimensions, context-to-expected semantic grounding |
 
 ## 16. 시험 전략과 합격 기준
 

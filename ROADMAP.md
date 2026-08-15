@@ -2,11 +2,11 @@
 
 | 항목 | 값 |
 |---|---|
-| 문서 버전 | 1.12.0 |
+| 문서 버전 | 1.13.0 |
 | 기준일 | 2026-08-15 |
-| 상태 | DEV-029~094 완료 (hosted CI closeout 대기) |
+| 상태 | DEV-029~095 완료 (hosted CI closeout 대기) |
 | 대상 저장소 | `ArthurCore/shared-mind` |
-| 구현 브랜치 | `agent/dev-094-scoring-contract-integrity` |
+| 구현 브랜치 | `agent/dev-095-scenario-grounding-integrity` |
 | 참고 프로젝트 | `TencentCloud/TencentDB-Agent-Memory` |
 
 ## 1. 제품 목표
@@ -470,6 +470,23 @@ RED/GREEN은
 [`docs/testing/dev-094-scoring-contract-integrity.tdd.md`](docs/testing/dev-094-scoring-contract-integrity.tdd.md)에
 기록한다.
 
+### DEV-095 — Scenario Grounding Integrity
+
+**상태: DONE (local gates)**
+
+- scenario@1 version, exact shape, schema pins를 scorer 내부에서 검증한다.
+- context/expected response의 scenario ID, purpose, six non-vacuous dimensions를
+  고정한다.
+- decision, claim/evidence, conflict/member, question, work state가 context와
+  semantic하게 일치해야 한다.
+- vacuous/ungrounded fixture는 `INVALID_SCENARIO_CONTRACT`로 fail closed한다.
+
+계약은
+[`docs/DEV-095-scenario-grounding-integrity.md`](docs/DEV-095-scenario-grounding-integrity.md),
+RED/GREEN은
+[`docs/testing/dev-095-scenario-grounding-integrity.tdd.md`](docs/testing/dev-095-scenario-grounding-integrity.tdd.md)에
+기록한다.
+
 ## 14. 구현된 인터페이스
 
 ```text
@@ -529,6 +546,9 @@ src/shared_mind/web_control.py
 - DEV-094 scoring contract integrity: **6 RED→GREEN tests**, product-continuity
   evaluation 회귀 포함 **35 tests 통과**.
 - DEV-094 완료 전체 회귀: **463 tests, 0 failures, branch coverage 83%**.
+- DEV-095 scenario grounding integrity: **7 RED→GREEN tests**, evaluation
+  회귀 포함 **33 tests 통과**.
+- DEV-095 완료 전체 회귀: **470 tests, 0 failures, branch coverage 83%**.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.
@@ -626,6 +646,10 @@ source/test/documentation head `3051f9986ac6e867cb6ef4949a609fc161e3e616`의
 [run 31874440698](https://github.com/ArthurCore/shared-mind/actions/runs/31874440698)은
 Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
 8개 job을 모두 통과했다.
+
+DEV-095는 vacuous 또는 ungrounded scenario fixture가 100점을 받는 경로를
+차단하고 470-test/83% local regression을 완료했다. Shared Mind closeout과
+hosted CI 근거는 PR 완료 시 이 절에 추가한다.
 
 ## 16. Definition of Done
 

@@ -76,6 +76,13 @@ weights, and three positive penalties must match exactly. Missing, extra,
 boolean, NaN, weakened, or otherwise changed values fail closed with
 `INVALID_SCORING_CONTRACT` before any pass decision is computed.
 
+The surrounding scenario is also validated inside the scorer. Scenario@1
+version/schema pins and exact fields are fixed; context and expected response
+must share the scenario ID and purpose; every scored dimension must be
+non-empty; and decisions, claims/evidence, conflicts/members, questions, and
+work items must match the context authority. Vacuous or ungrounded evaluator
+fixtures fail with `INVALID_SCENARIO_CONTRACT` before candidate scoring.
+
 The golden fixture records a manual baseline of 24,000 bytes, 6,000 tokens, and
 120 seconds, versus 9,720 bytes, 2,430 tokens, and 45 seconds for context-only
 handoff. Those fixture values represent reductions of 59.5%, 59.5%, and 62.5%
