@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import tempfile
+import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from shared_mind.work_items import (
@@ -177,33 +179,67 @@ class WorkItemWrapperTest(unittest.TestCase):
     def test_competing_writers_produce_one_winner_and_one_rebased_success(self) -> None:
         work_item_id = handoff(self.workspace, "Contended task.", actor=ACTOR)
 
-        # Two independent handles model two sessions that both read version 1.
+        # Two independent handles model two sessions. Session B reads version 1,
+        # then session A commits inside B's write window, so B's first attempt
+        # carries a stale guard and must rebase to succeed.
         writer_a = Workspace.open(self.workspace.root)
         writer_b = Workspace.open(self.workspace.root)
-
-        first = progress(
-            writer_a,
-            work_item_id,
-            "DOING",
-            "Session A started first.",
-            actor="agent:session-a",
+        races = iter(
+            [
+                lambda: progress(
+                    writer_a,
+                    work_item_id,
+                    "DOING",
+                    "Session A started first.",
+                    actor="agent:session-a",
+                )
+            ]
         )
+
         second = progress(
             writer_b,
             work_item_id,
             "DONE",
             "Session B finished after rebasing onto A.",
             actor="agent:session-b",
+            _on_rebase=lambda: next(races, lambda: None)(),
         )
 
-        self.assertEqual("COMMITTED", first["code"])
-        self.assertEqual(2, first["version"])
         self.assertEqual("COMMITTED", second["code"])
         self.assertEqual(3, second["version"])
+        self.assertEqual("DOING", second["previous_status"])
         self.assertTrue(second["rebased"])
 
         item = _by_id(list_work_items(self.workspace), work_item_id)
         self.assertEqual("DONE", item["status"])
+        self.assertEqual(3, item["version"])
+
+    def test_two_concurrent_writers_both_succeed_without_silent_overwrite(self) -> None:
+        work_item_id = handoff(self.workspace, "Threaded contention.", actor=ACTOR)
+        start = threading.Barrier(2)
+
+        def write(session: str, status: str) -> dict:
+            handle = Workspace.open(self.workspace.root)
+            start.wait(timeout=10)
+            return progress(
+                handle,
+                work_item_id,
+                status,
+                f"{session} transition.",
+                actor=f"agent:{session}",
+            )
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [
+                pool.submit(write, "session-a", "DOING"),
+                pool.submit(write, "session-b", "DONE"),
+            ]
+            results = [future.result() for future in futures]
+
+        # Both land because the loser rebases; neither transition is lost.
+        self.assertEqual({"COMMITTED"}, {result["code"] for result in results})
+        self.assertEqual({2, 3}, {result["version"] for result in results})
+        item = _by_id(list_work_items(self.workspace), work_item_id)
         self.assertEqual(3, item["version"])
 
     def test_stale_expected_version_retries_once_then_raises(self) -> None:
