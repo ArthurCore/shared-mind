@@ -22,6 +22,13 @@ EXIT_CAPABILITY_UNAVAILABLE = 6
 EXIT_IO_ERROR = 7
 EXIT_INTERNAL_ERROR = 70
 
+DEFAULT_RESUME_TASK = "Continue the highest-priority unblocked project work."
+DEFAULT_RESUME_QUERY = (
+    "project purpose current decisions open questions active work conflicts evidence"
+)
+DEFAULT_RESUME_BUDGET_BYTES = 24 * 1024
+MAX_RESUME_BUDGET_BYTES = 128 * 1024
+
 
 class CliUsageError(Exception):
     pass
@@ -43,6 +50,13 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser = commands.add_parser("init")
     init_parser.add_argument("path")
     init_parser.add_argument("--purpose")
+
+    setup_parser = commands.add_parser("setup")
+    setup_parser.add_argument("--project")
+    setup_parser.add_argument("--workspace", dest="workspace_path")
+    setup_parser.add_argument("--purpose")
+    setup_parser.add_argument("--no-cold-start", action="store_true")
+    setup_parser.add_argument("--no-install-skill", action="store_true")
 
     source_parser = commands.add_parser("source")
     source_commands = source_parser.add_subparsers(dest="source_command", required=True)
@@ -72,6 +86,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     context_parser.add_argument("--budget-tokens", type=_positive_integer)
     context_parser.add_argument("--budget-bytes", type=_positive_integer)
+
+    resume_parser = commands.add_parser("resume")
+    resume_parser.add_argument("task", nargs="?", default=DEFAULT_RESUME_TASK)
+    resume_parser.add_argument("--query", default=DEFAULT_RESUME_QUERY)
+    resume_parser.add_argument(
+        "--depth", choices=("SUMMARY", "DETAIL", "EVIDENCE"), default="EVIDENCE"
+    )
+    resume_parser.add_argument(
+        "--budget-bytes",
+        type=_resume_budget_bytes,
+        default=DEFAULT_RESUME_BUDGET_BYTES,
+    )
 
     conflict_parser = commands.add_parser("conflict")
     conflict_commands = conflict_parser.add_subparsers(
@@ -124,13 +150,35 @@ def main(
                 "WORKSPACE_INITIALIZED",
                 data=workspace.describe(),
             )
-        workspace = Workspace.open(arguments.workspace or Path.cwd())
+        if arguments.command == "setup":
+            from .setup import setup_project
+
+            return _emit(
+                output,
+                True,
+                "SETUP_READY",
+                data=setup_project(
+                    start=Path.cwd(),
+                    project=arguments.project,
+                    workspace_path=arguments.workspace_path,
+                    purpose=arguments.purpose,
+                    cold_start=not arguments.no_cold_start,
+                    install_codex_skill=not arguments.no_install_skill,
+                ),
+            )
+        workspace = (
+            Workspace.open(arguments.workspace)
+            if arguments.workspace is not None
+            else Workspace.discover(Path.cwd())
+        )
         if arguments.command == "source":
             return _source_command(workspace, arguments, output)
         if arguments.command == "proposal":
             return _proposal_command(workspace, arguments, output)
         if arguments.command == "context":
             return _context_command(workspace, arguments, output)
+        if arguments.command == "resume":
+            return _resume_command(workspace, arguments, output)
         if arguments.command == "conflict":
             return _conflict_command(workspace, arguments, output)
         if arguments.command == "replay":
@@ -404,6 +452,43 @@ def _context_command(
     )
 
 
+def _resume_command(
+    workspace: Workspace, arguments: argparse.Namespace, output: TextIO
+) -> int:
+    service = ProductService(workspace)
+    try:
+        integrity = service.verify()
+        if not integrity["valid"]:
+            return _emit(
+                output,
+                False,
+                "PRODUCT_INTEGRITY_INVALID",
+                message="Product verification failed before session resume.",
+                data={"integrity": integrity},
+                exit_code=EXIT_INTEGRITY_ERROR,
+            )
+        context = service.context(
+            {
+                "task": arguments.task,
+                "purpose": None,
+                "query": arguments.query,
+                "references": [],
+                "depth": arguments.depth,
+                "budget_bytes": arguments.budget_bytes,
+                "budget_tokens": None,
+                "hints": {},
+            }
+        )
+    finally:
+        service.close()
+    return _emit(
+        output,
+        True,
+        "SESSION_READY",
+        data={"integrity": integrity, "context": context},
+    )
+
+
 def _load_projection() -> Any | None:
     try:
         from . import projection
@@ -501,6 +586,16 @@ def _positive_integer(value: str) -> int:
     parsed = int(value)
     if parsed <= 0:
         raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
+def _resume_budget_bytes(value: str) -> int:
+    parsed = _positive_integer(value)
+    if parsed > MAX_RESUME_BUDGET_BYTES:
+        raise argparse.ArgumentTypeError(
+            f"must not exceed {MAX_RESUME_BUDGET_BYTES} bytes; "
+            "use the context command for larger advanced requests"
+        )
     return parsed
 
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Shared Mind Setup"
+  short_description: "Initialize and resume one shared project state"
+  default_prompt: "Use $shared-mind-setup to initialize Shared Mind for this project."

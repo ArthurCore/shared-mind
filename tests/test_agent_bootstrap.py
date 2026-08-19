@@ -48,16 +48,18 @@ class AgentBootstrapDocumentationTest(unittest.TestCase):
         self.assertEqual(
             {
                 "init",
+                "setup",
                 "source",
                 "proposal",
                 "context",
+                "resume",
                 "conflict",
                 "replay",
                 "project",
             },
             {build_parser().parse_args(shlex.split(command)).command for command in commands},
         )
-        self.assertIn("context --budget-tokens 4096", commands)
+        self.assertIn("resume", commands)
         self.assertIn("proposal validate proposal.json", commands)
         self.assertIn("proposal commit proposal.json --json", commands)
         self.assertIn("project --format markdown", commands)

@@ -41,6 +41,12 @@ where = ["src"]
   "contracts/product-conformance-fixtures.v1.json",
   "contracts/atlas-predicate-registry.v1.json",
 ]
+"share/shared-mind/skills/shared-mind-setup" = [
+  ".agents/skills/shared-mind-setup/SKILL.md",
+]
+"share/shared-mind/skills/shared-mind-setup/agents" = [
+  ".agents/skills/shared-mind-setup/agents/openai.yaml",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

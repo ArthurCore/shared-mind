@@ -403,6 +403,13 @@ class ProductStore:
             count += 1
         return {"valid": True, "count": count, "head_hash": previous}
 
+    def has_audit_event(self, event_type: str) -> bool:
+        row = self.connection.execute(
+            "SELECT 1 FROM product_audit WHERE event_type = ? LIMIT 1",
+            (event_type,),
+        ).fetchone()
+        return row is not None
+
     def get_task_capture_receipt(self, trace_id: str) -> dict[str, Any] | None:
         row = self.connection.execute(
             """

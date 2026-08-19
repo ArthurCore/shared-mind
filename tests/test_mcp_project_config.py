@@ -91,15 +91,14 @@ class McpProjectConfigurationContractTest(unittest.TestCase):
         self.assertEqual(">=3.11", project["requires-python"])
         self.assertEqual(["mcp>=2,<3"], project["optional-dependencies"]["mcp"])
         self.assertRegex(guide, r"Python\s+3\.11\+?")
-        self.assertIn("python3 -m pip install .", guide)
-        self.assertRegex(
-            guide,
-            r"python3 -m pip install\s+['\"]?\.\[mcp\]['\"]?",
-        )
+        self.assertIn("uv tool install --editable '.[mcp]'", guide)
+        installation = guide.split("## Installation", 1)[1].split("## Codex", 1)[0]
+        self.assertNotIn("python3 -m pip install", installation)
+        self.assertIn("No manual virtualenv", installation)
         self.assertIn("mcp>=2,<3", guide)
         self.assertRegex(
             normalized.lower(),
-            r"base install.{0,160}(does not|doesn't|without).{0,80}mcp sdk",
+            r"base distribution.{0,160}(does not|doesn't|without).{0,80}mcp sdk",
         )
 
     def test_guide_lists_the_exact_tool_and_resource_allowlists(self) -> None:

@@ -223,6 +223,38 @@ class Workspace:
             purpose=purpose,
         )
 
+    @classmethod
+    def discover(cls, start: str | Path) -> "Workspace":
+        """Open the nearest workspace or a project sibling named ``*-memory``.
+
+        The sibling convention keeps canonical memory outside the project tree
+        while allowing a CLI launched anywhere below the project root to resume
+        without repeating ``--workspace``. Explicit workspace paths should keep
+        using :meth:`open` so a typo never silently selects another workspace.
+        """
+
+        try:
+            return cls.open(start)
+        except WorkspaceError as exc:
+            if exc.code != "WORKSPACE_NOT_FOUND":
+                raise
+            not_found = exc
+
+        start_path = Path(start).expanduser().resolve()
+        candidate = start_path if start_path.is_dir() else start_path.parent
+        for project_directory in (candidate, *candidate.parents):
+            if not project_directory.name:
+                continue
+            sibling = project_directory.parent / f"{project_directory.name}-memory"
+            config_path = sibling / WORKSPACE_DIRECTORY / CONFIG_FILENAME
+            cls._reject_control_symlink(
+                sibling / WORKSPACE_DIRECTORY, "Workspace control directory"
+            )
+            cls._reject_control_symlink(config_path, "Workspace config")
+            if config_path.is_file():
+                return cls.open(sibling)
+        raise not_found
+
     def describe(self) -> dict[str, str | int | None]:
         return {
             "workspace_version": WORKSPACE_VERSION,

@@ -7,7 +7,7 @@ Proposal, conflict, replay, and projection commands remain documented in
 ## 1. Initialize
 
 ```bash
-python3 -m pip install -e .
+uv tool install --editable '.[mcp]'
 shared-mind init ./memory --purpose "Preserve project reasoning and work state."
 cd ./memory
 ```
@@ -200,7 +200,7 @@ ZIP entries.
 Install the optional extra:
 
 ```bash
-python3 -m pip install -e '.[mcp]'
+uv tool install --editable '.[mcp]' --force
 shared-mind-product-mcp --workspace ./memory
 ```
 

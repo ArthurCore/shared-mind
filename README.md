@@ -91,13 +91,42 @@ rewrite the kernel's factual ledger. See
 
 ## Quick start
 
-Shared Mind requires Python 3.11 or newer.
+Shared Mind uses `uv` for installation. `uv` selects a compatible Python 3.11+
+runtime and keeps the tool environment isolated; users do not create or
+activate a virtual environment.
 
 ```console
-$ python3 -m pip install -e .
-$ shared-mind init ./memory --purpose "Preserve this project's reasoning across AI sessions."
-$ cd ./memory
+$ uv tool install --editable '.[mcp]'
+$ shared-mind setup
 ```
+
+Run `uv tool update-shell` once if the installed commands are not yet on
+`PATH`. `setup` finds the current Git project, creates or reuses its conventional
+`<project>-memory` sibling, performs the first bounded cold start exactly once,
+installs the global Codex `shared-mind-setup` skill, verifies integrity, and
+returns `SETUP_READY` with resumable context. It is idempotent.
+
+After that one-time command, a new Codex session can be started with the natural
+language request `Shared Mind 초기설정해`. The globally installed skill invokes
+the same deterministic setup boundary and loads the returned Shared State; the
+user does not need to repeat paths or shell commands. Software must be installed
+once before any session can recognize the skill.
+
+The `*-memory` sibling convention also lets `shared-mind resume` discover the
+workspace from anywhere below the project tree. It verifies kernel and product
+integrity before returning a task-aware `SESSION_READY` context. The
+default EVIDENCE context is capped at 24 KiB so a cold start restores the
+continuity core without packing unrelated history up to the old 128 KiB
+target. Request the full resume ceiling explicitly when deeper evidence is
+needed:
+
+```console
+$ shared-mind resume --budget-bytes 131072
+```
+
+For this repository the existing workspace is `../shared-mind-memory`, so
+`shared-mind setup` reuses it without repeating cold start. Direct `init`,
+`cold-start`, and `resume` remain available as lower-level or advanced surfaces.
 
 ### Cold-start an existing project
 
@@ -125,11 +154,11 @@ $ shared-mind-product build all
 ### Request task-aware context
 
 ```console
-$ shared-mind context \
-    --task "Review the authentication migration" \
-    --query "auth compatibility" \
-    --budget-bytes 32768
+$ shared-mind resume "Review the authentication migration"
 ```
+
+Use `shared-mind context` when custom query, reference, depth, token-budget, or
+more than the 128 KiB resume safety ceiling is required.
 
 The same state, request, selector version, and budget produce the same context
 regardless of which model or client made the request.

@@ -16,6 +16,11 @@ The first self-dogfooding invariant is:
 
 After a real development task, capture the task trace back into the same Shared State before ending the session. Never create client-specific project memories.
 
+For an installed checkout, `shared-mind resume` is the default session entrypoint:
+it discovers the sibling `*-memory` workspace, verifies integrity, and returns
+task-aware context in one command. Use the longer context command only for
+custom selectors or budgets.
+
 ## Product boundary
 
 Shared Mind preserves sources, assertions, evidence, conflicts, decisions,

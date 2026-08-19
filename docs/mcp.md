@@ -7,21 +7,21 @@ Python and CLI interfaces.
 
 ## Installation
 
-Shared Mind requires Python 3.11+. The base install does not include the MCP SDK:
+Install once from the repository checkout with `uv`:
 
 ```console
-python3 -m pip install .
+$ uv tool install --editable '.[mcp]'
 ```
 
-Install the optional adapter dependencies with:
+`uv` chooses a compatible Python 3.11+ runtime and owns the isolated tool
+environment. No manual virtualenv creation or activation is required. Run
+`uv tool update-shell` once if `shared-mind-mcp` is not yet on `PATH`.
 
-```console
-python3 -m pip install '.[mcp]'
-```
-
-The optional dependency is pinned to `mcp>=2,<3`. Keep that major-version pin
-when reproducing an environment because MCP transport APIs and generated schemas
-may change across major versions.
+The base distribution does not include the MCP SDK; the primary session install
+above deliberately selects the optional `mcp` extra. The optional dependency is
+pinned to `mcp>=2,<3`. Keep that major-version pin when reproducing an
+environment because MCP transport APIs and generated schemas may change across
+major versions.
 
 The supported release and fresh-wheel surface is MCP SDK v2. The legacy v1
 fallback is compatibility code exercised against a simulated SDK import and
@@ -144,7 +144,8 @@ using `.`. Keep the workspace fixed for the lifetime of that server process.
 ## Troubleshooting
 
 - Confirm the runtime is Python 3.11 or newer and run `shared-mind-mcp --help`.
-- If the `mcp` module is unavailable, install `.[mcp]` and verify that the
+- If the `mcp` module is unavailable, repeat the `uv tool install` command with
+  `--force` and verify that the
   resolved SDK version satisfies `mcp>=2,<3`.
 - If the workspace cannot be opened, initialize it first and confirm the MCP
   process working directory is the intended project root.

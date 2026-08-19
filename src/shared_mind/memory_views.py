@@ -727,6 +727,10 @@ class ContextRouter:
                     f"Explicit reference {identifier} cannot fit in the context budget.",
                 )
         final_size = _stabilized_context_size(response)
+        while final_size > budget and response["selection_trace"]:
+            response["selection_trace"].pop()
+            response["budget"]["trace_omitted"] += 1
+            final_size = _stabilized_context_size(response)
         if final_size > budget:
             raise MemoryViewError(
                 "CONTEXT_BUDGET_TOO_SMALL",

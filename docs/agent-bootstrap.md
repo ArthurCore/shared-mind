@@ -1,24 +1,76 @@
 # Coding-agent bootstrap
 
 This guide is the operational contract for a coding agent entering an existing
-Shared Mind workspace. It assumes the `shared-mind` console command is installed
-and the shell is at the workspace root or below it.
+Shared Mind workspace. Install once from the project checkout; `uv` owns the
+isolated tool environment, so no virtualenv activation is required:
+
+```console
+$ uv tool install --editable '.[mcp]'
+```
+
+Run `uv tool update-shell` once if the command is not yet on `PATH`.
+
+## Natural-language initial setup
+
+From a Git project, run the idempotent setup once:
+
+```console
+$ shared-mind setup
+```
+
+It creates or reuses the sibling `<project>-memory` workspace, performs a
+bounded deterministic cold start only when one has not completed, installs the
+global Codex `shared-mind-setup` skill, verifies product/kernel integrity, and
+returns one `SETUP_READY` JSON document with session context. It never creates
+Agent-specific state and never commits model output implicitly.
+
+Every later Codex session on this machine may use the natural-language request
+`Shared Mind 초기설정해`. The global skill runs the same command, requires
+`SETUP_READY` and valid integrity, then reads active WorkItems, decisions,
+questions, conflicts, and evidence references from `data.context`. A tool must
+be installed once before a new session can discover its skill; natural language
+cannot bootstrap software that is not present on the machine.
 
 ## Resume in one command
 
 Run this before proposing or changing project work:
 
 ```console
-$ shared-mind context --budget-tokens 4096
+$ shared-mind resume
 ```
 
-The command discovers `.shared-mind/workspace.json` by walking upward and emits
-exactly one JSON document. Require `ok: true` and `code: "CONTEXT_READY"`, then
-read `data.context`. The context contains current unconflicted claims, all open
-conflicts and their member claims, active decisions, open questions, actionable
-work items, the ledger sequence, the state root, and truncation metadata.
+The command first walks upward for `.shared-mind/workspace.json`; when invoked
+from a project checkout it also discovers the conventional sibling
+`<project>-memory` workspace. It verifies kernel and product integrity, then
+emits exactly one JSON document. Require `ok: true`, code `SESSION_READY`, and
+`data.integrity.valid: true`, then read `data.context`. The context contains
+current unconflicted claims, all open conflicts and their member claims, active
+decisions, open questions, actionable work items, the ledger sequence, the
+state root, and truncation metadata. The default is a compact 24 KiB EVIDENCE
+request. It preserves those mandatory continuity sections and their projection
+references while leaving older or less relevant evidence for on-demand
+drill-down.
 
-If the response is `CONTEXT_BUDGET_TOO_SMALL`, increase the budget. Shared Mind
+An explicit task remains short:
+
+```console
+$ shared-mind resume "Review the authentication migration"
+```
+
+The explicit full resume ceiling remains available for evidence-heavy work:
+
+```console
+$ shared-mind resume --budget-bytes 131072
+```
+
+For custom selectors, token budgets, or more than 128 KiB use the advanced
+command:
+
+```console
+$ shared-mind context --task "Review the authentication migration" --budget-tokens 4096
+```
+
+If the advanced context response is `CONTEXT_BUDGET_TOO_SMALL`, increase the budget. Shared Mind
 will not hide an open conflict, active decision, open question, or actionable
 work item merely to fit a requested budget. If truncation
 metadata lists omitted records, follow its projection references before making

@@ -331,8 +331,8 @@ Continuity 계층의 최소 연산은 다음과 같다.
 | ID | 우선순위 | 요구사항 | 합격 조건 |
 |---|---:|---|---|
 | FR-050 | P0 | Python API와 JSON 출력 CLI를 제공해야 한다. | 에이전트가 shell에서 parse 가능한 안정된 결과 code를 받음 |
-| FR-051 | P0 | 최소 CLI는 `init`, `source add`, `proposal validate`, `proposal commit`, `context`, `conflict list/resolve`, `replay --verify`, `project`를 제공해야 한다. | end-to-end acceptance script가 수동 DB 접근 없이 통과함 |
-| FR-052 | P1 | coding agent용 명시적 사용 지침과 context bootstrap 명령을 제공해야 한다. | 새 에이전트가 한 명령으로 handoff context를 얻음 |
+| FR-051 | P0 | 최소 CLI는 `init`, `source add`, `proposal validate`, `proposal commit`, `context`, `resume`, `conflict list/resolve`, `replay --verify`, `project`를 제공해야 한다. | end-to-end acceptance script가 수동 DB 접근 없이 통과함 |
+| FR-052 | P1 | coding agent용 명시적 사용 지침과 context bootstrap 명령을 제공해야 한다. | 새 에이전트가 `shared-mind resume` 한 명령으로 integrity-verified handoff context를 얻음 |
 | FR-053 | P1 | 로컬 MCP adapter를 제공할 수 있어야 한다. | optional stdio server가 CLI/Python과 동일한 commit/query envelope를 사용하고 workspace/path 권한을 넓히지 않음 |
 | FR-054 | P2 | AtomicStrata, Qarinah, SwarmVault adapter를 core 밖에서 제공할 수 있어야 한다. | source-only 기본값이며 adapter 실패가 canonical store를 부분 변경하지 않음 |
 
@@ -363,6 +363,7 @@ shared-mind source add <path> [--source-id ID]
 shared-mind proposal validate <proposal.json>
 shared-mind proposal commit <proposal.json> --json
 shared-mind context [--budget-tokens N] [--budget-bytes N]
+shared-mind resume [TASK]
 shared-mind conflict list [--status OPEN]
 shared-mind conflict resolve <conflict-id> --proposal <proposal.json>
 shared-mind replay --verify
@@ -461,7 +462,7 @@ python3 contracts/validate_contract.py
 #     + 6 semantic cases + 7 continuity operations
 
 PYTHONPATH=src python3 -m unittest discover -s tests -v
-# DEV-098 local Python 3.13 parallel runner: 490 tests, 0 failures
+# DEV-099 local Python 3.13 parallel runner: 495 tests, 0 failures
 # branch-enabled coverage total 83%
 ```
 
@@ -532,6 +533,18 @@ source/test/documentation head `9e4142f93ddacecfdbc1babaee72f8b57a25ab82`의
 hosted [run 31876421867](https://github.com/ArthurCore/shared-mind/actions/runs/31876421867)은
 동일한 Python 3.11~3.13 coverage, 3-OS determinism, quality/security,
 fresh wheel의 8개 job을 모두 통과했다.
+
+DEV-099는 primary install을 `uv tool install --editable '.[mcp]'`로 바꾸고,
+project sibling memory discovery, product/kernel verification, task-aware
+EVIDENCE context를 `shared-mind resume` 한 명령으로 결합했다. local Python
+3.13 parallel branch coverage는 495 tests / 0 failures / 83%다. Hosted CI는
+branch push/PR 전이므로 아직 주장하지 않는다.
+
+DEV-100은 기본 resume context를 24 KiB로 축소하고 128 KiB를 explicit safety
+ceiling으로 유지한다. purpose, active decision, open question/conflict,
+actionable work와 evidence projection reference 보존을 focused integration
+test와 실제 dogfooding으로 검증했다. managed sandbox의 loopback bind와
+dependency-audit network 제한 때문에 unsandboxed/hosted gate는 대기 중이다.
 
 ### 13.2 요구사항 추적표
 
@@ -716,6 +729,8 @@ deny-by-default remote policy evaluator.
 | 완료(local) | DEV-096 | candidate response contract integrity | pinned closed schema, private/unknown field rejection, stable path-only errors |
 | 완료(local) | DEV-097 | live summary contract integrity | sanitized schema enforcement, pre-comparison optional output, secret/provenance fail-closed |
 | 완료(local) | DEV-098 | evaluator policy/adversarial integrity | exact offline policy, executable unique vectors, declared/effective penalty parity |
+| 완료(local) | DEV-099 | uv-first session resume UX | manual venv/alias 없이 uv tool install, sibling workspace discovery, integrity-verified one-command context |
+| 차단(external gates) | DEV-100 | compact resume context | 24 KiB default와 explicit 128 KiB ceiling은 GREEN/dogfood 완료; loopback/audit/build gate 대기 |
 
 ## 16. 시험 전략과 합격 기준
 

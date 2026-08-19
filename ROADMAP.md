@@ -539,6 +539,66 @@ RED/GREEN은
 [`docs/testing/dev-098-evaluator-policy-integrity.tdd.md`](docs/testing/dev-098-evaluator-policy-integrity.tdd.md)에
 기록한다.
 
+### DEV-099 — uv-first Session Resume UX
+
+**상태: DONE (local gates)**
+
+- 기본 설치를 수동 virtualenv/pip 방식에서
+  `uv tool install --editable '.[mcp]'`로 전환한다.
+- shell alias 없이 공식 `shared-mind resume` 명령 하나로 product/kernel
+  integrity 검증과 task-aware context 복원을 수행한다.
+- 프로젝트 트리 안에서는 기존 upward workspace 탐색 후
+  `<project>-memory` sibling convention을 적용한다.
+- explicit `--workspace`는 자동 탐색보다 우선하며, integrity failure에서는
+  context를 만들지 않고 fail closed한다.
+- custom task는 positional argument 하나로 받고, selector/budget 세부 조정은
+  기존 `context` 명령으로 유지한다.
+
+계약은 [`docs/DEV-099-uv-session-ux.md`](docs/DEV-099-uv-session-ux.md),
+RED/GREEN·uv tool install·실제 self-dogfooding evidence는
+[`docs/testing/dev-099-uv-session-ux.tdd.md`](docs/testing/dev-099-uv-session-ux.tdd.md)에
+기록한다.
+
+### DEV-100 — Compact Resume Context
+
+**상태: DONE**
+
+- 기본 `shared-mind resume` EVIDENCE budget을 24 KiB로 제한해 128 KiB를
+  packing target이 아닌 explicit safety ceiling로 바꾼다.
+- 기본 cold start는 purpose, active decisions, open questions/conflicts,
+  actionable work와 evidence drill-down projection reference를 보존한다.
+- `--budget-bytes 131072`는 명시적인 full resume option으로 유지하고 그보다
+  큰 요청은 advanced `context` command로 분리한다.
+- 동일 Shared State/request/selector/budget의 deterministic context hash,
+  integrity-first fail-closed behavior와 canonical mutation boundary는 바꾸지
+  않는다.
+- RED/GREEN, 실제 bytes/token estimate, 전체 regression과 real dogfooding을
+  evidence로 남긴다.
+
+계약은 [`docs/DEV-100-compact-resume.md`](docs/DEV-100-compact-resume.md),
+RED/GREEN·실제 self-dogfooding evidence는
+[`docs/testing/dev-100-compact-resume.tdd.md`](docs/testing/dev-100-compact-resume.tdd.md)에
+기록한다.
+
+### DEV-101 — Natural-language Shared Mind Setup
+
+**상태: DONE**
+
+- `Shared Mind 초기설정해` 같은 자연어 요청을 전역 Codex skill이 인식한다.
+- idempotent `shared-mind setup`은 현재 Git project를 찾고 기존 또는 sibling
+  Shared Mind workspace 하나만 사용한다.
+- 신규 workspace만 bounded deterministic cold start를 수행하고, 재시도는
+  canonical source/ledger 또는 product audit를 중복시키지 않는다.
+- setup은 skill 설치, product/kernel integrity 검증, active continuity와 evidence
+  pointer가 포함된 task-aware context 반환을 한 경계로 제공한다.
+- 사용자 수정 skill 충돌, project root 부재, partial cold-start는 fail closed하며
+  SQLite 직접 수정이나 Agent별 memory를 만들지 않는다.
+
+계약은 [`docs/DEV-101-natural-language-setup.md`](docs/DEV-101-natural-language-setup.md),
+RED/GREEN 및 fresh-session evidence는
+[`docs/testing/dev-101-natural-language-setup.tdd.md`](docs/testing/dev-101-natural-language-setup.tdd.md)에
+기록한다.
+
 ## 14. 구현된 인터페이스
 
 ```text
@@ -610,6 +670,8 @@ src/shared_mind/web_control.py
 - DEV-098 evaluator policy integrity: **7 RED→GREEN tests**, evaluation 회귀
   포함 **51 tests 통과**.
 - DEV-098 완료 전체 회귀: **490 tests, 0 failures, branch coverage 83%**.
+- DEV-099 uv-first session UX: **5 RED→GREEN tests**, 관련 CLI/docs 회귀
+  **33 tests 통과**, 최종 **495 tests, 0 failures, branch coverage 83%**.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.
@@ -739,6 +801,27 @@ closeout을 완료했다. PR #17 첫 source/test/documentation head
 [run 31876421867](https://github.com/ArthurCore/shared-mind/actions/runs/31876421867)은
 Python 3.11~3.13 coverage, 3-OS determinism, quality/security, fresh wheel의
 8개 job을 모두 통과했다.
+
+DEV-099는 uv-first install, official `shared-mind resume`, sibling workspace
+discovery, integrity-before-context fail-closed behavior를 구현하고
+495-test/83% local regression과 Shared Mind closeout을 완료했다. task trace
+`trace:dev-099-uv-session-ux-20260815-001`과 WorkItem DONE v3가 같은 Shared
+State에 보존됐다. Hosted CI는 branch push/PR 전이므로 아직 주장하지 않는다.
+
+DEV-100은 24 KiB compact resume default와 explicit 128 KiB ceiling을 RED→GREEN
+구현하고 actual self-dogfooding에서 context bytes/token estimate를 81.27%
+줄였다. DEV-101의 unrestricted final regression에서 기존 blocker였던 loopback,
+strict dependency audit, isolated build/twine 및 fresh uv wheel smoke가 모두
+통과해 WorkItem을 DONE v3으로 정리했다.
+
+DEV-101은 `Shared Mind 초기설정해` 자연어 요청을 전역 Codex Skill과
+idempotent `shared-mind setup`으로 연결했다. stale disposable view와 mandatory
+continuity budget overflow를 실제 dogfooding RED로 발견·수정했고,
+508-test/83% regression, fresh uv wheel smoke, 실제 shared workspace 및 완전히
+새 Codex 세션의 한 문장 forward test를 통과했다. task trace
+`trace:dev-101-natural-language-setup-20260815-001`과 WorkItem DONE v2가 같은
+Shared State에 보존됐다. Hosted CI는 branch push/PR 전이므로 아직 주장하지
+않는다.
 
 ## 16. Definition of Done
 

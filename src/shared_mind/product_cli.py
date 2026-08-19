@@ -241,7 +241,11 @@ def main(
         if arguments.command == "backup" and arguments.backup_command == "restore":
             result = ProductService.restore_backup(arguments.package, arguments.destination)
             return _emit(output, True, "BACKUP_RESTORED", result)
-        workspace = Workspace.open(arguments.workspace or Path.cwd())
+        workspace = (
+            Workspace.open(arguments.workspace)
+            if arguments.workspace is not None
+            else Workspace.discover(Path.cwd())
+        )
         service = ProductService(workspace)
         try:
             result, code = _dispatch(service, arguments)
