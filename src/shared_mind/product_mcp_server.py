@@ -819,17 +819,27 @@ def create_server(workspace: Workspace) -> Any:
 
     for descriptor in _RESOURCE_DEFINITIONS:
         uri = descriptor["uri"]
-
-        def resource(uri: str = uri) -> str:
-            return application.read_resource(uri)["contents"][0]["text"]
-
         server.resource(
             uri,
             name=descriptor["name"],
             description=descriptor["description"],
             mime_type=descriptor["mimeType"],
-        )(resource)
+        )(_resource_reader(application, uri))
     return server
+
+
+def _resource_reader(application: ProductMcpApplication, uri: str) -> Any:
+    """Bind one resource URI without declaring it as a handler parameter.
+
+    The SDK derives URI template variables from the handler signature, so a
+    default-argument capture (``def resource(uri: str = uri)``) registers as a
+    template variable and rejects these static URIs at startup.
+    """
+
+    def resource() -> str:
+        return application.read_resource(uri)["contents"][0]["text"]
+
+    return resource
 
 
 def main(argv: Sequence[str] | None = None) -> int:
