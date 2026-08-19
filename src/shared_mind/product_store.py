@@ -69,7 +69,13 @@ class ProductStore:
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.connection = sqlite3.connect(self.path, timeout=30.0, isolation_level=None)
+        # The MCP SDK runs sync resource/tool handlers through
+        # anyio.to_thread.run_sync, so this long-lived connection is reached
+        # from worker threads. Writers still serialize on BEGIN IMMEDIATE and
+        # the busy timeout below.
+        self.connection = sqlite3.connect(
+            self.path, timeout=30.0, isolation_level=None, check_same_thread=False
+        )
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA journal_mode=WAL")
         self.connection.execute("PRAGMA synchronous=FULL")
