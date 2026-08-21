@@ -228,7 +228,7 @@ class ContinuityEvaluationUnitTest(unittest.TestCase):
         ]
         report = evaluate_memory_pollution(
             memories,
-            expected_truth={"database": "postgresql", "owner": "arthurcore", "license": "BSD-3-Clause"},
+            expected_truth={"database": "postgresql", "owner": "arthurcore", "license": "Apache-2.0"},
         )
         self.assertEqual("memory-pollution-eval@1", report["report_version"])
         self.assertFalse(report["passed"])

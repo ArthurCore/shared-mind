@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import unittest
 from pathlib import Path
 
@@ -13,35 +14,67 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class PackageMetadataTest(unittest.TestCase):
-    def test_distribution_uses_the_standard_bsd_3_clause_license(self) -> None:
+    def test_distribution_uses_the_canonical_apache_2_license(self) -> None:
         with (ROOT / "pyproject.toml").open("rb") as handle:
             metadata = tomllib.load(handle)
 
         license_path = ROOT / "LICENSE"
+        notice_path = ROOT / "NOTICE"
         self.assertTrue(license_path.is_file())
+        self.assertTrue(notice_path.is_file())
         license_text = license_path.read_text(encoding="utf-8")
+        notice_text = notice_path.read_text(encoding="utf-8")
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
         self.assertEqual(
-            "BSD-3-Clause",
+            "Apache-2.0",
             metadata["project"]["license"],
         )
-        self.assertEqual(["LICENSE"], metadata["project"]["license-files"])
+        self.assertEqual(
+            ["LICENSE", "NOTICE"], metadata["project"]["license-files"]
+        )
         self.assertIn("setuptools>=77.0.3", metadata["build-system"]["requires"])
-        self.assertIn("Copyright (c) 2026 ArthurCore", license_text)
-        self.assertIn("All rights reserved", license_text)
+        self.assertEqual(
+            "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+            hashlib.sha256(license_path.read_bytes()).hexdigest(),
+        )
+        self.assertTrue(license_text.startswith("Apache License\n"))
+        self.assertIn("Version 2.0, January 2004", license_text)
         self.assertIn(
-            "Redistribution and use in source and binary forms, with or without modification",
+            "Grant of Patent License",
             license_text,
         )
         self.assertIn(
-            "Neither the name of the copyright holder nor the names of its contributors",
+            "TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION",
             license_text,
         )
-        self.assertIn('THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"', license_text)
+        self.assertIn("END OF TERMS AND CONDITIONS", license_text)
+        self.assertEqual("Shared Mind\nCopyright 2026 ArthurCore\n", notice_text)
         self.assertIn("## License", readme)
-        self.assertIn("BSD-3-Clause", readme)
-        self.assertIn("commercial use", readme)
+        self.assertIn("[Apache License 2.0](LICENSE) (`Apache-2.0`)", readme)
+        self.assertIn("[NOTICE](NOTICE)", readme)
+
+    def test_readme_documents_the_current_operator_workflow(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+        for command_or_route in (
+            "uv tool install --editable '.[mcp]'",
+            "shared-mind setup --install-hooks",
+            "shared-mind resume",
+            "shared-mind-product observe start",
+            "shared-mind-product observe append",
+            "shared-mind-product observe finalize",
+            "shared-mind-product observe prune",
+            "shared-mind-web --workspace",
+            "/observations",
+            "/review",
+            "X-Shared-Mind-CSRF-Token",
+            "shared-mind-product review-queue",
+            "shared-mind-product draft commit",
+            "shared-mind-product draft reject",
+        ):
+            with self.subTest(command_or_route=command_or_route):
+                self.assertIn(command_or_route, readme)
 
     def test_installed_package_exposes_cli_and_default_contracts(self) -> None:
         with (ROOT / "pyproject.toml").open("rb") as handle:
