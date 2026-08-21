@@ -41,7 +41,9 @@ of factual truth:
 - FTS5/BM25 retrieval, optional vector/RRF fusion, Python symbol/reference/call
   indexing, and impact paths;
 - cold start, review queues, catalog, telemetry, backup/restore, and product
-  quality benchmarks; and
+  quality benchmarks;
+- fail-open Claude Code hook capture, deterministic observation archives, a
+  read-only live observation viewer, and an explicit review queue; and
 - separate product CLI, MCP, and loopback-only web control surfaces.
 
 ## Architecture
@@ -91,9 +93,10 @@ rewrite the kernel's factual ledger. See
 
 ## Quick start
 
-Shared Mind uses `uv` for installation. `uv` selects a compatible Python 3.11+
-runtime and keeps the tool environment isolated; users do not create or
-activate a virtual environment.
+Shared Mind currently installs from a source checkout; this is not a claim that
+the package is published to a package index. From the repository root, `uv`
+selects a compatible Python 3.11+ runtime and keeps the tool environment
+isolated, so no virtual environment activation is required.
 
 ```console
 $ uv tool install --editable '.[mcp]'
@@ -105,6 +108,19 @@ Run `uv tool update-shell` once if the installed commands are not yet on
 `<project>-memory` sibling, performs the first bounded cold start exactly once,
 installs the global Codex `shared-mind-setup` skill, verifies integrity, and
 returns `SETUP_READY` with resumable context. It is idempotent.
+
+Claude Code observation hooks are opt-in. To install or reconcile the
+project-local `PostToolUse`, `SessionEnd`, and `Stop` hooks, run:
+
+```console
+$ shared-mind setup --install-hooks
+```
+
+Re-running the command reuses the same Shared State and preserves unrelated
+Claude settings. Hook collection is the only fail-open boundary: a malformed
+or unavailable hook capture records a non-canonical diagnostic and returns
+control to Claude Code. It does not weaken Proposal validation, idempotency, or
+fail-closed canonical commits.
 
 After that one-time command, a new Codex session can be started with the natural
 language request `Shared Mind 초기설정해`. The globally installed skill invokes
@@ -128,6 +144,66 @@ For this repository the existing workspace is `../shared-mind-memory`, so
 `shared-mind setup` reuses it without repeating cold start. Direct `init`,
 `cold-start`, and `resume` remain available as lower-level or advanced surfaces.
 
+### Automatic and manual observation capture
+
+With `--install-hooks`, Claude Code tool events lazily start an observation
+buffer. Session end or stop finalizes the ordered events through the existing
+DEV-081 task-capture boundary. Finalization creates immutable source bytes and
+reviewable DraftProposals; it does not let hook or model output write canonical
+memory directly. Identical retries are idempotent.
+
+The same lifecycle is available explicitly for integrations and debugging.
+Run from the workspace tree, or place the global
+`--workspace <workspace>` option before `observe`:
+
+```console
+$ shared-mind-product observe start \
+    --session session:example --task DEV-105
+$ shared-mind-product observe append \
+    --session session:example \
+    --event-json '{"object_type":"TASK_TRACE_EVENT","event_version":"task-trace-event@1","event_id":"trace_event_example_1","sequence":1,"event_type":"TASK","occurred_at":"2026-08-21T09:00:00Z","summary":"Begin DEV-105","details":{}}'
+$ shared-mind-product observe finalize \
+    --session session:example
+$ shared-mind-product observe prune \
+    --before 2026-09-01T00:00:00Z
+```
+
+`append` accepts the versioned task-trace event schema and requires contiguous
+sequence numbers plus caller-supplied UTC timestamps. `finalize` requires at
+least one valid event. `prune` removes only finalized archives that ended
+strictly before the cutoff; pending buffers and canonical/product state are not
+changed.
+
+### Live viewer and browser review queue
+
+Launch the local control surface against an explicit workspace:
+
+```console
+$ shared-mind-web --workspace ../project-memory --host 127.0.0.1 --port 8126
+```
+
+Then open `http://127.0.0.1:8126/observations` for cursor-ordered capture
+receipts, canonical event detail, and the relative SSE feed. Open
+`http://127.0.0.1:8126/review` to inspect Draft content and provenance and to
+commit or reject one selected Draft. The server accepts loopback bindings only.
+
+The review page sends its per-process ephemeral token in the
+`X-Shared-Mind-CSRF-Token` header. Direct API clients must do the same for every
+POST. Commit delegates to the existing deterministic Proposal/receipt boundary;
+reject changes only staged product state. Missing or invalid CSRF, invalid
+Drafts, and stale canonical writes fail closed. There is no browser bulk-commit
+or automatic approval route.
+
+The equivalent terminal review path is:
+
+```console
+$ shared-mind-product review-queue
+$ shared-mind-product draft show <draft-id>
+$ shared-mind-product draft commit <draft-id>
+$ shared-mind-product draft reject <draft-id> \
+    --rationale "Evidence is incomplete."
+```
+
 ### Cold-start an existing project
 
 ```console
@@ -140,7 +216,7 @@ The command performs bounded ingest, deterministic extraction, Proposal commit,
 derived-view/index rebuild, and first handoff generation. Model-backed extraction
 is never enabled implicitly.
 
-### Review before committing
+### Import and review before committing
 
 ```console
 $ shared-mind-product ingest ./project --conversation ./sessions.jsonl
@@ -148,6 +224,7 @@ $ shared-mind-product extract <batch-id>
 $ shared-mind-product draft list --batch-id <batch-id>
 $ shared-mind-product draft show <draft-id>
 $ shared-mind-product draft commit <draft-id>
+$ shared-mind-product draft reject <draft-id> --rationale "Not supported by the source."
 $ shared-mind-product build all
 ```
 
@@ -272,7 +349,7 @@ and integrity evaluations are executable in the product test suite.
 ## License
 
 Shared Mind is licensed under the
-[BSD 3-Clause License](LICENSE) (`BSD-3-Clause`). Redistribution, modification,
-and commercial use are permitted when the copyright notice, license conditions,
-and disclaimer are retained. The names of the copyright holder and contributors
-may not be used to endorse derived products without prior written permission.
+[Apache License 2.0](LICENSE) (`Apache-2.0`). The distribution also carries the
+project attribution in [NOTICE](NOTICE). Apache-2.0 permits use, modification,
+and distribution subject to its license, notice, attribution, changed-file,
+trademark, patent, and other stated terms.

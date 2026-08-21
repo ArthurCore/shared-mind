@@ -2,6 +2,11 @@
 
 Date: 2026-08-15
 
+> **Superseded:** This file preserves the historical BSD-3-Clause TDD record.
+> The repository and package metadata were later relicensed to Apache-2.0; see
+> [`apache-2.0-readme-license.tdd.md`](apache-2.0-readme-license.tdd.md) for the
+> current contract and verification evidence.
+
 ## Scope
 
 The repository owner first requested a proprietary, nonmodifiable license and
