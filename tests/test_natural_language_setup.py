@@ -524,7 +524,7 @@ class NaturalLanguageSetupTest(unittest.TestCase):
             self.assertIn("SessionEnd", codex_hooks)
             self.assertEqual(
                 12000,
-                codex_hooks["SessionStart"][0]["hooks"][0]["additionalContextLimit"],
+                codex_hooks["SessionStart"][-1]["hooks"][0]["additionalContextLimit"],
             )
             for event, action in {
                 "SessionStart": "start",

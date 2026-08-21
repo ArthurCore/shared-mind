@@ -29,6 +29,7 @@ shared-mind-mcp = "shared_mind.mcp_server:main"
 shared-mind-product = "shared_mind.product_cli:main"
 shared-mind-product-mcp = "shared_mind.product_mcp_server:main"
 shared-mind-web = "shared_mind.web_control:main"
+shared-mind-session-hook = "shared_mind.adapters.session_hooks:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -21,6 +21,12 @@ DEFAULT_BOOTSTRAP_QUERY = (
     "project purpose current decisions open questions active work conflicts evidence"
 )
 DEFAULT_BOOTSTRAP_BUDGET_BYTES = 24 * 1024
+_BINDING_FIELDS = {
+    "binding_version",
+    "project_root",
+    "workspace_root",
+    "workspace_config_hash",
+}
 
 
 def binding_path_for(project_root: str | Path) -> Path:
@@ -46,7 +52,18 @@ def build_project_binding(project_root: str | Path, workspace: Workspace) -> dic
     }
 
 
-def write_project_binding(project_root: str | Path, workspace: Workspace) -> Path:
+def project_binding_bytes(project_root: str | Path, workspace: Workspace) -> bytes:
+    return (canonical_json(build_project_binding(project_root, workspace)) + "\n").encode(
+        "utf-8"
+    )
+
+
+def write_project_binding(
+    project_root: str | Path,
+    workspace: Workspace,
+    *,
+    allow_rebind: bool = False,
+) -> Path:
     path = binding_path_for(project_root)
     if path.is_symlink():
         raise WorkspaceError(
@@ -64,13 +81,45 @@ def write_project_binding(project_root: str | Path, workspace: Workspace) -> Pat
             "PROJECT_BINDING_PATH_INVALID",
             f"Project binding path is not a regular file: {path}",
         )
-    content = (canonical_json(build_project_binding(project_root, workspace)) + "\n").encode(
-        "utf-8"
-    )
+    content = project_binding_bytes(project_root, workspace)
     if path.exists() and path.read_bytes() == content:
         return path
+    if path.exists() and not allow_rebind:
+        raise WorkspaceError(
+            "PROJECT_BINDING_CONFLICT",
+            "Project binding already selects a different Shared Mind workspace; "
+            "use setup --workspace to authorize rebinding.",
+        )
     _atomic_replace(path, content)
     return path
+
+
+def resolve_project_workspace(
+    *,
+    cwd: str | Path | None = None,
+    binding: str | Path | None = None,
+) -> tuple[Path, Workspace, str]:
+    """Resolve exactly one verified project binding without broad discovery."""
+
+    start = Path(cwd).expanduser() if cwd is not None else Path.cwd()
+    project_root = _nearest_git_root(start)
+    binding_path = (
+        Path(binding).expanduser().resolve()
+        if binding is not None
+        else binding_path_for(project_root)
+    )
+    document, binding_hash = _read_binding(binding_path)
+    _validate_binding_document(document, project_root)
+    workspace_root = Path(document["workspace_root"]).expanduser().resolve()
+    expected_hash = str(document["workspace_config_hash"])
+    actual_hash = workspace_config_hash(workspace_root)
+    if actual_hash != expected_hash:
+        raise WorkspaceError(
+            "WORKSPACE_BINDING_MISMATCH",
+            "Workspace config hash does not match the project binding.",
+        )
+    workspace = _open_exact_workspace(workspace_root)
+    return project_root, workspace, binding_hash
 
 
 def bootstrap_session(
@@ -83,26 +132,10 @@ def bootstrap_session(
 ) -> dict[str, Any]:
     start = Path(cwd).expanduser() if cwd is not None else Path.cwd()
     try:
-        project_root = _nearest_git_root(start)
-        binding_path = (
-            Path(binding).expanduser().resolve()
-            if binding is not None
-            else binding_path_for(project_root)
+        project_root, workspace, binding_hash = resolve_project_workspace(
+            cwd=start,
+            binding=binding,
         )
-        document, binding_hash = _read_binding(binding_path)
-        _validate_binding_document(document, project_root)
-        workspace_root = Path(document["workspace_root"]).expanduser().resolve()
-        expected_hash = str(document["workspace_config_hash"])
-        actual_hash = workspace_config_hash(workspace_root)
-        if actual_hash != expected_hash:
-            return _skipped(
-                "WORKSPACE_BINDING_MISMATCH",
-                phase=phase,
-                project_root=project_root,
-                workspace_root=workspace_root,
-                binding_hash=binding_hash,
-            )
-        workspace = _open_exact_workspace(workspace_root)
         service = ProductService(workspace)
         try:
             integrity = service.verify()
@@ -166,13 +199,24 @@ def _read_binding(path: Path) -> tuple[dict[str, Any], str]:
             f"No project binding found at {path}.",
         )
     content = _read_regular_file(path, "PROJECT_BINDING_INVALID")
-    parsed = json.loads(content.decode("utf-8"))
+    try:
+        parsed = json.loads(content.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise WorkspaceError(
+            "PROJECT_BINDING_INVALID",
+            f"Cannot decode project binding: {exc}",
+        ) from exc
     if not isinstance(parsed, dict):
         raise WorkspaceError("PROJECT_BINDING_INVALID", "Project binding must be an object.")
     return parsed, sha256_bytes(content)
 
 
 def _validate_binding_document(document: Mapping[str, Any], project_root: Path) -> None:
+    if set(document) != _BINDING_FIELDS:
+        raise WorkspaceError(
+            "PROJECT_BINDING_INVALID",
+            "Project binding fields must exactly match project-binding@1.",
+        )
     if document.get("binding_version") != BINDING_VERSION:
         raise WorkspaceError(
             "PROJECT_BINDING_INVALID",
@@ -186,7 +230,12 @@ def _validate_binding_document(document: Mapping[str, Any], project_root: Path) 
             "PROJECT_BINDING_INVALID",
             "Project binding requires project_root and workspace_root strings.",
         )
-    if not isinstance(config_hash, str) or not config_hash.startswith("sha256:"):
+    if (
+        not isinstance(config_hash, str)
+        or len(config_hash) != 71
+        or not config_hash.startswith("sha256:")
+        or any(character not in "0123456789abcdef" for character in config_hash[7:])
+    ):
         raise WorkspaceError(
             "PROJECT_BINDING_INVALID",
             "Project binding requires a sha256 workspace_config_hash.",

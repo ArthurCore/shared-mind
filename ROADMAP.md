@@ -656,6 +656,29 @@ RED/GREEN은
 [`docs/testing/dev-104-review-queue-web.tdd.md`](docs/testing/dev-104-review-queue-web.tdd.md)에
 기록한다.
 
+### DEV-105 — Project-scoped Automatic Session Restore
+
+**상태: IMPLEMENTED; LOCAL GATES PASS (fresh-host dogfooding pending)**
+
+- hook payload cwd에서 nearest physical Git root를 고르고 그 root의 closed
+  `project-binding@1` 하나만 검증해 자동 context를 복원한다.
+- implicit setup은 verified binding 또는 exact project sibling만 사용하며 ancestor
+  project memory discovery와 silent rebind를 금지한다. explicit `--workspace`만
+  rebind authority다.
+- Claude/Codex start, prompt, append, finalize는 path를 내장하지 않는
+  `shared-mind-session-hook` 중립 adapter를 공유한다. capture도 매번 cwd binding을
+  다시 검증해 neighbor workspace로 redirect되지 않는다.
+- Claude settings, Codex hooks, binding은 preflight/stage/rollback transaction으로
+  설치하고 binding을 마지막에 공개한다. machine-local binding은 gitignore한다.
+- One Shared State, DEV-081 fail-closed/idempotency, Proposal-only canonical mutation,
+  DEV-102 hook fail-open, loopback-only web 경계는 유지한다.
+
+계약은
+[`docs/DEV-105-project-scoped-auto-resume.md`](docs/DEV-105-project-scoped-auto-resume.md),
+RED/GREEN은
+[`docs/testing/dev-105-project-scoped-auto-resume.tdd.md`](docs/testing/dev-105-project-scoped-auto-resume.tdd.md)에
+기록한다.
+
 ## 14. 구현된 인터페이스
 
 ```text
@@ -738,6 +761,10 @@ src/shared_mind/web_control.py
 - DEV-102~104 actual dogfooding: hook capture `trace:dev-102-104-live-20260821-001`,
   observation detail cursor `812`, CSRF review commit 및 최종
   `PRODUCT_INTEGRITY_VALID`/`LEDGER_VALID` 214 entries 통과.
+- DEV-105 hardening focused: project binding/bootstrap, neutral capture, setup rollback,
+  packaging/release 구조 **52 tests 통과**, 관련 회귀 **71 tests 통과**, 최종
+  **577 tests, 0 failures/errors, 1 optional skip**. Fresh Claude/Codex process
+  dogfooding은 아직 실행하지 않아 완료 증거로 주장하지 않는다.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.

@@ -10,3 +10,4 @@ build/
 
 .ci/
 .coverage.*
+/.shared-mind/project-binding.json

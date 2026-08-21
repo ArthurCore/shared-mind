@@ -18,7 +18,8 @@ From a Git project, run the idempotent setup once:
 $ shared-mind setup --install-hooks
 ```
 
-It creates or reuses the sibling `<project>-memory` workspace, performs a bounded
+It reuses a verified existing project binding or the exact sibling
+`<project>-memory` workspace, performs a bounded
 deterministic cold start only when one has not completed, installs the global
 Codex `shared-mind-setup` skill, writes
 `.shared-mind/project-binding.json`, reconciles Claude Code and Codex project
@@ -26,12 +27,27 @@ hooks, verifies product/kernel integrity, and returns one `SETUP_READY` JSON
 document. It never creates Agent-specific state and never commits model output
 implicitly.
 
+Implicit setup stops at the nearest Git root and never discovers an ancestor
+project's sibling memory. A malformed, mismatched, or conflicting binding is not
+silently overwritten. Rebinding requires an explicit `--workspace` that opens a
+valid workspace for the current root.
+
+The Claude settings, Codex hooks, and binding are staged and installed as one
+rollback-capable transaction. The binding is published last, and every original
+file is restored byte-for-byte if a replacement fails. Generated lifecycle
+commands use `shared-mind-session-hook`; they contain no absolute Python,
+project, or workspace path. `.shared-mind/project-binding.json` is machine-local
+absolute-path state and is gitignored.
+
 Every later Claude Code or Codex session should be started from somewhere inside
 the Git project. The working directory selects the nearest Git root, and that
 root's project binding selects exactly one Shared Mind workspace. The
 SessionStart hook injects compact project context before the first model turn;
 the UserPromptSubmit hook refines context with the actual prompt. Codex
 project hooks require the normal trust review before they execute.
+PostToolUse and session-finalization hooks also use the neutral adapter, resolve
+the binding again from the payload cwd, and cannot be redirected by a stale
+workspace argument.
 
 The global setup skill still recognizes `Shared Mind 초기설정해` as a one-time
 natural-language way to run setup from Codex after the package is installed. It
@@ -54,6 +70,7 @@ missing, ambiguous, moved, or integrity-invalid.
 Manual resume remains available for recovery and custom budgets:
 
 ```console
+$ shared-mind resume
 $ shared-mind resume "Review the authentication migration"
 ```
 

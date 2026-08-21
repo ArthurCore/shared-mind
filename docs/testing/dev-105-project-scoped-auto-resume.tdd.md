@@ -17,9 +17,19 @@ recovery/custom-budget path.
 | GREEN | `PYTHONPATH=src python3 -m unittest tests.test_project_session_bootstrap tests.test_session_hook_adapters -v` | 7/7 PASS. |
 | Setup idempotency RED | `PYTHONPATH=src python3 -m unittest tests.test_natural_language_setup.NaturalLanguageSetupTest.test_setup_does_not_touch_claude_settings_without_install_hooks -v` | 1 intended failure: second `setup --install-hooks` reported project binding `INSTALLED` instead of `UNCHANGED`. |
 | Setup idempotency GREEN | Same single-test command | 1/1 PASS. |
+| Hardening RED | `PYTHONPATH=src python3 -m unittest tests.test_project_session_bootstrap tests.test_session_hook_adapters tests.test_natural_language_setup tests.test_package_metadata tests.test_release_gates -v` at `3d6b970` | 52 run, 17 intended failures. Failures covered closed binding shape/rebind, neutral capture, strict nested setup, binding-last rollback transaction, portable entrypoint/gitignore, and CI parity. |
+| Hardening GREEN | Same five-module command | 52/52 PASS. |
+| Mixed-hook preservation RED | `PYTHONPATH=src python3 -m unittest tests.test_natural_language_setup.NaturalLanguageSetupTest.test_setup_does_not_touch_claude_settings_without_install_hooks -v` | 1 intended failure: an unrelated command sharing an entry with a legacy managed hook was removed. |
+| Mixed-hook preservation GREEN | Same single-test command | 1/1 PASS; only the legacy managed command is reconciled. |
 
 RED checkpoint commit:
 `e2585a5 test: add RED gate for project-scoped auto resume`.
+
+Hardening RED checkpoint commit:
+`3d6b970 test: harden DEV-105 project session contracts`.
+
+Mixed-hook RED checkpoint commit:
+`90866b9 test: preserve unrelated mixed lifecycle hooks`.
 
 ## Acceptance specification
 
@@ -35,20 +45,30 @@ RED checkpoint commit:
 | 8 | Missing binding hook output carries only a bounded warning and no additional context | `SessionHookAdaptersTest.test_missing_binding_emits_warning_without_additional_context` | PASS |
 | 9 | `setup --install-hooks` installs binding, Claude hooks, and Codex hooks idempotently while preserving unrelated settings | `NaturalLanguageSetupTest.test_setup_does_not_touch_claude_settings_without_install_hooks` | PASS |
 | 10 | Setup without `--install-hooks` touches none of binding, Claude hooks, or Codex hooks | `NaturalLanguageSetupTest.test_setup_does_not_touch_claude_settings_without_install_hooks` | PASS |
+| 11 | Binding schema rejects extra fields, symlink paths, root/config mismatches, and invalid product integrity without state mutation | `ProjectSessionBootstrapTest.test_binding_schema_is_closed_and_rejects_extra_fields_without_mutation`; related mismatch/symlink/integrity tests | PASS |
+| 12 | Existing different binding cannot be silently overwritten; explicit setup workspace is the sole rebind authority | `ProjectSessionBootstrapTest.test_write_project_binding_rejects_silent_workspace_rebind`; `NaturalLanguageSetupTest.test_explicit_workspace_is_the_only_rebind_authority` | PASS |
+| 13 | Implicit nested-project setup uses only its verified binding or exact sibling, never ancestor memory | `NaturalLanguageSetupTest.test_nested_project_implicit_setup_never_reuses_ancestor_memory`; `test_nested_project_implicit_setup_reuses_only_its_verified_binding` | PASS |
+| 14 | Prompt cwd is re-resolved and cannot reuse a prior project's binding | `SessionHookAdaptersTest.test_user_prompt_submit_changed_cwd_does_not_reuse_original_binding` | PASS |
+| 15 | Neutral append/finalize ignores stale workspace hints and writes only through the cwd binding | `SessionHookAdaptersTest.test_neutral_append_and_finalize_use_verified_cwd_binding_only` | PASS |
+| 16 | Claude/Codex/binding installation publishes binding last and rolls back each injected post-replace failure | `NaturalLanguageSetupTest.test_hook_install_publishes_binding_last`; both `test_hook_install_rollback_*` tests | PASS |
+| 17 | Generated lifecycle hooks use one portable entrypoint, preserve unrelated hooks, embed no absolute path, and use a bounded approximate Codex token limit | `NaturalLanguageSetupTest.test_setup_does_not_touch_claude_settings_without_install_hooks` | PASS |
+| 18 | The console entrypoint is packaged, the machine-local binding is gitignored, and bootstrap parity runs in the 3-OS determinism subset | `PackageMetadataTest`; `ReleaseGateStructureTest.test_determinism_subset_runs_on_linux_macos_and_windows` | PASS |
 
 ## Final required gates
 
-Pending final run:
-
-```console
-python3 contracts/validate_contract.py
-python3 contracts/validate_product_contract.py
-PYTHONPATH=src python3 -m unittest discover -s tests -v
-```
+| Gate | Result |
+|---|---|
+| `python3 contracts/validate_contract.py` | PASS: 7 predicates, 16 typed fixtures, 6 negative cases, 6 semantic cases, 7 continuity operations |
+| `python3 contracts/validate_product_contract.py` | PASS: 10 typed fixtures, 14 negative cases |
+| Focused DEV-105 + manual resume/DEV-102/release regression (8 modules) | 71/71 PASS |
+| `PYTHONPATH=src python3 -m unittest discover -s tests -v` | 577 PASS, 0 failures/errors, 1 optional skip |
+| `.venv/bin/ruff check` on changed Python/tests and `python3 -m compileall` on changed modules | PASS |
 
 ## Coverage and exclusions
 
-The repository gate is the full unittest discovery suite. This DEV does not add
+The repository gate is the full unittest discovery suite. This DEV did not run
 a separate coverage command. Cross-project aggregation, global memory search,
 automatic workspace creation during SessionStart, and unmodifiable web-chat
-injection remain explicit non-goals.
+injection remain explicit non-goals. Fresh Claude Code/Codex host launches are
+not claimed here; the parent/operator must run them after installation so host
+trust prompts and real lifecycle delivery are exercised.

@@ -105,10 +105,14 @@ $ shared-mind setup --install-hooks
 
 Run `uv tool update-shell` once if the installed commands are not yet on
 `PATH`. `setup --install-hooks` finds the current Git project, creates or reuses
-its conventional `<project>-memory` sibling, performs the first bounded cold
+its verified existing binding or exact conventional `<project>-memory` sibling,
+performs the first bounded cold
 start exactly once, installs the global Codex `shared-mind-setup` skill, writes
 the project-local `.shared-mind/project-binding.json`, and reconciles Claude
 Code plus Codex lifecycle hooks. It verifies integrity and returns `SETUP_READY`.
+Implicit setup stops at the nearest Git root: it never reuses an ancestor
+project's memory. A conflicting or malformed existing binding fails closed;
+only an explicit `--workspace` authorizes rebinding.
 
 After that one-time command, start Claude Code or Codex from anywhere inside the
 same Git project. The working directory selects the nearest Git root; that root's
@@ -119,7 +123,13 @@ neighboring projects. Codex project hooks require the normal trust review before
 they run.
 
 Re-running setup reuses the same Shared State and preserves unrelated Claude and
-Codex settings. Hook collection is the only fail-open boundary: a malformed or
+Codex settings. The Claude settings, Codex hooks, and binding are installed as
+one rollback-capable transaction, with the binding published last. Generated
+commands call the portable `shared-mind-session-hook` entrypoint and contain no
+absolute Python, project, or workspace path. The machine-local binding contains
+physical absolute paths and is excluded by the repository `.gitignore` rule.
+
+Hook collection is the only fail-open boundary: a malformed or
 unavailable hook capture records a non-canonical diagnostic and returns control
 to the AI host. It does not weaken Proposal validation, idempotency, or
 fail-closed canonical commits.
@@ -163,6 +173,9 @@ DEV-081 task-capture boundary. Finalization registers immutable source bytes,
 runs extraction, and leaves any resulting candidates as reviewable
 DraftProposals; valid input may produce zero Drafts. It does not let hook or
 model output write canonical memory directly. Identical retries are idempotent.
+Claude and Codex both route start, prompt, append, and finalize through the same
+neutral hook adapter. Append/finalize re-resolve the hook payload cwd and ignore
+stale workspace hints, so capture returns only to the verified project binding.
 
 The same lifecycle is available explicitly for integrations and debugging.
 Run from the workspace tree, or place the global

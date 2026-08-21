@@ -88,6 +88,10 @@ jobs:
         run: python -m unittest discover -s tests -p "test_product_retrieval.py" -v
       - name: Check deterministic observation finalization
         run: python -m unittest discover -s tests -p "test_observe.py" -v
+      - name: Check deterministic project bootstrap and cross-client parity
+        run: |
+          python -m unittest discover -s tests -p "test_project_session_bootstrap.py" -v
+          python -m unittest discover -s tests -p "test_session_hook_adapters.py" -v
 
   quality-and-security:
     name: Compile, lint, type, and security gates

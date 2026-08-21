@@ -49,6 +49,7 @@ class AgentBootstrapDocumentationTest(unittest.TestCase):
             {
                 "init",
                 "setup",
+                "session",
                 "source",
                 "proposal",
                 "context",
