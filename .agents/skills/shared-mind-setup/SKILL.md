@@ -31,3 +31,8 @@ If `shared-mind` is unavailable, report that the one-time Shared Mind tool
 installation is missing. Do not guess an installer source or fetch and execute a
 remote script. If setup returns a failure code, preserve the response and fix
 that explicit boundary instead of creating a second workspace.
+
+If automatic observation capture was started for this session, finish with
+`shared-mind-product observe finalize --session <same-session-id>`. A hook
+failure is non-blocking; keep the pending buffer for retry through the same
+DEV-081 canonical registration boundary.

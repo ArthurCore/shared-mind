@@ -130,6 +130,17 @@ def build_parser() -> argparse.ArgumentParser:
     capture.add_argument("trace")
     capture.add_argument("--auto-commit", action="store_true")
 
+    observe = commands.add_parser("observe")
+    observe_commands = observe.add_subparsers(dest="observe_command", required=True)
+    observe_start = observe_commands.add_parser("start")
+    observe_start.add_argument("--session", required=True)
+    observe_start.add_argument("--task", required=True)
+    observe_append = observe_commands.add_parser("append")
+    observe_append.add_argument("--session", required=True)
+    observe_append.add_argument("--event-json", required=True)
+    observe_finalize = observe_commands.add_parser("finalize")
+    observe_finalize.add_argument("--session", required=True)
+
     skill = commands.add_parser("skill")
     skill_commands = skill.add_subparsers(dest="skill_command", required=True)
     skill_list = skill_commands.add_parser("list")
@@ -389,6 +400,18 @@ def _dispatch(service: ProductService, args: argparse.Namespace) -> tuple[Any, s
             ),
             "TASK_CAPTURED",
         )
+    if args.command == "observe":
+        from .observe import ObservationCapture
+
+        capture = ObservationCapture(service.workspace)
+        if args.observe_command == "start":
+            return capture.start(args.session, args.task), "OBSERVATION_STARTED"
+        if args.observe_command == "append":
+            return (
+                capture.append(args.session, _load_inline_json_object(args.event_json)),
+                "OBSERVATION_APPENDED",
+            )
+        return capture.finalize(args.session, service), "OBSERVATION_FINALIZED"
     if args.command == "skill":
         if args.skill_command == "list":
             skills = service.store.list_skills(status=args.status)
@@ -563,6 +586,13 @@ def _load_json_argument(value: str) -> Mapping[str, Any]:
     path = Path(value)
     text = path.read_text(encoding="utf-8") if path.is_file() else value
     parsed = json.loads(text)
+    if not isinstance(parsed, Mapping):
+        raise ProductCliUsageError("JSON argument must be an object")
+    return parsed
+
+
+def _load_inline_json_object(value: str) -> Mapping[str, Any]:
+    parsed = json.loads(value)
     if not isinstance(parsed, Mapping):
         raise ProductCliUsageError("JSON argument must be an object")
     return parsed

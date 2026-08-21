@@ -599,6 +599,24 @@ RED/GREEN 및 fresh-session evidence는
 [`docs/testing/dev-101-natural-language-setup.tdd.md`](docs/testing/dev-101-natural-language-setup.tdd.md)에
 기록한다.
 
+### DEV-102 — Hook-based Automatic Observation Capture
+
+**상태: DONE (local gates)**
+
+- `shared-mind-product observe start/append/finalize`가 원본 event timestamp와
+  순서를 보존하는 pending JSONL을 DEV-081 immutable capture 경계로 등록한다.
+- 동일 session/trace bytes는 `UNCHANGED`, identity 재사용 충돌은 fail closed하며,
+  등록 실패 시 pending buffer와 기존 SourceRevision을 재시도에 보존한다.
+- Claude Code hook wrapper만 fail open이고, `setup --install-hooks`는 명시적
+  opt-in이다. 기본 setup은 `.claude/settings.json`을 건드리지 않는다.
+- Agent별 canonical partition, LLM direct write, web route 변경은 없다.
+
+계약은
+[`docs/DEV-102-auto-observation-capture.md`](docs/DEV-102-auto-observation-capture.md),
+RED/GREEN은
+[`docs/testing/dev-102-auto-observation-capture.tdd.md`](docs/testing/dev-102-auto-observation-capture.tdd.md)에
+기록한다.
+
 ## 14. 구현된 인터페이스
 
 ```text
@@ -672,6 +690,8 @@ src/shared_mind/web_control.py
 - DEV-098 완료 전체 회귀: **490 tests, 0 failures, branch coverage 83%**.
 - DEV-099 uv-first session UX: **5 RED→GREEN tests**, 관련 CLI/docs 회귀
   **33 tests 통과**, 최종 **495 tests, 0 failures, branch coverage 83%**.
+- DEV-102 automatic observation capture: **8 RED→GREEN acceptance tests**,
+  focused **17 tests 통과**, 최종 **536 tests, 0 failures/errors, 1 optional skip**.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.

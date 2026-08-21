@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import os
+import shlex
 import shutil
+import sys
 import sysconfig
 import tempfile
 from collections.abc import Mapping
@@ -12,6 +15,7 @@ from math import ceil
 from pathlib import Path
 from typing import Any
 
+from .canonical import canonical_json
 from .product import ProductError, ProductService
 from .workspace import CONFIG_FILENAME, WORKSPACE_DIRECTORY, Workspace, WorkspaceError
 
@@ -32,6 +36,7 @@ def setup_project(
     purpose: str | None = None,
     cold_start: bool = True,
     install_codex_skill: bool = True,
+    install_claude_hooks: bool = False,
 ) -> dict[str, Any]:
     """Set up one project workspace and return verified resumable context."""
 
@@ -41,12 +46,22 @@ def setup_project(
         if install_codex_skill
         else {"status": "SKIPPED", "path": None, "content_hash": None}
     )
+    settings = (
+        _read_claude_settings(project_root)
+        if install_claude_hooks
+        else None
+    )
     workspace, workspace_created = _resolve_workspace(
         project_root,
         explicit=workspace_path,
         purpose=purpose,
     )
     skill = _apply_codex_skill_plan(skill_plan) if install_codex_skill else skill_plan
+    hooks = (
+        _install_claude_hooks(project_root, workspace, settings)
+        if install_claude_hooks
+        else {"status": "SKIPPED", "path": None}
+    )
 
     service = ProductService(workspace)
     try:
@@ -99,6 +114,7 @@ def setup_project(
         "cold_start": cold_start_result,
         "consolidation": consolidation,
         "codex_skill": skill,
+        "claude_hooks": hooks,
         "integrity": integrity,
         "context": context,
     }
@@ -221,6 +237,107 @@ def _resolve_workspace(
 
 def _default_purpose(project_root: Path) -> str:
     return f"Preserve {project_root.name} project state across AI sessions."
+
+
+def _read_claude_settings(project_root: Path) -> dict[str, Any] | None:
+    claude_root = project_root / ".claude"
+    settings_path = claude_root / "settings.json"
+    if claude_root.is_symlink() or settings_path.is_symlink():
+        raise WorkspaceError(
+            "CLAUDE_HOOKS_PATH_INVALID",
+            "Claude settings path must not be a symbolic link.",
+        )
+    if claude_root.exists() and not claude_root.is_dir():
+        raise WorkspaceError(
+            "CLAUDE_HOOKS_PATH_INVALID", f"Claude config path is not a directory: {claude_root}"
+        )
+    if not settings_path.exists():
+        return None
+    if not settings_path.is_file():
+        raise WorkspaceError(
+            "CLAUDE_HOOKS_PATH_INVALID",
+            f"Claude settings path is not a regular file: {settings_path}",
+        )
+    try:
+        document = json.loads(settings_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise WorkspaceError(
+            "CLAUDE_HOOKS_SETTINGS_INVALID", f"Cannot read Claude settings: {exc}"
+        ) from exc
+    if not isinstance(document, dict):
+        raise WorkspaceError(
+            "CLAUDE_HOOKS_SETTINGS_INVALID", "Claude settings must be a JSON object."
+        )
+    hooks = document.get("hooks")
+    if hooks is not None and not isinstance(hooks, dict):
+        raise WorkspaceError(
+            "CLAUDE_HOOKS_SETTINGS_INVALID", "Claude settings hooks must be a JSON object."
+        )
+    return document
+
+
+def _install_claude_hooks(
+    project_root: Path,
+    workspace: Workspace,
+    existing: dict[str, Any] | None,
+) -> dict[str, Any]:
+    settings_path = project_root / ".claude" / "settings.json"
+    document = dict(existing) if existing is not None else {}
+    hooks = dict(document.get("hooks", {}))
+    executable = shlex.quote(sys.executable)
+    module = "shared_mind.adapters.claude_code_hooks"
+    workspace_argument = shlex.quote(workspace.root.as_posix())
+    commands = {
+        "PostToolUse": f"{executable} -m {module} append --workspace {workspace_argument}",
+        "SessionEnd": f"{executable} -m {module} finalize --workspace {workspace_argument}",
+        "Stop": f"{executable} -m {module} finalize --workspace {workspace_argument}",
+    }
+    changed = False
+    for event_name, command in commands.items():
+        entries = hooks.get(event_name, [])
+        if not isinstance(entries, list):
+            raise WorkspaceError(
+                "CLAUDE_HOOKS_SETTINGS_INVALID",
+                f"Claude hook {event_name} must be an array.",
+            )
+        entry = {
+            "matcher": "",
+            "hooks": [{"type": "command", "command": command}],
+        }
+        if entry not in entries:
+            hooks[event_name] = [*entries, entry]
+            changed = True
+    if not changed:
+        return {"status": "UNCHANGED", "path": settings_path.as_posix()}
+    document["hooks"] = hooks
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    content = (canonical_json(document) + "\n").encode("utf-8")
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=settings_path.parent,
+            prefix=".settings-",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, settings_path)
+        temporary_path = None
+    except OSError as exc:
+        raise WorkspaceError("CLAUDE_HOOKS_INSTALL_FAILED", str(exc)) from exc
+    finally:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+    return {
+        "status": "UPDATED" if existing is not None else "INSTALLED",
+        "path": settings_path.as_posix(),
+    }
 
 
 def _codex_skill_plan() -> dict[str, Any]:

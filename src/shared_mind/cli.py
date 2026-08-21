@@ -57,6 +57,7 @@ def build_parser() -> argparse.ArgumentParser:
     setup_parser.add_argument("--purpose")
     setup_parser.add_argument("--no-cold-start", action="store_true")
     setup_parser.add_argument("--no-install-skill", action="store_true")
+    setup_parser.add_argument("--install-hooks", action="store_true")
 
     source_parser = commands.add_parser("source")
     source_commands = source_parser.add_subparsers(dest="source_command", required=True)
@@ -164,6 +165,7 @@ def main(
                     purpose=arguments.purpose,
                     cold_start=not arguments.no_cold_start,
                     install_codex_skill=not arguments.no_install_skill,
+                    install_claude_hooks=arguments.install_hooks,
                 ),
             )
         workspace = (
