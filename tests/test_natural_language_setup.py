@@ -53,11 +53,13 @@ class NaturalLanguageSetupTest(unittest.TestCase):
         self.assertIsNone(arguments.workspace_path)
         self.assertFalse(arguments.no_cold_start)
         self.assertFalse(arguments.no_install_skill)
+        self.assertFalse(arguments.install_hooks)
         skill_text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("name: shared-mind-setup", skill_text)
         self.assertIn("Shared Mind 초기설정해", skill_text)
         self.assertNotIn("shared mine", skill_text.lower())
         self.assertIn("shared-mind setup", skill_text)
+        self.assertIn("shared-mind-product observe finalize", skill_text)
         interface = (SKILL_ROOT / "agents" / "openai.yaml").read_text(
             encoding="utf-8"
         )
@@ -210,6 +212,42 @@ class NaturalLanguageSetupTest(unittest.TestCase):
             self.assertEqual("CODEX_SKILL_CONFLICT", result["code"])
             self.assertEqual(custom, (destination / "SKILL.md").read_bytes())
             self.assertFalse((root / "atlas-memory").exists())
+
+    def test_setup_does_not_touch_claude_settings_without_install_hooks(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self._project(root)
+            settings = project / ".claude" / "settings.json"
+            settings.parent.mkdir()
+            original = b'{"permissions":{"allow":["Read"]}}\n'
+            settings.write_bytes(original)
+            codex_home = root / "codex-home"
+
+            default_exit, default = self._run_setup(
+                project, codex_home, "--no-cold-start"
+            )
+
+            self.assertEqual(EXIT_OK, default_exit, default)
+            self.assertEqual(original, settings.read_bytes())
+            self.assertEqual("SKIPPED", default["data"]["claude_hooks"]["status"])
+
+            installed_exit, installed = self._run_setup(
+                project,
+                codex_home,
+                "--no-cold-start",
+                "--install-hooks",
+            )
+
+            self.assertEqual(EXIT_OK, installed_exit, installed)
+            configured = json.loads(settings.read_text(encoding="utf-8"))
+            self.assertEqual(["Read"], configured["permissions"]["allow"])
+            self.assertIn("PostToolUse", configured["hooks"])
+            self.assertIn("SessionEnd", configured["hooks"])
+            self.assertIn("Stop", configured["hooks"])
+            self.assertIn(
+                installed["data"]["claude_hooks"]["status"],
+                {"INSTALLED", "UPDATED"},
+            )
 
     def test_implicit_setup_requires_a_git_project_but_explicit_project_is_allowed(
         self,
