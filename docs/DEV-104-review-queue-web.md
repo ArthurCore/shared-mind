@@ -25,9 +25,10 @@ input hashes, parameters, and disclosure-policy provenance.
 
 Commit and reject call only `ProductService.commit_draft` and
 `ProductService.reject_draft`. The web layer does not construct a second Proposal,
-write SQLite/kernel state directly, or create a second promotion receipt. The request
-body must carry the same explicit `draft_id` selected in the URL; reject additionally
-requires a non-empty rationale.
+write SQLite/kernel state directly, or create a second promotion receipt. DEV-104
+commit/reject request bodies must carry the same explicit `draft_id` selected in the
+URL; reject additionally requires a non-empty rationale. The pre-existing edit route
+retains its historical `{document, expected_version}` body without redundant ID.
 
 - A kernel-proposal commit runs existing validation, kernel commit, receipt, and Draft
   update behavior. CLI and Web therefore return the same stored Draft/receipt.

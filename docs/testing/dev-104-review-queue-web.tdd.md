@@ -17,8 +17,11 @@ it does not introduce a new mutation service or storage object.
 |---|---|---|
 | RED | `PYTHONPATH=src python3 -m unittest -v tests.test_web_review_queue tests.test_product_interfaces` | 13 tests ran: 5 existing non-Web/loopback paths passed; missing review page/token/header interface produced 6 intended failures and 2 intended errors. Draft fixtures and dependencies were valid. |
 | GREEN | `PYTHONPATH=src python3 -m unittest -v tests.test_web_review_queue tests.test_product_interfaces` | 13/13 PASS. |
+| Compatibility RED | `PYTHONPATH=src python3 -m unittest -v tests.test_web_review_queue.WebReviewQueueTest.test_existing_edit_body_remains_compatible_without_redundant_draft_id` | 1/1 intended failure: historical edit body was rejected as `DRAFT_ID_MISMATCH`. |
+| Compatibility GREEN | Same single-test command | 1/1 PASS. Final DEV-104/interface focused suite: 14/14 PASS. |
 
 RED checkpoint: `4db961a` (`test: add RED acceptance suite for DEV-104 review queue`).
+Compatibility RED checkpoint: `2b2cd9a` (`test: add RED regression for DEV-104 edit compatibility`).
 
 ## Acceptance specification
 
@@ -30,6 +33,7 @@ RED checkpoint: `4db961a` (`test: add RED acceptance suite for DEV-104 review qu
 | 4 | Invalid Draft commit fails closed with zero canonical mutation | `WebReviewQueueTest.test_validation_failure_is_fail_closed_with_zero_canonical_mutation` | PASS |
 | 5 | Per-application tokens differ; missing/wrong CSRF fails before service mutation; non-loopback remains rejected | `WebReviewQueueTest.test_state_changing_posts_require_ephemeral_csrf_before_service_mutation` | PASS |
 | UI | `state` list, detail provenance, inline token, explicit commit/reject, and absence of bulk/automatic approval | `WebReviewQueueTest.test_draft_state_detail_provenance_and_review_page_have_no_bulk_path` | PASS |
+| Compatibility | Existing edit with `{document, expected_version}` remains valid while commit without explicit `draft_id` remains rejected | `WebReviewQueueTest.test_existing_edit_body_remains_compatible_without_redundant_draft_id` | PASS |
 
 ## Final required gates
 
@@ -37,7 +41,7 @@ RED checkpoint: `4db961a` (`test: add RED acceptance suite for DEV-104 review qu
 |---|---|
 | `python3 contracts/validate_contract.py` | PASS: 7 predicates, 16 typed fixtures, 6 negative cases, 6 semantic cases, and 7 continuity operations. |
 | `python3 contracts/validate_product_contract.py` | PASS: 10 typed fixtures and 14 negative cases. |
-| `PYTHONPATH=src python3 -m unittest discover -s tests -v` | 551 tests, 0 failures/errors; 1 pre-existing optional MCP SDK v1 skip. |
+| `PYTHONPATH=src python3 -m unittest discover -s tests -v` | 552 tests, 0 failures/errors; 1 pre-existing optional MCP SDK v1 skip. |
 
 ## Coverage and exclusions
 

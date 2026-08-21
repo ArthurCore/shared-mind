@@ -648,6 +648,7 @@ RED/GREEN은
 - reject와 validation failure는 kernel head/state root를 전진시키지 않는다.
 - 모든 유효 Web POST는 앱별 ephemeral CSRF token을 mutation 전에 constant-time
   검증하고, loopback bind 제한과 no-CORS 경계를 유지한다.
+- explicit body Draft ID는 commit/reject에만 요구하고 기존 edit body 호환은 유지한다.
 - 자동·일괄 승인과 별도 promotion/storage 경로는 없다.
 
 계약은 [`docs/DEV-104-review-queue-web.md`](docs/DEV-104-review-queue-web.md),
@@ -732,8 +733,8 @@ src/shared_mind/web_control.py
   focused **20 tests 통과**, 최종 **539 tests, 0 failures/errors, 1 optional skip**.
 - DEV-103 live observation stream: **6 RED→GREEN tests**, 최종
   **545 tests, 0 failures/errors, 1 optional skip**.
-- DEV-104 review-queue promotion UX: **6 RED→GREEN tests**, focused
-  **13 tests 통과**, 최종 **551 tests, 0 failures/errors, 1 optional skip**.
+- DEV-104 review-queue promotion UX: **6 base + 1 compatibility RED→GREEN tests**,
+  focused **14 tests 통과**, 최종 **552 tests, 0 failures/errors, 1 optional skip**.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.

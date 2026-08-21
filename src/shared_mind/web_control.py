@@ -188,7 +188,7 @@ class WebControlApplication:
                     return self._not_found(path)
                 draft_id, action = segments[3], segments[4]
                 values = self._object(body)
-                if values.get("draft_id") != draft_id:
+                if action in {"commit", "reject"} and values.get("draft_id") != draft_id:
                     raise ProductError(
                         "DRAFT_ID_MISMATCH",
                         "Request draft_id must match the selected draft URL.",
