@@ -39,6 +39,9 @@ Hardening GREEN checkpoint commit:
 Codex hook-shape RED checkpoint commit:
 `36e560c test: require official Codex hooks document shape`.
 
+Codex hook-shape GREEN checkpoint commit:
+`0594620 fix: emit official Codex hooks document`.
+
 ## Acceptance specification
 
 | # | What is guaranteed | Test | Result |
