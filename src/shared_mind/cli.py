@@ -59,6 +59,18 @@ def build_parser() -> argparse.ArgumentParser:
     setup_parser.add_argument("--no-install-skill", action="store_true")
     setup_parser.add_argument("--install-hooks", action="store_true")
 
+    session_parser = commands.add_parser("session")
+    session_commands = session_parser.add_subparsers(
+        dest="session_command", required=True
+    )
+    session_start = session_commands.add_parser("start")
+    session_start.add_argument("--cwd")
+    session_start.add_argument("--binding")
+    session_prompt = session_commands.add_parser("prompt")
+    session_prompt.add_argument("--prompt", required=True)
+    session_prompt.add_argument("--cwd")
+    session_prompt.add_argument("--binding")
+
     source_parser = commands.add_parser("source")
     source_commands = source_parser.add_subparsers(dest="source_command", required=True)
     source_add = source_commands.add_parser("add")
@@ -168,6 +180,8 @@ def main(
                     install_claude_hooks=arguments.install_hooks,
                 ),
             )
+        if arguments.command == "session":
+            return _session_command(arguments, output)
         workspace = (
             Workspace.open(arguments.workspace)
             if arguments.workspace is not None
@@ -488,6 +502,30 @@ def _resume_command(
         True,
         "SESSION_READY",
         data={"integrity": integrity, "context": context},
+    )
+
+
+def _session_command(arguments: argparse.Namespace, output: TextIO) -> int:
+    from .session_bootstrap import bootstrap_session
+
+    phase = (
+        "UserPromptSubmit"
+        if arguments.session_command == "prompt"
+        else "SessionStart"
+    )
+    result = bootstrap_session(
+        cwd=arguments.cwd or Path.cwd(),
+        prompt=getattr(arguments, "prompt", None),
+        phase=phase,
+        binding=arguments.binding,
+    )
+    return _emit(
+        output,
+        True,
+        "SESSION_BOOTSTRAP_READY"
+        if result["status"] == "READY"
+        else "SESSION_BOOTSTRAP_SKIPPED",
+        data=result,
     )
 
 

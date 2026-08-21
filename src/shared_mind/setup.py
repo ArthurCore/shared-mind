@@ -17,6 +17,7 @@ from typing import Any
 
 from .canonical import canonical_json
 from .product import ProductError, ProductService
+from .session_bootstrap import binding_path_for, build_project_binding, write_project_binding
 from .workspace import CONFIG_FILENAME, WORKSPACE_DIRECTORY, Workspace, WorkspaceError
 
 
@@ -51,17 +52,20 @@ def setup_project(
         if install_claude_hooks
         else None
     )
+    codex_hooks = (
+        _read_codex_hooks(project_root)
+        if install_claude_hooks
+        else None
+    )
     workspace, workspace_created = _resolve_workspace(
         project_root,
         explicit=workspace_path,
         purpose=purpose,
     )
     skill = _apply_codex_skill_plan(skill_plan) if install_codex_skill else skill_plan
-    hooks = (
-        _install_claude_hooks(project_root, workspace, settings)
-        if install_claude_hooks
-        else {"status": "SKIPPED", "path": None}
-    )
+    hooks = {"status": "SKIPPED", "path": None}
+    codex_hook_result = {"status": "SKIPPED", "path": None}
+    binding_result = {"status": "SKIPPED", "path": None}
 
     service = ProductService(workspace)
     try:
@@ -106,6 +110,26 @@ def setup_project(
     finally:
         service.close()
 
+    if install_claude_hooks:
+        binding_path = binding_path_for(project_root)
+        expected_binding = (
+            canonical_json(build_project_binding(project_root, workspace)) + "\n"
+        ).encode("utf-8")
+        binding_status = (
+            "UNCHANGED"
+            if binding_path.exists() and binding_path.read_bytes() == expected_binding
+            else "UPDATED"
+            if binding_path.exists()
+            else "INSTALLED"
+        )
+        binding_path = write_project_binding(project_root, workspace)
+        binding_result = {
+            "status": binding_status,
+            "path": binding_path.as_posix(),
+        }
+        hooks = _install_claude_hooks(project_root, workspace, settings)
+        codex_hook_result = _install_codex_hooks(project_root, workspace, codex_hooks)
+
     return {
         "setup_version": SETUP_VERSION,
         "project": project_root.as_posix(),
@@ -114,7 +138,9 @@ def setup_project(
         "cold_start": cold_start_result,
         "consolidation": consolidation,
         "codex_skill": skill,
+        "project_binding": binding_result,
         "claude_hooks": hooks,
+        "codex_hooks": codex_hook_result,
         "integrity": integrity,
         "context": context,
     }
@@ -276,6 +302,39 @@ def _read_claude_settings(project_root: Path) -> dict[str, Any] | None:
     return document
 
 
+def _read_codex_hooks(project_root: Path) -> dict[str, Any] | None:
+    codex_root = project_root / ".codex"
+    hooks_path = codex_root / "hooks.json"
+    if codex_root.is_symlink() or hooks_path.is_symlink():
+        raise WorkspaceError(
+            "CODEX_HOOKS_PATH_INVALID",
+            "Codex hooks path must not be a symbolic link.",
+        )
+    if codex_root.exists() and not codex_root.is_dir():
+        raise WorkspaceError(
+            "CODEX_HOOKS_PATH_INVALID",
+            f"Codex config path is not a directory: {codex_root}",
+        )
+    if not hooks_path.exists():
+        return None
+    if not hooks_path.is_file():
+        raise WorkspaceError(
+            "CODEX_HOOKS_PATH_INVALID",
+            f"Codex hooks path is not a regular file: {hooks_path}",
+        )
+    try:
+        document = json.loads(hooks_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise WorkspaceError(
+            "CODEX_HOOKS_SETTINGS_INVALID", f"Cannot read Codex hooks: {exc}"
+        ) from exc
+    if not isinstance(document, dict):
+        raise WorkspaceError(
+            "CODEX_HOOKS_SETTINGS_INVALID", "Codex hooks must be a JSON object."
+        )
+    return document
+
+
 def _install_claude_hooks(
     project_root: Path,
     workspace: Workspace,
@@ -285,9 +344,12 @@ def _install_claude_hooks(
     document = dict(existing) if existing is not None else {}
     hooks = dict(document.get("hooks", {}))
     executable = shlex.quote(sys.executable)
+    session_module = "shared_mind.adapters.session_hooks"
     module = "shared_mind.adapters.claude_code_hooks"
     workspace_argument = shlex.quote(workspace.root.as_posix())
     commands = {
+        "SessionStart": f"{executable} -m {session_module} claude start",
+        "UserPromptSubmit": f"{executable} -m {session_module} claude prompt",
         "PostToolUse": f"{executable} -m {module} append --workspace {workspace_argument}",
         "SessionEnd": f"{executable} -m {module} finalize --workspace {workspace_argument}",
         "Stop": f"{executable} -m {module} finalize --workspace {workspace_argument}",
@@ -338,6 +400,82 @@ def _install_claude_hooks(
         "status": "UPDATED" if existing is not None else "INSTALLED",
         "path": settings_path.as_posix(),
     }
+
+
+def _install_codex_hooks(
+    project_root: Path,
+    workspace: Workspace,
+    existing: dict[str, Any] | None,
+) -> dict[str, Any]:
+    hooks_path = project_root / ".codex" / "hooks.json"
+    document = dict(existing) if existing is not None else {}
+    executable = shlex.quote(sys.executable)
+    session_module = "shared_mind.adapters.session_hooks"
+    observe_module = "shared_mind.adapters.claude_code_hooks"
+    workspace_argument = shlex.quote(workspace.root.as_posix())
+    commands: dict[str, tuple[str, int | None]] = {
+        "SessionStart": (f"{executable} -m {session_module} codex start", 12000),
+        "UserPromptSubmit": (f"{executable} -m {session_module} codex prompt", 12000),
+        "PostToolUse": (
+            f"{executable} -m {observe_module} append --workspace {workspace_argument}",
+            None,
+        ),
+        "SessionEnd": (
+            f"{executable} -m {observe_module} finalize --workspace {workspace_argument}",
+            None,
+        ),
+    }
+    changed = False
+    for event_name, (command, limit) in commands.items():
+        entries = document.get(event_name, [])
+        if not isinstance(entries, list):
+            raise WorkspaceError(
+                "CODEX_HOOKS_SETTINGS_INVALID",
+                f"Codex hook {event_name} must be an array.",
+            )
+        hook: dict[str, Any] = {"type": "command", "command": command}
+        if limit is not None:
+            hook["additionalContextLimit"] = limit
+        entry = {"hooks": [hook]}
+        if entry not in entries:
+            document[event_name] = [*entries, entry]
+            changed = True
+    if not changed:
+        return {"status": "UNCHANGED", "path": hooks_path.as_posix()}
+    hooks_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json_atomic(hooks_path, document, "CODEX_HOOKS_INSTALL_FAILED")
+    return {
+        "status": "UPDATED" if existing is not None else "INSTALLED",
+        "path": hooks_path.as_posix(),
+    }
+
+
+def _write_json_atomic(
+    destination: Path, document: Mapping[str, Any], error_code: str
+) -> None:
+    content = (canonical_json(document) + "\n").encode("utf-8")
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=destination.parent,
+            prefix=f".{destination.name}-",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, destination)
+        temporary_path = None
+    except OSError as exc:
+        raise WorkspaceError(error_code, str(exc)) from exc
+    finally:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def _codex_skill_plan() -> dict[str, Any]:

@@ -15,49 +15,53 @@ Run `uv tool update-shell` once if the command is not yet on `PATH`.
 From a Git project, run the idempotent setup once:
 
 ```console
-$ shared-mind setup
+$ shared-mind setup --install-hooks
 ```
 
-It creates or reuses the sibling `<project>-memory` workspace, performs a
-bounded deterministic cold start only when one has not completed, installs the
-global Codex `shared-mind-setup` skill, verifies product/kernel integrity, and
-returns one `SETUP_READY` JSON document with session context. It never creates
-Agent-specific state and never commits model output implicitly.
+It creates or reuses the sibling `<project>-memory` workspace, performs a bounded
+deterministic cold start only when one has not completed, installs the global
+Codex `shared-mind-setup` skill, writes
+`.shared-mind/project-binding.json`, reconciles Claude Code and Codex project
+hooks, verifies product/kernel integrity, and returns one `SETUP_READY` JSON
+document. It never creates Agent-specific state and never commits model output
+implicitly.
 
-Every later Codex session on this machine may use the natural-language request
-`Shared Mind 초기설정해`. The global skill runs the same command, requires
-`SETUP_READY` and valid integrity, then reads active WorkItems, decisions,
-questions, conflicts, and evidence references from `data.context`. A tool must
-be installed once before a new session can discover its skill; natural language
-cannot bootstrap software that is not present on the machine.
+Every later Claude Code or Codex session should be started from somewhere inside
+the Git project. The working directory selects the nearest Git root, and that
+root's project binding selects exactly one Shared Mind workspace. The
+SessionStart hook injects compact project context before the first model turn;
+the UserPromptSubmit hook refines context with the actual prompt. Codex
+project hooks require the normal trust review before they execute.
 
-## Resume in one command
+The global setup skill still recognizes `Shared Mind 초기설정해` as a one-time
+natural-language way to run setup from Codex after the package is installed. It
+is not a per-session resume step.
 
-Run this before proposing or changing project work:
+## Automatic and Manual Bootstrap
+
+The hook-neutral bootstrap surface is:
 
 ```console
-$ shared-mind resume
+$ shared-mind session start
+$ shared-mind session prompt --prompt "Review the authentication migration"
 ```
 
-The command first walks upward for `.shared-mind/workspace.json`; when invoked
-from a project checkout it also discovers the conventional sibling
-`<project>-memory` workspace. It verifies kernel and product integrity, then
-emits exactly one JSON document. Require `ok: true`, code `SESSION_READY`, and
-`data.integrity.valid: true`, then read `data.context`. The context contains
-current unconflicted claims, all open conflicts and their member claims, active
-decisions, open questions, actionable work items, the ledger sequence, the
-state root, and truncation metadata. The default is a compact 24 KiB EVIDENCE
-request. It preserves those mandatory continuity sections and their projection
-references while leaving older or less relevant evidence for on-demand
-drill-down.
+Both commands read only the current Git root's
+`.shared-mind/project-binding.json`. They do not search neighboring
+`*-memory` directories and they return no `additional_context` if the binding is
+missing, ambiguous, moved, or integrity-invalid.
 
-An explicit task remains short:
+Manual resume remains available for recovery and custom budgets:
 
 ```console
 $ shared-mind resume "Review the authentication migration"
 ```
 
-The explicit full resume ceiling remains available for evidence-heavy work:
+`resume` discovers the workspace from the project tree, verifies kernel and
+product integrity, and emits exactly one JSON document. Require `ok: true`, code
+`SESSION_READY`, and `data.integrity.valid: true`, then read `data.context`.
+The default is a compact 24 KiB EVIDENCE request. The explicit full resume
+ceiling remains available for evidence-heavy work:
 
 ```console
 $ shared-mind resume --budget-bytes 131072

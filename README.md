@@ -100,49 +100,60 @@ isolated, so no virtual environment activation is required.
 
 ```console
 $ uv tool install --editable '.[mcp]'
-$ shared-mind setup
-```
-
-Run `uv tool update-shell` once if the installed commands are not yet on
-`PATH`. `setup` finds the current Git project, creates or reuses its conventional
-`<project>-memory` sibling, performs the first bounded cold start exactly once,
-installs the global Codex `shared-mind-setup` skill, verifies integrity, and
-returns `SETUP_READY` with resumable context. It is idempotent.
-
-Claude Code observation hooks are opt-in. To install or reconcile the
-project-local `PostToolUse`, `SessionEnd`, and `Stop` hooks, run:
-
-```console
 $ shared-mind setup --install-hooks
 ```
 
-Re-running the command reuses the same Shared State and preserves unrelated
-Claude settings. Hook collection is the only fail-open boundary: a malformed
-or unavailable hook capture records a non-canonical diagnostic and returns
-control to Claude Code. It does not weaken Proposal validation, idempotency, or
+Run `uv tool update-shell` once if the installed commands are not yet on
+`PATH`. `setup --install-hooks` finds the current Git project, creates or reuses
+its conventional `<project>-memory` sibling, performs the first bounded cold
+start exactly once, installs the global Codex `shared-mind-setup` skill, writes
+the project-local `.shared-mind/project-binding.json`, and reconciles Claude
+Code plus Codex lifecycle hooks. It verifies integrity and returns `SETUP_READY`.
+
+After that one-time command, start Claude Code or Codex from anywhere inside the
+same Git project. The working directory selects the nearest Git root; that root's
+binding selects exactly one Shared Mind workspace. Session-start hooks inject the
+same deterministic 24 KiB EVIDENCE context into Claude and Codex, and
+UserPromptSubmit hooks refine context with the actual prompt without searching
+neighboring projects. Codex project hooks require the normal trust review before
+they run.
+
+Re-running setup reuses the same Shared State and preserves unrelated Claude and
+Codex settings. Hook collection is the only fail-open boundary: a malformed or
+unavailable hook capture records a non-canonical diagnostic and returns control
+to the AI host. It does not weaken Proposal validation, idempotency, or
 fail-closed canonical commits.
 
-After that one-time command, a new Codex session can be started with the natural
-language request `Shared Mind 초기설정해`. The globally installed skill invokes
-the same deterministic setup boundary and loads the returned Shared State; the
-user does not need to repeat paths or shell commands. Software must be installed
-once before any session can recognize the skill.
+`setup` without `--install-hooks` still performs setup and returns context, but
+it does not create the project binding or hook files. Manual
+`shared-mind resume` remains an advanced recovery/custom-budget command. It
+discovers the workspace from the project tree, verifies kernel and product
+integrity, and returns task-aware `SESSION_READY` context. Request the full
+resume ceiling explicitly when deeper evidence is needed:
 
-The `*-memory` sibling convention also lets `shared-mind resume` discover the
-workspace from anywhere below the project tree. It verifies kernel and product
-integrity before returning a task-aware `SESSION_READY` context. The
-default EVIDENCE context is capped at 24 KiB so a cold start restores the
-continuity core without packing unrelated history up to the old 128 KiB
-target. Request the full resume ceiling explicitly when deeper evidence is
-needed:
+The global setup skill still recognizes `Shared Mind 초기설정해` as a one-time
+natural-language way to run setup from Codex after the package is installed. It
+is not a per-session resume step.
 
 ```console
 $ shared-mind resume --budget-bytes 131072
 ```
 
 For this repository the existing workspace is `../shared-mind-memory`, so
-`shared-mind setup` reuses it without repeating cold start. Direct `init`,
-`cold-start`, and `resume` remain available as lower-level or advanced surfaces.
+`shared-mind setup --install-hooks` reuses it without repeating cold start.
+Direct `init`, `cold-start`, `session`, and `resume` remain available as
+lower-level or advanced surfaces.
+
+The hook-neutral bootstrap surface is available for custom hosts:
+
+```console
+$ shared-mind session start
+$ shared-mind session prompt --prompt "Review the authentication migration"
+```
+
+Both commands use only the current Git root's project binding. Missing,
+malformed, moved, or integrity-invalid bindings return
+`SESSION_BOOTSTRAP_SKIPPED` with no `additional_context`.
 
 ### Automatic and manual observation capture
 

@@ -60,6 +60,8 @@ class PackageMetadataTest(unittest.TestCase):
         for command_or_route in (
             "uv tool install --editable '.[mcp]'",
             "shared-mind setup --install-hooks",
+            "shared-mind session start",
+            "shared-mind session prompt",
             "shared-mind resume",
             "shared-mind-product observe start",
             "shared-mind-product observe append",

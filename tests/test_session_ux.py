@@ -38,8 +38,11 @@ class SessionUxTest(unittest.TestCase):
         self.assertIn(install, mcp_guide)
         self.assertNotIn("python3 -m venv", quick_start)
         self.assertNotIn("source .venv/bin/activate", quick_start)
-        self.assertIn("$ shared-mind resume", quick_start)
-        self.assertIn("$ shared-mind resume", bootstrap)
+        self.assertIn("$ shared-mind setup --install-hooks", quick_start)
+        self.assertIn("$ shared-mind setup --install-hooks", bootstrap)
+        self.assertIn("$ shared-mind session start", quick_start)
+        self.assertIn("$ shared-mind session start", bootstrap)
+        self.assertIn("Manual resume remains", bootstrap)
 
     def test_resume_parser_has_safe_task_aware_defaults(self) -> None:
         arguments = build_parser().parse_args(["resume"])

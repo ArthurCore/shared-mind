@@ -229,7 +229,11 @@ class NaturalLanguageSetupTest(unittest.TestCase):
 
             self.assertEqual(EXIT_OK, default_exit, default)
             self.assertEqual(original, settings.read_bytes())
+            self.assertFalse((project / ".shared-mind" / "project-binding.json").exists())
+            self.assertFalse((project / ".codex" / "hooks.json").exists())
             self.assertEqual("SKIPPED", default["data"]["claude_hooks"]["status"])
+            self.assertEqual("SKIPPED", default["data"]["codex_hooks"]["status"])
+            self.assertEqual("SKIPPED", default["data"]["project_binding"]["status"])
 
             installed_exit, installed = self._run_setup(
                 project,
@@ -237,17 +241,55 @@ class NaturalLanguageSetupTest(unittest.TestCase):
                 "--no-cold-start",
                 "--install-hooks",
             )
+            repeated_exit, repeated = self._run_setup(
+                project,
+                codex_home,
+                "--no-cold-start",
+                "--install-hooks",
+            )
 
             self.assertEqual(EXIT_OK, installed_exit, installed)
+            self.assertEqual(EXIT_OK, repeated_exit, repeated)
             configured = json.loads(settings.read_text(encoding="utf-8"))
             self.assertEqual(["Read"], configured["permissions"]["allow"])
+            self.assertIn("SessionStart", configured["hooks"])
+            self.assertIn("UserPromptSubmit", configured["hooks"])
             self.assertIn("PostToolUse", configured["hooks"])
             self.assertIn("SessionEnd", configured["hooks"])
             self.assertIn("Stop", configured["hooks"])
+            binding = json.loads(
+                (project / ".shared-mind" / "project-binding.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(project.resolve().as_posix(), binding["project_root"])
+            self.assertEqual(
+                (root / "atlas-memory").resolve().as_posix(),
+                binding["workspace_root"],
+            )
+            codex_hooks = json.loads(
+                (project / ".codex" / "hooks.json").read_text(encoding="utf-8")
+            )
+            self.assertIn("SessionStart", codex_hooks)
+            self.assertIn("UserPromptSubmit", codex_hooks)
+            self.assertIn("PostToolUse", codex_hooks)
+            self.assertIn("SessionEnd", codex_hooks)
+            self.assertEqual(
+                12000,
+                codex_hooks["SessionStart"][0]["hooks"][0]["additionalContextLimit"],
+            )
             self.assertIn(
                 installed["data"]["claude_hooks"]["status"],
                 {"INSTALLED", "UPDATED"},
             )
+            self.assertIn(
+                installed["data"]["codex_hooks"]["status"],
+                {"INSTALLED", "UPDATED"},
+            )
+            self.assertEqual("INSTALLED", installed["data"]["project_binding"]["status"])
+            self.assertEqual("UNCHANGED", repeated["data"]["claude_hooks"]["status"])
+            self.assertEqual("UNCHANGED", repeated["data"]["codex_hooks"]["status"])
+            self.assertEqual("UNCHANGED", repeated["data"]["project_binding"]["status"])
 
     def test_implicit_setup_requires_a_git_project_but_explicit_project_is_allowed(
         self,
