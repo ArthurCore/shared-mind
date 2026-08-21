@@ -148,9 +148,10 @@ For this repository the existing workspace is `../shared-mind-memory`, so
 
 With `--install-hooks`, Claude Code tool events lazily start an observation
 buffer. Session end or stop finalizes the ordered events through the existing
-DEV-081 task-capture boundary. Finalization creates immutable source bytes and
-reviewable DraftProposals; it does not let hook or model output write canonical
-memory directly. Identical retries are idempotent.
+DEV-081 task-capture boundary. Finalization registers immutable source bytes,
+runs extraction, and leaves any resulting candidates as reviewable
+DraftProposals; valid input may produce zero Drafts. It does not let hook or
+model output write canonical memory directly. Identical retries are idempotent.
 
 The same lifecycle is available explicitly for integrations and debugging.
 Run from the workspace tree, or place the global
@@ -254,7 +255,8 @@ Search input is literal Unicode text under `retrieval-index@2`; task IDs such as
 interpreted as SQLite FTS syntax. Python, CLI, and product MCP responses expose
 the retrieval version with the ordered results.
 
-See the [Product guide](docs/product-guide.md) for the complete workflow.
+See the [Product guide](docs/product-guide.md) for additional product-layer
+workflow details.
 
 ## Authority and safety model
 
@@ -321,7 +323,8 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 CI runs the complete suite with branch coverage on Python 3.11, 3.12, and 3.13;
 determinism subsets on Linux, macOS, and Windows; compile/lint/type/dependency/
 security gates; and fresh base/MCP wheel installation smoke tests. Product
-Scenario and retrieval determinism are included in the cross-platform subset.
+Scenario, retrieval, and observation-finalization determinism are included in
+the cross-platform subset.
 
 Shared-state continuity evaluation is available through ProductService, the
 `shared-mind-product metrics` commands, and the Product MCP
