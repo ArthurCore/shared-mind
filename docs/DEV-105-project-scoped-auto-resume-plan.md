@@ -88,6 +88,18 @@ If any step fails, return a stable non-canonical status and no
 `<git-root-name>-memory`, but runtime automatic restore never guesses beyond the
 stored binding.
 
+Setup uses the same strict project boundary before a binding exists. Implicit
+setup may reuse only an already verified binding or the exact sibling of the
+nearest Git root. It must not call broad ancestor sibling discovery. An
+explicit `--workspace` is the only setup-time authority to select a different
+workspace.
+
+An existing byte-identical binding is `UNCHANGED`. A malformed binding,
+different project root, different workspace, or different workspace config
+hash is a conflict and is never silently overwritten. Rebinding is allowed only
+when the operator supplies explicit `--workspace`; that explicit path must open
+as a valid workspace and the new binding must still match the current Git root.
+
 Nested directories resolve to the same nearest Git root. A nested Git repo or
 submodule is a separate project. A Git worktree (`.git` file) is a separate
 local root for binding purposes; setup may explicitly bind it to the original
@@ -142,14 +154,19 @@ Project `.claude/settings.json` receives idempotent entries for:
 The adapter emits Claude-compatible `hookSpecificOutput` and never prints
 context on failure.
 
+All capture lifecycle commands resolve and verify the same project binding from
+the hook payload `cwd`. Generated hooks must not trust a literal workspace path
+that can outlive or escape the project binding.
+
 ### Codex
 
 Project `.codex/hooks.json` receives the equivalent lifecycle configuration.
 Codex officially supports `SessionStart`, `UserPromptSubmit`, `PostToolUse`, and
 `SessionEnd`; `SessionStart` and `UserPromptSubmit` accept
 `hookSpecificOutput.additionalContext`. Set a bounded
-`additionalContextLimit` large enough for the 24 KiB contract and require the
-normal Codex project-hook trust review.
+`additionalContextLimit` large enough for the 24 KiB contract (the setting is an
+approximate **token** threshold, not a byte count) and require the normal Codex
+project-hook trust review.
 
 Reference: <https://developers.openai.com/codex/hooks>
 
@@ -175,6 +192,19 @@ Shared Mind cannot inject into an unmodifiable web chat.
 Hook errors and bootstrap warnings are non-canonical diagnostics. They do not
 create a workspace, repair canonical state, search other projects, or advance
 ledger/product audit state.
+
+Binding, Claude settings, and Codex hooks form one installation transaction:
+
+1. Read and validate every existing destination before writing anything.
+2. Build all three final byte payloads in memory.
+3. Stage temporary files in each destination directory.
+4. Replace destinations in a fixed order while retaining exact backups.
+5. If any replace fails, restore every prior destination byte-for-byte and
+   remove newly created destinations.
+
+The binding is the activation switch and is published last. A failed or partial
+installation must never leave automatic restore active with only one client
+configured.
 
 ## 8. File plan
 
@@ -210,15 +240,21 @@ create  docs/testing/dev-105-project-scoped-auto-resume.tdd.md
    `additionalContext` and the same `context_hash` for the same binding.
 7. UserPromptSubmit refines context using the prompt only within the verified
    binding; a changed cwd/binding injects nothing.
-8. Observation append/finalize uses the workspace in the verified binding and
-   cannot write to a different project's workspace.
-9. `setup --install-hooks` atomically and idempotently installs the binding,
+8. Observation append/finalize resolves the verified binding from hook cwd and
+   cannot write to a different project's workspace even if a stale literal
+   workspace argument is supplied.
+9. Implicit setup never reuses an ancestor/neighbor memory and an existing
+   conflicting binding is rejected; explicit `--workspace` is required to
+   rebind.
+10. `setup --install-hooks` atomically and idempotently installs the binding,
    Claude lifecycle hooks, and Codex lifecycle hooks while preserving unrelated
    settings/hooks.
-10. Setup without `--install-hooks` touches none of the binding or hook files.
-11. Existing manual `shared-mind resume`, DEV-081 idempotency/conflict behavior,
+11. Injected failure after each install replace restores all original binding,
+    Claude, and Codex bytes with no partial activation.
+12. Setup without `--install-hooks` touches none of the binding or hook files.
+13. Existing manual `shared-mind resume`, DEV-081 idempotency/conflict behavior,
     and DEV-102 capture tests remain green.
-12. Cross-client deterministic subset covers bootstrap context parity.
+14. Cross-client deterministic subset covers bootstrap context parity.
 
 ## 10. Implementation stages and dependency graph
 
