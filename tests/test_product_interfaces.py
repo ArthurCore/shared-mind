@@ -136,6 +136,7 @@ class ProductInterfacesTest(ProductTestCase):
             "POST",
             "/api/skills/skill:web-review/1/mark-tested",
             json.dumps({"evidence": {"passed": True}}).encode(),
+            headers={"X-Shared-Mind-CSRF-Token": web.csrf_token},
         )
         self.assertEqual(200, status)
         self.assertEqual("TESTED", json.loads(body)["data"]["status"])
@@ -213,6 +214,7 @@ class ProductInterfacesTest(ProductTestCase):
                     "hints": {},
                 }
             ).encode(),
+            headers={"X-Shared-Mind-CSRF-Token": app.csrf_token},
         )
         self.assertEqual(200, status)
         self.assertIn("context_hash", json.loads(body)["data"])
@@ -220,6 +222,7 @@ class ProductInterfacesTest(ProductTestCase):
             "POST",
             "/api/tool",
             json.dumps({"name": "capabilities", "arguments": {}}).encode(),
+            headers={"X-Shared-Mind-CSRF-Token": app.csrf_token},
         )
         self.assertEqual(200, status)
         self.assertIn("read_source_span", json.loads(body)["data"]["tools"])
