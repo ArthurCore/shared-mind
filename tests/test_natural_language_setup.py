@@ -281,9 +281,11 @@ class NaturalLanguageSetupTest(unittest.TestCase):
                     target = Path(destination).resolve()
                     if target in {path.resolve() for path in targets} and not injected:
                         target_count += 1
+                        original_replace(source, destination)
                         if target_count == failure_index:
                             injected = True
                             raise OSError(f"injected replace failure {failure_index}")
+                        return
                     original_replace(source, destination)
 
                 with patch("shared_mind.setup.os.replace", side_effect=fail_replace):
@@ -316,9 +318,11 @@ class NaturalLanguageSetupTest(unittest.TestCase):
                     target = Path(destination).resolve()
                     if target in {path.resolve() for path in targets} and not injected:
                         target_count += 1
+                        original_replace(source, destination)
                         if target_count == failure_index:
                             injected = True
                             raise OSError(f"injected replace failure {failure_index}")
+                        return
                     original_replace(source, destination)
 
                 with patch("shared_mind.setup.os.replace", side_effect=fail_replace):
@@ -427,7 +431,10 @@ class NaturalLanguageSetupTest(unittest.TestCase):
             settings.parent.mkdir()
             original = (
                 b'{"hooks":{"PreToolUse":[{"hooks":[{"command":"keep-claude",'
-                b'"type":"command"}],"matcher":"Read"}]},'
+                b'"type":"command"}],"matcher":"Read"}],"SessionStart":[{"hooks":['
+                b'{"command":"python -m shared_mind.adapters.session_hooks claude start",'
+                b'"type":"command"},{"command":"keep-claude-session","type":"command"}],'
+                b'"matcher":""}]},'
                 b'"permissions":{"allow":["Read"]}}\n'
             )
             settings.write_bytes(original)
@@ -435,7 +442,9 @@ class NaturalLanguageSetupTest(unittest.TestCase):
             codex_path.parent.mkdir()
             codex_original = (
                 b'{"Notification":[{"hooks":[{"command":"keep-codex",'
-                b'"type":"command"}]}]}\n'
+                b'"type":"command"}]}],"SessionStart":[{"hooks":['
+                b'{"command":"python -m shared_mind.adapters.session_hooks codex start",'
+                b'"type":"command"},{"command":"keep-codex-session","type":"command"}]}]}\n'
             )
             codex_path.write_bytes(codex_original)
             codex_home = root / "codex-home"
@@ -473,6 +482,13 @@ class NaturalLanguageSetupTest(unittest.TestCase):
                 "keep-claude",
                 configured["hooks"]["PreToolUse"][0]["hooks"][0]["command"],
             )
+            self.assertTrue(
+                any(
+                    hook["command"] == "keep-claude-session"
+                    for entry in configured["hooks"]["SessionStart"]
+                    for hook in entry["hooks"]
+                )
+            )
             self.assertIn("SessionStart", configured["hooks"])
             self.assertIn("UserPromptSubmit", configured["hooks"])
             self.assertIn("PostToolUse", configured["hooks"])
@@ -494,6 +510,13 @@ class NaturalLanguageSetupTest(unittest.TestCase):
             self.assertEqual(
                 "keep-codex",
                 codex_hooks["Notification"][0]["hooks"][0]["command"],
+            )
+            self.assertTrue(
+                any(
+                    hook["command"] == "keep-codex-session"
+                    for entry in codex_hooks["SessionStart"]
+                    for hook in entry["hooks"]
+                )
             )
             self.assertIn("SessionStart", codex_hooks)
             self.assertIn("UserPromptSubmit", codex_hooks)
