@@ -8,8 +8,10 @@ boundaries.  The default and accepted bind addresses are loopback only.
 from __future__ import annotations
 
 import argparse
+import hmac
 import ipaddress
 import json
+import secrets
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -19,10 +21,12 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from .canonical import canonical_json
 from .product import ProductError, ProductService
 from .web_observations import OBSERVATIONS_HTML, ObservationReadModel
+from .web_review import render_review_html
 from .workspace import Workspace
 
 
 MAX_BODY_BYTES = 1024 * 1024
+CSRF_HEADER = "X-Shared-Mind-CSRF-Token"
 
 _INDEX = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -31,7 +35,7 @@ body{font-family:system-ui,sans-serif;max-width:1100px;margin:2rem auto;padding:
 h1{margin-bottom:.25rem}small{color:#52525b}pre{white-space:pre-wrap;background:#f4f4f5;padding:1rem;border-radius:.5rem;overflow:auto}
 button{padding:.5rem .8rem;margin:.25rem}.grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}@media(max-width:800px){.grid{grid-template-columns:1fr}}
 </style></head><body><h1>Shared Mind</h1><small>Project has state. Agents come and go.</small>
-<p><button onclick="load('/api/catalog','catalog')">Catalog</button><button onclick="load('/api/review-queue','queue')">Review queue</button><button onclick="load('/api/verify','verify')">Verify</button></p>
+<p><a href="/observations">Observations</a> · <a href="/review">Review</a></p><p><button onclick="load('/api/catalog','catalog')">Catalog</button><button onclick="load('/api/review-queue','queue')">Review queue</button><button onclick="load('/api/verify','verify')">Verify</button></p>
 <div class="grid"><section><h2>Catalog</h2><pre id="catalog">Load catalog</pre></section><section><h2>Review queue</h2><pre id="queue">Load review queue</pre></section></div>
 <h2>Integrity</h2><pre id="verify">Load verification</pre>
 <script>async function load(url,id){const r=await fetch(url);document.getElementById(id).textContent=JSON.stringify(await r.json(),null,2)}</script></body></html>"""
@@ -41,17 +45,22 @@ class WebControlApplication:
     def __init__(self, service: ProductService):
         self.service = service
         self.observations = ObservationReadModel(service)
+        self.csrf_token = secrets.token_urlsafe(32)
 
     def handle(
         self,
         method: str,
         target: str,
         body: bytes = b"",
+        *,
+        headers: Mapping[str, str] | None = None,
     ) -> tuple[int, str, bytes]:
         split = urlsplit(target)
         path = split.path.rstrip("/") or "/"
         query = parse_qs(split.query, keep_blank_values=False)
         try:
+            if method == "POST" and _requires_csrf(path):
+                self._require_csrf(headers)
             if method == "GET" and path == "/":
                 return HTTPStatus.OK, "text/html; charset=utf-8", _INDEX.encode("utf-8")
             if method == "GET" and path == "/observations":
@@ -59,6 +68,12 @@ class WebControlApplication:
                     HTTPStatus.OK,
                     "text/html; charset=utf-8",
                     OBSERVATIONS_HTML.encode("utf-8"),
+                )
+            if method == "GET" and path == "/review":
+                return (
+                    HTTPStatus.OK,
+                    "text/html; charset=utf-8",
+                    render_review_html(self.csrf_token).encode("utf-8"),
                 )
             if method == "GET" and path == "/api/health":
                 return self._json(HTTPStatus.OK, {"ok": True, "code": "HEALTHY"})
@@ -91,8 +106,9 @@ class WebControlApplication:
                     {"ok": report["valid"], "code": "PRODUCT_INTEGRITY_VALID" if report["valid"] else "PRODUCT_INTEGRITY_INVALID", "data": report},
                 )
             if method == "GET" and path == "/api/drafts":
+                state = _first(query, "state")
                 drafts = self.service.list_drafts(
-                    status=_first(query, "status"),
+                    status=state if state is not None else _first(query, "status"),
                     draft_kind=_first(query, "kind"),
                     batch_id=_first(query, "batch_id"),
                 )
@@ -172,13 +188,24 @@ class WebControlApplication:
                     return self._not_found(path)
                 draft_id, action = segments[3], segments[4]
                 values = self._object(body)
+                if values.get("draft_id") != draft_id:
+                    raise ProductError(
+                        "DRAFT_ID_MISMATCH",
+                        "Request draft_id must match the selected draft URL.",
+                    )
                 if action == "commit":
                     return self._ok("DRAFT_COMMITTED", self.service.commit_draft(draft_id))
                 if action == "reject":
+                    rationale = values.get("rationale")
+                    if not isinstance(rationale, str) or not rationale.strip():
+                        raise ProductError(
+                            "DRAFT_RATIONALE_REQUIRED",
+                            "Draft rejection requires a non-empty rationale.",
+                        )
                     return self._ok(
                         "DRAFT_REJECTED",
                         self.service.reject_draft(
-                            draft_id, rationale=str(values.get("rationale", ""))
+                            draft_id, rationale=rationale
                         ),
                     )
                 if action == "edit":
@@ -208,6 +235,16 @@ class WebControlApplication:
             return self._json(
                 HTTPStatus.BAD_REQUEST,
                 {"ok": False, "code": "REQUEST_INVALID", "message": str(exc)},
+            )
+
+    def _require_csrf(self, headers: Mapping[str, str] | None) -> None:
+        provided = _header(headers, CSRF_HEADER)
+        if provided is None or not hmac.compare_digest(
+            provided.encode("utf-8"), self.csrf_token.encode("ascii")
+        ):
+            raise ProductError(
+                "CSRF_TOKEN_INVALID",
+                "A valid per-application CSRF token is required.",
             )
 
     @staticmethod
@@ -261,7 +298,7 @@ def create_server(workspace: Workspace, *, host: str = "127.0.0.1", port: int = 
             else:
                 body_bytes = self.rfile.read(length) if length else b""
                 status, content_type, body = application.handle(
-                    self.command, self.path, body_bytes
+                    self.command, self.path, body_bytes, headers=self.headers
                 )
             self.send_response(int(status))
             self.send_header("Content-Type", content_type)
@@ -303,7 +340,25 @@ def _first(query: Mapping[str, list[str]], key: str) -> str | None:
     return values[0] if values else None
 
 
+def _header(headers: Mapping[str, str] | None, name: str) -> str | None:
+    if headers is None:
+        return None
+    expected = name.casefold()
+    for key, value in headers.items():
+        if str(key).casefold() == expected:
+            return str(value)
+    return None
+
+
+def _requires_csrf(path: str) -> bool:
+    return path in {"/api/context", "/api/search", "/api/tool", "/api/build"} or path.startswith(
+        ("/api/skills/", "/api/drafts/")
+    )
+
+
 def _status_for_error(code: str) -> int:
+    if code == "CSRF_TOKEN_INVALID":
+        return HTTPStatus.FORBIDDEN
     if code.endswith("NOT_FOUND"):
         return HTTPStatus.NOT_FOUND
     if "VERSION" in code or code in {"DRAFT_FINAL", "DRAFT_NOT_EDITABLE"}:
@@ -336,4 +391,10 @@ if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(main())
 
 
-__all__ = ["MAX_BODY_BYTES", "WebControlApplication", "create_server", "main"]
+__all__ = [
+    "CSRF_HEADER",
+    "MAX_BODY_BYTES",
+    "WebControlApplication",
+    "create_server",
+    "main",
+]
