@@ -31,6 +31,9 @@ Hardening RED checkpoint commit:
 Mixed-hook RED checkpoint commit:
 `90866b9 test: preserve unrelated mixed lifecycle hooks`.
 
+Hardening GREEN checkpoint commit:
+`e63f8c7 fix: harden project-scoped automatic session restore`.
+
 ## Acceptance specification
 
 | # | What is guaranteed | Test | Result |
