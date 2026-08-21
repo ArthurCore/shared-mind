@@ -417,9 +417,13 @@ class ProductStore:
         return row is not None
 
     def get_task_capture_receipt(self, trace_id: str) -> dict[str, Any] | None:
+        record = self.get_task_capture_record(trace_id)
+        return dict(record["receipt"]) if record is not None else None
+
+    def get_task_capture_record(self, trace_id: str) -> dict[str, Any] | None:
         row = self.connection.execute(
             """
-            SELECT payload FROM product_audit
+            SELECT seq, payload FROM product_audit
             WHERE event_type='TASK_TRACE_CAPTURED' AND object_id=?
             ORDER BY seq DESC LIMIT 1
             """,
@@ -427,9 +431,31 @@ class ProductStore:
         ).fetchone()
         if row is None:
             return None
+        return self._task_capture_record(row)
+
+    def list_task_capture_records(
+        self, *, after_cursor: int = 0, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        rows = self.connection.execute(
+            """
+            SELECT seq, payload FROM product_audit
+            WHERE event_type='TASK_TRACE_CAPTURED' AND seq>?
+            ORDER BY seq LIMIT ?
+            """,
+            (after_cursor, limit),
+        )
+        return [self._task_capture_record(row) for row in rows]
+
+    @staticmethod
+    def _task_capture_record(row: sqlite3.Row) -> dict[str, Any]:
         payload = json.loads(row["payload"])
         receipt = payload.get("capture_receipt")
-        return dict(receipt) if isinstance(receipt, Mapping) else None
+        if not isinstance(receipt, Mapping):
+            raise ProductStoreError(
+                "TASK_TRACE_RECEIPT_INVALID",
+                "Task capture audit payload has no receipt object.",
+            )
+        return {"cursor": int(row["seq"]), "receipt": dict(receipt)}
 
     # ------------------------------------------------------------------
     # Product mutation proposals (shared procedural state)

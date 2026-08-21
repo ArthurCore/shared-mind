@@ -619,6 +619,24 @@ RED/GREEN은
 [`docs/testing/dev-102-auto-observation-capture.tdd.md`](docs/testing/dev-102-auto-observation-capture.tdd.md)에
 기록한다.
 
+### DEV-103 — Live Observation Stream in Web Control
+
+**상태: DONE (local gates)**
+
+- capture receipt의 product-audit sequence를 received-order cursor로 사용해
+  `/api/observations` list/detail과 cursor pagination을 제공한다.
+- detail의 trace/event는 receipt가 참조하는 canonical SourceRevision bytes에서
+  복원하고 content hash를 fail closed 검증한다.
+- `/api/observations/stream`은 cursor 기반 finite SSE polling response이며,
+  `/observations`는 외부 JavaScript 의존 없는 단일 HTML viewer다.
+- 모든 신규 route는 read-only이며 product write transaction, telemetry, 새 저장소,
+  canonical mutation을 만들지 않고 기존 loopback bind 제한을 유지한다.
+
+계약은 [`docs/DEV-103-observation-stream.md`](docs/DEV-103-observation-stream.md),
+RED/GREEN은
+[`docs/testing/dev-103-observation-stream.tdd.md`](docs/testing/dev-103-observation-stream.tdd.md)에
+기록한다.
+
 ## 14. 구현된 인터페이스
 
 ```text
@@ -694,6 +712,8 @@ src/shared_mind/web_control.py
   **33 tests 통과**, 최종 **495 tests, 0 failures, branch coverage 83%**.
 - DEV-102 automatic observation capture: **8 original + 3 review RED→GREEN tests**,
   focused **20 tests 통과**, 최종 **539 tests, 0 failures/errors, 1 optional skip**.
+- DEV-103 live observation stream: **6 RED→GREEN tests**, 최종
+  **545 tests, 0 failures/errors, 1 optional skip**.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.

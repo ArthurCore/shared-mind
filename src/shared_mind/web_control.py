@@ -14,10 +14,11 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Mapping, Sequence
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from .canonical import canonical_json
 from .product import ProductError, ProductService
+from .web_observations import OBSERVATIONS_HTML, ObservationReadModel
 from .workspace import Workspace
 
 
@@ -39,6 +40,7 @@ button{padding:.5rem .8rem;margin:.25rem}.grid{display:grid;grid-template-column
 class WebControlApplication:
     def __init__(self, service: ProductService):
         self.service = service
+        self.observations = ObservationReadModel(service)
 
     def handle(
         self,
@@ -52,8 +54,32 @@ class WebControlApplication:
         try:
             if method == "GET" and path == "/":
                 return HTTPStatus.OK, "text/html; charset=utf-8", _INDEX.encode("utf-8")
+            if method == "GET" and path == "/observations":
+                return (
+                    HTTPStatus.OK,
+                    "text/html; charset=utf-8",
+                    OBSERVATIONS_HTML.encode("utf-8"),
+                )
             if method == "GET" and path == "/api/health":
                 return self._json(HTTPStatus.OK, {"ok": True, "code": "HEALTHY"})
+            if method == "GET" and path == "/api/observations":
+                return self._ok(
+                    "OBSERVATIONS_LISTED",
+                    self.observations.list(
+                        limit=_first(query, "limit"), after=_first(query, "after")
+                    ),
+                )
+            if method == "GET" and path == "/api/observations/stream":
+                return (
+                    HTTPStatus.OK,
+                    "text/event-stream; charset=utf-8",
+                    self.observations.stream(after=_first(query, "after")),
+                )
+            if method == "GET" and path.startswith("/api/observations/"):
+                trace_id = unquote(path[len("/api/observations/") :])
+                return self._ok(
+                    "OBSERVATION_SHOWN", self.observations.detail(trace_id)
+                )
             if method == "GET" and path == "/api/catalog":
                 return self._ok("CATALOG_READY", self.service.catalog())
             if method == "GET" and path == "/api/review-queue":

@@ -572,6 +572,23 @@ class ProductService:
             task_id, trace, auto_commit_deterministic=auto_commit_deterministic
         )
 
+    def list_task_capture_records(
+        self, *, after_cursor: int = 0, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        return self._translate(
+            self.store.list_task_capture_records,
+            after_cursor=after_cursor,
+            limit=limit,
+        )
+
+    def get_task_capture_record(self, trace_id: str) -> dict[str, Any] | None:
+        return self._translate(self.store.get_task_capture_record, trace_id)
+
+    def read_source_span_projection(self, revision_id: str) -> dict[str, Any]:
+        """Read canonical source bytes without usage telemetry or product writes."""
+
+        return self._translate(self.retrieval.read_source_span, revision_id)
+
     def _post_legacy_task_capture(
         self,
         task_id: str,
