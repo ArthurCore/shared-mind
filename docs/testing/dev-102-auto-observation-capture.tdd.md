@@ -60,7 +60,7 @@ RED checkpoint commits were preserved before production edits:
 
 ## Actual shared-workspace capture
 
-The parent closeout exercised the installed hook path against
+The parent closeout exercised the DEV-102 hook module entrypoint against
 `../shared-mind-memory`; this section records that supplied result without rerunning or
 modifying the external workspace.
 
