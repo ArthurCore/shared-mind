@@ -4,7 +4,7 @@
 >
 > **The working directory selects the project; the project selects exactly one Shared State.**
 
-Status: **IMPLEMENTED; LOCAL GATES PASS (fresh-host dogfooding pending)**
+Status: **IMPLEMENTED; LOCAL GATES AND INSTALLED HOOK DOGFOOD PASS**
 
 ## Contract
 
@@ -131,5 +131,8 @@ settings, or Codex hook file.
 The acceptance guarantees and RED/GREEN evidence are indexed in
 [`testing/dev-105-project-scoped-auto-resume.tdd.md`](testing/dev-105-project-scoped-auto-resume.tdd.md).
 
-Fresh Claude/Codex process dogfooding is intentionally not claimed by this
-contract record yet; it remains the final operator validation after local gates.
+Installed Claude/Codex hook commands have returned byte-identical automatic
+context, rejected an unbound second project, and captured back into this
+project's bound workspace without manual `resume`. Fresh model-process launch
+remains an operator validation because Codex may require project-hook trust and
+the launch consumes an external model request.

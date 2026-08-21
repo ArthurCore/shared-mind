@@ -4,7 +4,7 @@
 >
 > **The working directory selects the project; the project selects exactly one Shared State.**
 
-Status: **PLANNED**
+Status: **IMPLEMENTED; FRESH HOST-PROCESS OPERATOR CHECK PENDING**
 
 ## 1. Objective
 

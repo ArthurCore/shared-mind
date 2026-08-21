@@ -76,11 +76,32 @@ Codex hook-shape GREEN checkpoint commit:
 | `PYTHONPATH=src python3 -m unittest discover -s tests -v` | 578 PASS, 0 failures/errors, 1 optional skip |
 | `.venv/bin/ruff check` on changed Python/tests and `python3 -m compileall` on changed modules | PASS |
 
+## Installed-entrypoint dogfooding
+
+The editable package was reinstalled with the `mcp` extra so the portable
+`shared-mind-session-hook` console entrypoint was exercised exactly as generated
+by setup. Because the already-installed global skill differed from the packaged
+skill, setup was rerun with `--no-install-skill --install-hooks`; no global skill
+file was overwritten.
+
+| Check | Actual result |
+|---|---|
+| Project setup | `SETUP_READY`; generated `.claude/settings.json`, `.codex/hooks.json`, and the ignored local binding to `/Users/kkh/IdeaProjects/shared-mind-memory` |
+| Claude/Codex SessionStart parity | Both returned 24,867 identical bytes; byte SHA-256 `sha256:8d5752164c81e40d88cb26da04bc9fc05db682a8d7ca0eaf20b0438412f67589`; embedded context hash `sha256:7033b75dd34660490ee844eae3fb480fc1aef88ae31fff6820f3591db290c3b7` |
+| Second-project isolation | A temporary Git project beside a marker-bearing `fixture-memory` returned `PROJECT_BINDING_NOT_FOUND`, emitted no `hookSpecificOutput`, and did not expose the marker |
+| Project-bound capture | One Claude adapter append/finalize cycle increased the bound workspace batch count from 23 to 24 and produced captured file `53972f83e9253171747b50587aee2802.jsonl` only under the bound workspace |
+
+These checks invoke the same installed commands that the hosts launch, without
+using manual `shared-mind resume`. A newly launched Claude/Codex model process
+is still an operator check because it may require Codex project-hook trust and
+would consume an external model request.
+
 ## Coverage and exclusions
 
 The repository gate is the full unittest discovery suite. This DEV did not run
 a separate coverage command. Cross-project aggregation, global memory search,
 automatic workspace creation during SessionStart, and unmodifiable web-chat
-injection remain explicit non-goals. Fresh Claude Code/Codex host launches are
-not claimed here; the parent/operator must run them after installation so host
-trust prompts and real lifecycle delivery are exercised.
+injection remain explicit non-goals. Installed hook command delivery is proven
+above. Fresh Claude Code/Codex model launches are not claimed here; the operator
+must approve Codex project hooks and start new processes to exercise host trust
+and paid/external lifecycle delivery.
