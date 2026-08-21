@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from shared_mind.product import ProductError, ProductService
 from shared_mind.product_cli import EXIT_OK, main as product_main
+from shared_mind.workspace import Workspace
 
 from tests.product_support import ProductTestCase
 
@@ -245,6 +246,39 @@ class ObservationCaptureTest(ProductTestCase):
         self.assertNotEqual(EXIT_OK, exit_code)
         self.assertEqual("OBSERVATION_CUTOFF_INVALID", response["code"])
         self.assertEqual(before, captured.read_bytes())
+
+    def test_identical_observation_finalization_is_cross_workspace_deterministic(
+        self,
+    ) -> None:
+        results = []
+        for index in (1, 2):
+            workspace = Workspace.initialize(
+                self.base / f"determinism-{index}", purpose="DEV-102 determinism"
+            )
+            service = ProductService(workspace)
+            try:
+                capture = observation_capture(workspace)
+                capture.start(SESSION_ID, TASK_ID)
+                for sequence, event_type in enumerate(EVENT_TYPES, start=1):
+                    capture.append(
+                        SESSION_ID, task_trace_event(sequence, event_type)
+                    )
+                result = capture.finalize(SESSION_ID, service)
+                receipt = result["capture_receipt"]
+                source_bytes = (
+                    workspace.root / receipt["destination"]
+                ).read_bytes()
+                results.append(
+                    (
+                        source_bytes,
+                        receipt["content_hash"],
+                        receipt["trace_id"],
+                    )
+                )
+            finally:
+                service.close()
+
+        self.assertEqual(results[0], results[1])
 
 
 if __name__ == "__main__":
