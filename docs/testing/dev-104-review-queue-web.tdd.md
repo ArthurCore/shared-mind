@@ -35,13 +35,38 @@ Compatibility RED checkpoint: `2b2cd9a` (`test: add RED regression for DEV-104 e
 | UI | `state` list, detail provenance, inline token, explicit commit/reject, and absence of bulk/automatic approval | `WebReviewQueueTest.test_draft_state_detail_provenance_and_review_page_have_no_bulk_path` | PASS |
 | Compatibility | Existing edit with `{document, expected_version}` remains valid while commit without explicit `draft_id` remains rejected | `WebReviewQueueTest.test_existing_edit_body_remains_compatible_without_redundant_draft_id` | PASS |
 
+## Actual loopback review and final integrity
+
+The parent closeout ran a real loopback `ThreadingHTTPServer` against
+`../shared-mind-memory`. `/review` issued a 43-character ephemeral token and listed
+provenance-bearing draft `draft_28563d4eda3fbdc9e9111555`. A token-authenticated
+CSRF POST committed the selected draft with `DRAFT_COMMITTED` and stored receipt status
+`COMMITTED`. Its source identities were:
+
+- batch `batch_d9173d85a09b465ab94bfca6`;
+- source revision `revision_672f68977fe21c532750bd1cdbafad7c`.
+
+Final consolidation and verification returned:
+
+| Evidence | Actual value |
+|---|---|
+| Product verification | `PRODUCT_INTEGRITY_VALID` |
+| Kernel checked entries | `214` |
+| Kernel state root | `sha256:67c58b077ea9e844d6a8f6ad90620358324ca566d540b6e3c461915f7e730b8a` |
+| Kernel head | `sha256:b894a8cb8f1ee2569f2c69c9324529f223e3bfdd4d9f77502f2d58f482b3f300` |
+| Product audit | `831`, valid |
+| Explicit replay | `LEDGER_VALID`, `214` entries |
+
+These are supplied facts from the already-completed closeout; no additional external
+workspace mutation was performed while writing this report.
+
 ## Final required gates
 
 | Gate | Actual result |
 |---|---|
 | `python3 contracts/validate_contract.py` | PASS: 7 predicates, 16 typed fixtures, 6 negative cases, 6 semantic cases, and 7 continuity operations. |
 | `python3 contracts/validate_product_contract.py` | PASS: 10 typed fixtures and 14 negative cases. |
-| `PYTHONPATH=src python3 -m unittest discover -s tests -v` | 552 tests, 0 failures/errors; 1 pre-existing optional MCP SDK v1 skip. |
+| `PYTHONPATH=src python3 -m unittest discover -s tests -v` | Final closeout: 553 tests, 0 failures/errors; 1 pre-existing optional MCP SDK v1 skip. |
 
 ## Coverage and exclusions
 

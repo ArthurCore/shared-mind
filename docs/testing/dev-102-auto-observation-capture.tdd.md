@@ -31,12 +31,15 @@ unlimited retention unless the user explicitly calls `observe prune --before`.
 | Skill validation | `python3 /Users/kkh/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/shared-mind-setup` | PASS: `Skill is valid!` |
 | Review RED | `PYTHONPATH=src python3 -m unittest -v tests.test_claude_code_hooks.ClaudeCodeHooksTest.test_post_tool_use_lazily_starts_with_payload_or_session_task tests.test_observe.ObservationCaptureTest.test_prune_removes_only_captured_buffers_strictly_before_cutoff tests.test_observe.ObservationCaptureTest.test_prune_rejects_non_rfc3339_cutoff_without_file_changes` | 3 tests ran with 4 intended failures: both lazy-start cases found no pending buffer, and `prune` was not a public parser choice. |
 | Review focused GREEN | Same three-test command | 3/3 PASS. |
+| 3-OS gate RED | `PYTHONPATH=src python3 -m unittest -v tests.test_observe.ObservationCaptureTest.test_identical_observation_finalization_is_cross_workspace_deterministic tests.test_release_gates.ReleaseGateStructureTest.test_determinism_subset_runs_on_linux_macos_and_windows` | Characterization PASS; release gate alone failed because `test_observe.py` was absent from the OS matrix workflow. |
+| 3-OS gate GREEN | Same two-test command | 2/2 PASS after adding the existing test module to the Ubuntu/macOS/Windows subset. |
 
 RED checkpoint commits were preserved before production edits:
 
 - `2ed18a5` — all eight acceptance tests and packaged-skill assertion;
 - `2f32f87` — public observe parser/dispatch assertion and explicit CLI RED.
 - `d66a6a0` — independent-review lazy-start and prune RED checkpoint.
+- `7b358a1` — cross-workspace characterization and missing 3-OS workflow RED gate.
 
 ## Acceptance specification
 
@@ -53,6 +56,22 @@ RED checkpoint commits were preserved before production edits:
 | 9 | A standard PostToolUse payload lazily starts with its valid task or a deterministic session-derived fallback, while manual metadata is preserved | `ClaudeCodeHooksTest.test_post_tool_use_lazily_starts_with_payload_or_session_task`; existing adapter preservation test | PASS |
 | 10 | Prune deletes only captured buffers ending strictly before cutoff and changes no canonical/product state | `ObservationCaptureTest.test_prune_removes_only_captured_buffers_strictly_before_cutoff` | PASS |
 | 11 | A non-RFC3339 cutoff is rejected before any buffer change | `ObservationCaptureTest.test_prune_rejects_non_rfc3339_cutoff_without_file_changes` | PASS |
+| 12 | Identical session/task/events produce identical source bytes, content hash, and trace ID in fresh workspaces | `ObservationCaptureTest.test_identical_observation_finalization_is_cross_workspace_deterministic` | PASS |
+
+## Actual shared-workspace capture
+
+The parent closeout exercised the installed hook path against
+`../shared-mind-memory`; this section records that supplied result without rerunning or
+modifying the external workspace.
+
+| Evidence | Actual value |
+|---|---|
+| Trace | `trace:dev-102-104-live-20260821-001` |
+| Capture status | `CAPTURED` |
+| Source revision | `revision_d608cb9adb337d1074c22056046e4109` |
+| Receipt cursor | `812` |
+| Events | `TASK`, `TEST`, `RESULT`, in that order |
+| Original timestamps | `2026-08-21T06:00:00Z` through `2026-08-21T06:00:02Z` |
 
 ## Final required gates
 
@@ -63,7 +82,7 @@ result is inferred from the focused suite.
 |---|---|
 | `python3 contracts/validate_contract.py` | PASS: 7 predicates, 16 typed fixtures, 6 negative cases, 6 semantic cases, and 7 continuity operations. |
 | `python3 contracts/validate_product_contract.py` | PASS: 10 typed fixtures and 14 negative cases. |
-| `PYTHONPATH=src python3 -m unittest discover -s tests -v` | 539 tests, 0 failures/errors; 1 pre-existing optional MCP SDK v1 skip. |
+| `PYTHONPATH=src python3 -m unittest discover -s tests -v` | Final closeout: 553 tests, 0 failures/errors; 1 pre-existing optional MCP SDK v1 skip. |
 
 ## Coverage and known gaps
 

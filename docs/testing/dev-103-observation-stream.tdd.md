@@ -33,13 +33,21 @@ RED checkpoint: `f5912f3` (`test: add RED acceptance suite for DEV-103 observati
 | 5 | List, detail, stream, and HTML routes open no ProductStore write transaction and change no kernel/audit state | `WebObservationTest.test_all_observation_routes_open_no_product_write_transaction` | PASS |
 | UI | `/observations` is dependency-free, uses relative SSE, and carries the polling cursor | `WebObservationTest.test_observations_html_is_dependency_free_and_cursor_aware` | PASS |
 
+## Actual shared-workspace detail
+
+The parent closeout called the real DEV-103 detail route for
+`trace:dev-102-104-live-20260821-001`. It returned HTTP 200 at receipt cursor `812`;
+the receipt, source revision `revision_d608cb9adb337d1074c22056046e4109`, and ordered
+`TASK`/`TEST`/`RESULT` events exactly matched the canonical source bytes. This evidence
+was supplied from the completed run; this documentation update did not replay it.
+
 ## Final required gates
 
 | Gate | Actual result |
 |---|---|
 | `python3 contracts/validate_contract.py` | PASS: 7 predicates, 16 typed fixtures, 6 negative cases, 6 semantic cases, and 7 continuity operations. |
 | `python3 contracts/validate_product_contract.py` | PASS: 10 typed fixtures and 14 negative cases. |
-| `PYTHONPATH=src python3 -m unittest discover -s tests -v` | 545 tests, 0 failures/errors; 1 pre-existing optional MCP SDK v1 skip. |
+| `PYTHONPATH=src python3 -m unittest discover -s tests -v` | Final closeout: 553 tests, 0 failures/errors; 1 pre-existing optional MCP SDK v1 skip. |
 
 ## Coverage and exclusions
 

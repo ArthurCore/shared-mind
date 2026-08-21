@@ -86,6 +86,8 @@ jobs:
         run: python -m unittest discover -s tests -p "test_memory_views_product.py" -v
       - name: Check deterministic retrieval and code index
         run: python -m unittest discover -s tests -p "test_product_retrieval.py" -v
+      - name: Check deterministic observation finalization
+        run: python -m unittest discover -s tests -p "test_observe.py" -v
 
   quality-and-security:
     name: Compile, lint, type, and security gates

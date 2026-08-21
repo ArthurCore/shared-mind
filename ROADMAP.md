@@ -601,7 +601,7 @@ RED/GREEN 및 fresh-session evidence는
 
 ### DEV-102 — Hook-based Automatic Observation Capture
 
-**상태: DONE (local gates)**
+**상태: DONE**
 
 - `shared-mind-product observe start/append/finalize/prune`가 원본 event timestamp와
   순서를 보존하는 pending JSONL, DEV-081 immutable capture, 명시적 captured-buffer
@@ -621,7 +621,7 @@ RED/GREEN은
 
 ### DEV-103 — Live Observation Stream in Web Control
 
-**상태: DONE (local gates)**
+**상태: DONE**
 
 - capture receipt의 product-audit sequence를 received-order cursor로 사용해
   `/api/observations` list/detail과 cursor pagination을 제공한다.
@@ -639,7 +639,7 @@ RED/GREEN은
 
 ### DEV-104 — Review-queue Promotion UX
 
-**상태: DONE (local gates)**
+**상태: DONE**
 
 - `/api/drafts?state=`, detail provenance, explicit commit/reject와 dependency-free
   `/review` page를 기존 ProductService Draft 경계 위에 제공한다.
@@ -729,12 +729,15 @@ src/shared_mind/web_control.py
 - DEV-098 완료 전체 회귀: **490 tests, 0 failures, branch coverage 83%**.
 - DEV-099 uv-first session UX: **5 RED→GREEN tests**, 관련 CLI/docs 회귀
   **33 tests 통과**, 최종 **495 tests, 0 failures, branch coverage 83%**.
-- DEV-102 automatic observation capture: **8 original + 3 review RED→GREEN tests**,
-  focused **20 tests 통과**, 최종 **539 tests, 0 failures/errors, 1 optional skip**.
-- DEV-103 live observation stream: **6 RED→GREEN tests**, 최종
-  **545 tests, 0 failures/errors, 1 optional skip**.
+- DEV-102 automatic observation capture: **8 original + 3 review RED→GREEN tests**와
+  cross-workspace determinism characterization; 최종 OS/release focused **24 tests 통과**.
+- DEV-103 live observation stream: **6 RED→GREEN tests**.
 - DEV-104 review-queue promotion UX: **6 base + 1 compatibility RED→GREEN tests**,
-  focused **14 tests 통과**, 최종 **552 tests, 0 failures/errors, 1 optional skip**.
+  focused **14 tests 통과**.
+- DEV-102~104 최종 전체 회귀: **553 tests, 0 failures/errors, 1 optional skip**.
+- DEV-102~104 actual dogfooding: hook capture `trace:dev-102-104-live-20260821-001`,
+  observation detail cursor `812`, CSRF review commit 및 최종
+  `PRODUCT_INTEGRITY_VALID`/`LEDGER_VALID` 214 entries 통과.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.
 - Ruff가 원격 quality job에서 보고한 unused import/local 11건 제거.
