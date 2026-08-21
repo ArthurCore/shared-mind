@@ -140,6 +140,8 @@ def build_parser() -> argparse.ArgumentParser:
     observe_append.add_argument("--event-json", required=True)
     observe_finalize = observe_commands.add_parser("finalize")
     observe_finalize.add_argument("--session", required=True)
+    observe_prune = observe_commands.add_parser("prune")
+    observe_prune.add_argument("--before", required=True)
 
     skill = commands.add_parser("skill")
     skill_commands = skill.add_subparsers(dest="skill_command", required=True)
@@ -257,6 +259,9 @@ def main(
             if arguments.workspace is not None
             else Workspace.discover(Path.cwd())
         )
+        if arguments.command == "observe" and arguments.observe_command != "finalize":
+            result, code = _dispatch_observe(workspace, arguments)
+            return _emit(output, True, code, result)
         service = ProductService(workspace)
         try:
             result, code = _dispatch(service, arguments)
@@ -401,17 +406,7 @@ def _dispatch(service: ProductService, args: argparse.Namespace) -> tuple[Any, s
             "TASK_CAPTURED",
         )
     if args.command == "observe":
-        from .observe import ObservationCapture
-
-        capture = ObservationCapture(service.workspace)
-        if args.observe_command == "start":
-            return capture.start(args.session, args.task), "OBSERVATION_STARTED"
-        if args.observe_command == "append":
-            return (
-                capture.append(args.session, _load_inline_json_object(args.event_json)),
-                "OBSERVATION_APPENDED",
-            )
-        return capture.finalize(args.session, service), "OBSERVATION_FINALIZED"
+        return _dispatch_observe(service.workspace, args, service=service)
     if args.command == "skill":
         if args.skill_command == "list":
             skills = service.store.list_skills(status=args.status)
@@ -570,6 +565,32 @@ def _workspace_paths(service: ProductService, values: Sequence[str]) -> list[Pat
         path = Path(value).expanduser()
         resolved.append(path if path.is_absolute() else service.workspace.root / path)
     return resolved
+
+
+def _dispatch_observe(
+    workspace: Workspace,
+    args: argparse.Namespace,
+    *,
+    service: ProductService | None = None,
+) -> tuple[Any, str]:
+    from .observe import ObservationCapture
+
+    capture = ObservationCapture(workspace)
+    if args.observe_command == "start":
+        return capture.start(args.session, args.task), "OBSERVATION_STARTED"
+    if args.observe_command == "append":
+        return (
+            capture.append(args.session, _load_inline_json_object(args.event_json)),
+            "OBSERVATION_APPENDED",
+        )
+    if args.observe_command == "prune":
+        return capture.prune(before=args.before), "OBSERVATIONS_PRUNED"
+    if service is None:  # pragma: no cover - main opens the service for finalize
+        raise ProductError(
+            "OBSERVATION_SERVICE_REQUIRED",
+            "Observation finalize requires the product capture service.",
+        )
+    return capture.finalize(args.session, service), "OBSERVATION_FINALIZED"
 
 
 def _load_workspace_json(service: ProductService, value: str) -> Mapping[str, Any]:

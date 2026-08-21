@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -14,6 +15,9 @@ from ..canonical import canonical_json, sha256_bytes
 from ..observe import ObservationCapture
 from ..product import ProductError, ProductService
 from ..workspace import MAX_JSON_BYTES, Workspace
+
+
+_TASK_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 
 
 class _HookArgumentError(Exception):
@@ -61,6 +65,7 @@ def main(
         failure_root = workspace.root
         capture = ObservationCapture(workspace)
         if action == "append":
+            _lazy_start(payload, session_id, capture)
             capture.append(session_id, _event_from_payload(payload, capture))
         else:
             service = ProductService(workspace)
@@ -81,6 +86,20 @@ def main(
         summary = " ".join(str(message).splitlines()) or str(code)
         errors.write(f"shared-mind hook {action} skipped: {code}: {summary}\n")
     return 0
+
+
+def _lazy_start(
+    payload: Mapping[str, Any], session_id: str, capture: ObservationCapture
+) -> None:
+    pending = capture.buffer_path(session_id, state="pending")
+    captured = capture.buffer_path(session_id, state="captured")
+    if pending.is_file() or captured.is_file():
+        return
+    candidate = payload.get("task_id")
+    if not isinstance(candidate, str) or _TASK_ID.fullmatch(candidate) is None:
+        digest = sha256_bytes(session_id.encode("utf-8")).split(":", 1)[1][:32]
+        candidate = f"observation-{digest}"
+    capture.start(session_id, candidate)
 
 
 def _event_from_payload(

@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
 import tempfile
 from collections.abc import Mapping, Sequence
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +22,8 @@ from .workspace import MAX_JSON_BYTES, Workspace
 OBSERVATION_VERSION = "observation-session@1"
 _SEMANTIC_ID = re.compile(r"^[a-z][a-z0-9_-]{1,31}:[a-z0-9][a-z0-9._-]{0,127}$")
 _TASK_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+_TIMESTAMP = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
+_BUFFER_NAME = re.compile(r"^[0-9a-f]{32}\.jsonl$")
 
 
 class ObservationCapture:
@@ -187,6 +191,83 @@ class ObservationCapture:
             _archive_no_clobber(pending, captured)
         return result
 
+    def prune(self, *, before: str) -> dict[str, Any]:
+        cutoff = _parse_timestamp(
+            before,
+            code="OBSERVATION_CUTOFF_INVALID",
+            message="before must be an RFC3339 UTC timestamp ending in Z",
+        )
+        captured_root = self.root / "captured"
+        if not captured_root.exists():
+            return {
+                "status": "PRUNED",
+                "before": before,
+                "scanned": 0,
+                "removed": 0,
+                "retained": 0,
+            }
+        if captured_root.is_symlink() or not captured_root.is_dir():
+            raise ProductError(
+                "OBSERVATION_ARCHIVE_INVALID",
+                "Captured observation root must be a regular directory.",
+            )
+        inspected: list[tuple[Path, os.stat_result, datetime]] = []
+        try:
+            targets = sorted(
+                path
+                for path in captured_root.iterdir()
+                if _BUFFER_NAME.fullmatch(path.name) is not None
+            )
+        except OSError as exc:
+            raise ProductError("OBSERVATION_ARCHIVE_READ_FAILED", str(exc)) from exc
+        for path in targets:
+            try:
+                metadata = path.lstat()
+            except OSError as exc:
+                raise ProductError("OBSERVATION_ARCHIVE_READ_FAILED", str(exc)) from exc
+            if not stat.S_ISREG(metadata.st_mode):
+                raise ProductError(
+                    "OBSERVATION_ARCHIVE_INVALID",
+                    f"Captured observation is not a regular file: {path.name}",
+                )
+            _, events = self._read_buffer(path)
+            if not events:
+                raise ProductError(
+                    "OBSERVATION_BUFFER_INVALID",
+                    f"Captured observation has no events: {path.name}",
+                )
+            ended_at = _parse_timestamp(
+                events[-1].get("occurred_at"),
+                code="OBSERVATION_BUFFER_INVALID",
+                message=f"Captured observation has an invalid final timestamp: {path.name}",
+            )
+            inspected.append((path, metadata, ended_at))
+        removed = 0
+        for path, metadata, ended_at in inspected:
+            if ended_at >= cutoff:
+                continue
+            try:
+                current = path.lstat()
+                if (current.st_dev, current.st_ino) != (metadata.st_dev, metadata.st_ino):
+                    raise ProductError(
+                        "OBSERVATION_ARCHIVE_CHANGED",
+                        f"Captured observation changed during prune: {path.name}",
+                    )
+                path.unlink()
+            except ProductError:
+                raise
+            except OSError as exc:
+                raise ProductError("OBSERVATION_PRUNE_FAILED", str(exc)) from exc
+            removed += 1
+        scanned = len(inspected)
+        return {
+            "status": "PRUNED",
+            "before": before,
+            "scanned": scanned,
+            "removed": removed,
+            "retained": scanned - removed,
+        }
+
     @staticmethod
     def _read_buffer(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         try:
@@ -248,6 +329,17 @@ def _trace_id(session_id: str, digest: str) -> str:
         if _SEMANTIC_ID.fullmatch(candidate) is not None:
             return candidate
     return f"trace:{digest}"
+
+
+def _parse_timestamp(value: Any, *, code: str, message: str) -> datetime:
+    if not isinstance(value, str) or _TIMESTAMP.fullmatch(value) is None:
+        raise ProductError(code, message)
+    try:
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc
+        )
+    except ValueError as exc:
+        raise ProductError(code, message) from exc
 
 
 def _write_new_atomic(destination: Path, content: bytes) -> None:

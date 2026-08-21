@@ -14,6 +14,7 @@
 shared-mind-product observe start --session <opaque-session-id> --task <task-id>
 shared-mind-product observe append --session <opaque-session-id> --event-json '<json>'
 shared-mind-product observe finalize --session <opaque-session-id>
+shared-mind-product observe prune --before <RFC3339-UTC-cutoff>
 ```
 
 `start` creates exactly one `observations/pending/<session-digest>.jsonl` file.
@@ -38,12 +39,26 @@ builds one `TASK_TRACE` (`task-trace@1`), and calls only
 `observations/captured/` only after that existing DEV-081 boundary returns. Repeating
 finalize reuses the captured buffer and returns the DEV-081 `UNCHANGED` receipt.
 
+Captured observation buffers have unlimited retention by default. `prune` is the
+only deletion surface: it scans recognized regular files directly under
+`observations/captured/`, validates every buffer before deleting any, and removes
+only buffers whose last original event timestamp is strictly before the cutoff.
+Buffers exactly at or newer than the cutoff and every pending buffer remain. The
+result contains stable `scanned`, `removed`, and `retained` counts. Pruning never
+opens or changes the kernel, canonical sources, ledger, receipts, or product store.
+
 ## Claude Code hook adapter
 
 `python -m shared_mind.adapters.claude_code_hooks` accepts `append` and `finalize`.
 The adapter accepts a validated event in the hook payload's `event` field. For a raw
 `PostToolUse` payload it requires an original `occurred_at` or `timestamp`, retains
 the tool data in `details`, and derives only stable non-time identity/order fields.
+
+`PostToolUse` also lazily creates the pending buffer when no pending or captured
+buffer exists. A schema-valid payload `task_id` is preserved. If the standard hook
+payload has no valid task ID, the adapter uses the deterministic Agent-neutral
+`observation-<session-sha256-prefix>` task ID. It contains no Agent identity or clock.
+An explicitly pre-started buffer always keeps its existing task metadata.
 
 The wrapper is fail-open for Agent execution: any workspace, payload, schema, lock,
 or registration failure returns process status 0, emits one stderr line, and writes a
@@ -78,5 +93,6 @@ and adds only the session-finalize instruction for a capture that was already st
 
 ## Acceptance
 
-The eight acceptance guarantees and RED/GREEN proof are indexed in
+The eight original acceptance guarantees plus the independent-review lazy-start and
+retention guarantees are indexed in
 [`testing/dev-102-auto-observation-capture.tdd.md`](testing/dev-102-auto-observation-capture.tdd.md).
