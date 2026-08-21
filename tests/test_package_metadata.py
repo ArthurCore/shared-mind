@@ -38,7 +38,7 @@ class PackageMetadataTest(unittest.TestCase):
             "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
             hashlib.sha256(license_path.read_bytes()).hexdigest(),
         )
-        self.assertTrue(license_text.startswith("Apache License\n"))
+        self.assertEqual("Apache License", license_text.splitlines()[1].strip())
         self.assertIn("Version 2.0, January 2004", license_text)
         self.assertIn(
             "Grant of Patent License",
