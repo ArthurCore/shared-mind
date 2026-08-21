@@ -441,10 +441,12 @@ class NaturalLanguageSetupTest(unittest.TestCase):
             codex_path = project / ".codex" / "hooks.json"
             codex_path.parent.mkdir()
             codex_original = (
-                b'{"Notification":[{"hooks":[{"command":"keep-codex",'
-                b'"type":"command"}]}],"SessionStart":[{"hooks":['
+                b'{"description":"keep-description","hooks":{"Notification":['
+                b'{"hooks":[{"command":"keep-codex","type":"command"}]}],'
+                b'"SessionStart":[{"hooks":['
                 b'{"command":"python -m shared_mind.adapters.session_hooks codex start",'
-                b'"type":"command"},{"command":"keep-codex-session","type":"command"}]}]}\n'
+                b'"type":"command"},{"command":"keep-codex-session","type":"command"}]}]},'
+                b'"x-project-metadata":{"owner":"operator"}}\n'
             )
             codex_path.write_bytes(codex_original)
             codex_home = root / "codex-home"
@@ -507,24 +509,29 @@ class NaturalLanguageSetupTest(unittest.TestCase):
             codex_hooks = json.loads(
                 (project / ".codex" / "hooks.json").read_text(encoding="utf-8")
             )
+            self.assertEqual("keep-description", codex_hooks["description"])
+            self.assertEqual(
+                {"owner": "operator"}, codex_hooks["x-project-metadata"]
+            )
+            codex_events = codex_hooks["hooks"]
             self.assertEqual(
                 "keep-codex",
-                codex_hooks["Notification"][0]["hooks"][0]["command"],
+                codex_events["Notification"][0]["hooks"][0]["command"],
             )
             self.assertTrue(
                 any(
                     hook["command"] == "keep-codex-session"
-                    for entry in codex_hooks["SessionStart"]
+                    for entry in codex_events["SessionStart"]
                     for hook in entry["hooks"]
                 )
             )
-            self.assertIn("SessionStart", codex_hooks)
-            self.assertIn("UserPromptSubmit", codex_hooks)
-            self.assertIn("PostToolUse", codex_hooks)
-            self.assertIn("SessionEnd", codex_hooks)
+            self.assertIn("SessionStart", codex_events)
+            self.assertIn("UserPromptSubmit", codex_events)
+            self.assertIn("PostToolUse", codex_events)
+            self.assertIn("SessionEnd", codex_events)
             self.assertEqual(
                 12000,
-                codex_hooks["SessionStart"][-1]["hooks"][0]["additionalContextLimit"],
+                codex_events["SessionStart"][-1]["hooks"][0]["additionalContextLimit"],
             )
             for event, action in {
                 "SessionStart": "start",
@@ -541,7 +548,7 @@ class NaturalLanguageSetupTest(unittest.TestCase):
                 "PostToolUse": "append",
                 "SessionEnd": "finalize",
             }.items():
-                hook = codex_hooks[event][-1]["hooks"][0]
+                hook = codex_events[event][-1]["hooks"][0]
                 self.assertEqual(
                     f"shared-mind-session-hook codex {action}", hook["command"]
                 )
@@ -562,6 +569,26 @@ class NaturalLanguageSetupTest(unittest.TestCase):
             self.assertEqual("UNCHANGED", repeated["data"]["claude_hooks"]["status"])
             self.assertEqual("UNCHANGED", repeated["data"]["codex_hooks"]["status"])
             self.assertEqual("UNCHANGED", repeated["data"]["project_binding"]["status"])
+
+    def test_setup_rejects_non_mapping_codex_hooks_without_partial_install(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self._project(root)
+            workspace = Workspace.initialize(root / "atlas-memory", purpose="Atlas")
+            codex_path = project / ".codex" / "hooks.json"
+            codex_path.parent.mkdir()
+            original = b'{"description":"invalid","hooks":[]}\n'
+            codex_path.write_bytes(original)
+
+            with self.assertRaises(WorkspaceError) as caught:
+                self._direct_setup(
+                    project, workspace=workspace.root, install_hooks=True
+                )
+
+            self.assertEqual("CODEX_HOOKS_SETTINGS_INVALID", caught.exception.code)
+            self.assertEqual(original, codex_path.read_bytes())
+            self.assertFalse((project / ".claude" / "settings.json").exists())
+            self.assertFalse(binding_path_for(project).exists())
 
     def test_implicit_setup_requires_a_git_project_but_explicit_project_is_allowed(
         self,
