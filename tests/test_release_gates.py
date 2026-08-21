@@ -224,6 +224,8 @@ class ReleaseGateStructureTest(unittest.TestCase):
         self.assertIn("test_memory_views_product.py", self.workflow_lower)
         self.assertIn("test_product_retrieval.py", self.workflow_lower)
         self.assertIn("test_observe.py", self.workflow_lower)
+        self.assertIn("test_project_session_bootstrap.py", self.workflow_lower)
+        self.assertIn("test_session_hook_adapters.py", self.workflow_lower)
 
     def test_contract_validation_and_full_suite_enforce_80_percent_coverage(
         self,

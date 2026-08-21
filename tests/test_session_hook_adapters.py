@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from shared_mind.adapters.session_hooks import main as hook_main
+from shared_mind.product import ProductService
 from shared_mind.session_bootstrap import write_project_binding
 from shared_mind.workspace import Workspace
 
@@ -30,6 +31,25 @@ class SessionHookAdaptersTest(unittest.TestCase):
         self.assertEqual(0, exit_code, errors.getvalue())
         self.assertEqual("", errors.getvalue())
         return json.loads(output.getvalue())
+
+    def _tree_bytes(self, root: Path) -> dict[str, bytes]:
+        return {
+            path.relative_to(root).as_posix(): path.read_bytes()
+            for path in sorted(root.rglob("*"))
+            if path.is_file() and not path.is_symlink()
+        }
+
+    def _event(self) -> dict[str, object]:
+        return {
+            "object_type": "TASK_TRACE_EVENT",
+            "event_version": "task-trace-event@1",
+            "event_id": "trace_event_dev105_neutral_0001",
+            "sequence": 1,
+            "event_type": "TOOL",
+            "occurred_at": "2026-08-21T08:00:00Z",
+            "summary": "Verify neutral project-bound capture",
+            "details": {"tool_name": "Read"},
+        }
 
     def test_claude_and_codex_session_start_emit_identical_context(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -102,6 +122,89 @@ class SessionHookAdaptersTest(unittest.TestCase):
 
         self.assertNotIn("hookSpecificOutput", output)
         self.assertIn("PROJECT_BINDING_NOT_FOUND", output["systemMessage"])
+
+    def test_user_prompt_submit_changed_cwd_does_not_reuse_original_binding(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project_a = self._project(root)
+            project_b = root / "beta"
+            project_b.mkdir()
+            (project_b / ".git").mkdir()
+            workspace_a = Workspace.initialize(
+                root / "atlas-memory", purpose="ORIGINAL_PROJECT_ONLY_MARKER"
+            )
+            Workspace.initialize(
+                root / "beta-memory", purpose="UNBOUND_NEIGHBOR_MARKER"
+            )
+            write_project_binding(project_a, workspace_a)
+
+            started = self._run_hook(
+                "claude",
+                "start",
+                payload={"session_id": "session-dev-105", "cwd": str(project_a)},
+            )
+            prompted = self._run_hook(
+                "claude",
+                "prompt",
+                payload={
+                    "session_id": "session-dev-105",
+                    "cwd": str(project_b),
+                    "prompt": "Continue the original task",
+                },
+            )
+
+        self.assertIn("ORIGINAL_PROJECT_ONLY_MARKER", str(started))
+        self.assertNotIn("hookSpecificOutput", prompted)
+        self.assertIn("PROJECT_BINDING_NOT_FOUND", prompted["systemMessage"])
+        self.assertNotIn("ORIGINAL_PROJECT_ONLY_MARKER", str(prompted))
+
+    def test_neutral_append_and_finalize_use_verified_cwd_binding_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project_a = self._project(root)
+            project_b = root / "beta"
+            project_b.mkdir()
+            (project_b / ".git").mkdir()
+            workspace_a = Workspace.initialize(root / "atlas-memory", purpose="Atlas")
+            workspace_b = Workspace.initialize(root / "beta-memory", purpose="Beta")
+            write_project_binding(project_a, workspace_a)
+            write_project_binding(project_b, workspace_b)
+            neighbor_before = self._tree_bytes(workspace_b.root)
+            session_id = "session:dev-105-neutral-capture"
+            stale = workspace_b.root.as_posix()
+
+            self._run_hook(
+                "claude",
+                "append",
+                "--workspace",
+                stale,
+                payload={
+                    "session_id": session_id,
+                    "cwd": str(project_a),
+                    "task_id": "DEV-105",
+                    "event": self._event(),
+                },
+            )
+            self._run_hook(
+                "claude",
+                "finalize",
+                "--workspace",
+                stale,
+                payload={"session_id": session_id, "cwd": str(project_a)},
+            )
+
+            product_a = ProductService.open(workspace_a.root)
+            try:
+                self.assertEqual(1, len(product_a.store.list_batches()))
+            finally:
+                product_a.close()
+            self.assertTrue(
+                list((workspace_a.root / "observations" / "captured").glob("*.jsonl"))
+            )
+            self.assertFalse((workspace_b.root / "observations").exists())
+            self.assertEqual(neighbor_before, self._tree_bytes(workspace_b.root))
 
 
 if __name__ == "__main__":

@@ -93,6 +93,11 @@ class PackageMetadataTest(unittest.TestCase):
             scripts["shared-mind-product-mcp"],
         )
         self.assertEqual("shared_mind.web_control:main", scripts["shared-mind-web"])
+        self.assertIn("shared-mind-session-hook", scripts)
+        self.assertEqual(
+            "shared_mind.adapters.session_hooks:main",
+            scripts["shared-mind-session-hook"],
+        )
         packaged_contracts = project["tool"]["setuptools"]["data-files"][
             "share/shared-mind/contracts"
         ]
@@ -108,6 +113,15 @@ class PackageMetadataTest(unittest.TestCase):
         self.assertIn(
             "contracts/product-conformance-fixtures.v1.json", packaged_contracts
         )
+
+    def test_machine_local_project_binding_is_gitignored(self) -> None:
+        rules = {
+            line.strip()
+            for line in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        }
+
+        self.assertIn("/.shared-mind/project-binding.json", rules)
 
 
 if __name__ == "__main__":

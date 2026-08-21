@@ -1,11 +1,20 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from shared_mind.session_bootstrap import bootstrap_session, write_project_binding
-from shared_mind.workspace import Workspace
+from shared_mind.canonical import canonical_json
+from shared_mind.product import ProductService
+from shared_mind.session_bootstrap import (
+    binding_path_for,
+    bootstrap_session,
+    build_project_binding,
+    write_project_binding,
+)
+from shared_mind.workspace import Workspace, WorkspaceError
 
 
 class ProjectSessionBootstrapTest(unittest.TestCase):
@@ -15,6 +24,13 @@ class ProjectSessionBootstrapTest(unittest.TestCase):
         (project / ".git").mkdir()
         (project / "src" / "pkg").mkdir(parents=True)
         return project
+
+    def _tree_bytes(self, root: Path) -> dict[str, bytes]:
+        return {
+            path.relative_to(root).as_posix(): path.read_bytes()
+            for path in sorted(root.rglob("*"))
+            if path.is_file() and not path.is_symlink()
+        }
 
     def test_nested_cwd_uses_exact_project_binding_without_cross_project_fallback(
         self,
@@ -91,6 +107,140 @@ class ProjectSessionBootstrapTest(unittest.TestCase):
         self.assertEqual("PROJECT_BINDING_INVALID", result["status"], result)
         self.assertIsNone(result["additional_context"])
         self.assertIsNone(result["context_hash"])
+
+    def test_binding_schema_is_closed_and_rejects_extra_fields_without_mutation(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self._project(root, "atlas")
+            workspace = Workspace.initialize(root / "atlas-memory", purpose="Atlas")
+            binding = write_project_binding(project, workspace)
+            document = json.loads(binding.read_text(encoding="utf-8"))
+            document["client"] = "claude"
+            binding.write_text(canonical_json(document) + "\n", encoding="utf-8")
+            before = self._tree_bytes(workspace.root)
+
+            result = bootstrap_session(cwd=project)
+
+            self.assertEqual("PROJECT_BINDING_INVALID", result["status"], result)
+            self.assertIsNone(result["additional_context"])
+            self.assertIsNone(result["context_hash"])
+            self.assertEqual(before, self._tree_bytes(workspace.root))
+
+    def test_binding_root_and_workspace_hash_mismatches_fail_closed(self) -> None:
+        cases = ("project_root", "workspace_config_hash")
+        for case in cases:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                project = self._project(root, "atlas")
+                workspace = Workspace.initialize(root / "atlas-memory", purpose="Atlas")
+                binding = write_project_binding(project, workspace)
+                document = json.loads(binding.read_text(encoding="utf-8"))
+                if case == "project_root":
+                    document[case] = (root / "other-project").resolve().as_posix()
+                    expected = "PROJECT_BINDING_MISMATCH"
+                else:
+                    document[case] = "sha256:" + ("0" * 64)
+                    expected = "WORKSPACE_BINDING_MISMATCH"
+                binding.write_text(canonical_json(document) + "\n", encoding="utf-8")
+                before = self._tree_bytes(workspace.root)
+
+                result = bootstrap_session(cwd=project)
+
+                self.assertEqual(expected, result["status"], result)
+                self.assertIsNone(result["additional_context"])
+                self.assertEqual(before, self._tree_bytes(workspace.root))
+
+    def test_binding_file_and_control_directory_symlinks_fail_closed(self) -> None:
+        for symlink_kind in ("file", "control"):
+            with self.subTest(symlink=symlink_kind), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                project = self._project(root, "atlas")
+                workspace = Workspace.initialize(root / "atlas-memory", purpose="Atlas")
+                binding = binding_path_for(project)
+                binding.parent.mkdir(parents=True)
+                content = (
+                    canonical_json(build_project_binding(project, workspace)) + "\n"
+                ).encode("utf-8")
+                try:
+                    if symlink_kind == "file":
+                        target = root / "binding-target.json"
+                        target.write_bytes(content)
+                        binding.symlink_to(target)
+                    else:
+                        target = root / "binding-control"
+                        target.mkdir()
+                        (target / binding.name).write_bytes(content)
+                        binding.parent.rmdir()
+                        binding.parent.symlink_to(target, target_is_directory=True)
+                except (OSError, NotImplementedError) as exc:
+                    self.skipTest(f"symlink creation is unavailable: {exc}")
+
+                result = bootstrap_session(cwd=project)
+
+                self.assertEqual("PROJECT_BINDING_INVALID", result["status"], result)
+                self.assertIsNone(result["additional_context"])
+
+    def test_workspace_control_directory_symlink_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self._project(root, "atlas")
+            workspace = Workspace.initialize(root / "atlas-memory", purpose="Atlas")
+            write_project_binding(project, workspace)
+            control = workspace.root / ".shared-mind"
+            target = root / "workspace-control"
+            control.rename(target)
+            try:
+                control.symlink_to(target, target_is_directory=True)
+            except (OSError, NotImplementedError) as exc:
+                self.skipTest(f"symlink creation is unavailable: {exc}")
+
+            result = bootstrap_session(cwd=project)
+
+            self.assertEqual("WORKSPACE_CONFIG_INVALID", result["status"], result)
+            self.assertIsNone(result["additional_context"])
+
+    def test_invalid_product_integrity_returns_no_context_and_mutates_no_state(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self._project(root, "atlas")
+            workspace = Workspace.initialize(root / "atlas-memory", purpose="Atlas")
+            write_project_binding(project, workspace)
+            initialized = ProductService(workspace)
+            initialized.close()
+            before = self._tree_bytes(workspace.root)
+
+            with patch.object(
+                ProductService,
+                "verify",
+                return_value={"valid": False, "kernel": {"valid": False}},
+            ):
+                result = bootstrap_session(cwd=project)
+
+            self.assertEqual("PRODUCT_INTEGRITY_INVALID", result["status"], result)
+            self.assertIsNone(result["additional_context"])
+            self.assertIsNone(result["context_hash"])
+            self.assertEqual(before, self._tree_bytes(workspace.root))
+
+    def test_write_project_binding_rejects_silent_workspace_rebind(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self._project(root, "atlas")
+            first = Workspace.initialize(root / "first-memory", purpose="First")
+            second = Workspace.initialize(root / "second-memory", purpose="Second")
+            binding = write_project_binding(project, first)
+            original = binding.read_bytes()
+
+            unchanged = write_project_binding(project, first)
+            with self.assertRaises(WorkspaceError) as caught:
+                write_project_binding(project, second)
+
+            self.assertEqual("PROJECT_BINDING_CONFLICT", caught.exception.code)
+            self.assertEqual(binding, unchanged)
+            self.assertEqual(original, binding.read_bytes())
 
 
 if __name__ == "__main__":

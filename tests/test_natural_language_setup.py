@@ -10,7 +10,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 from shared_mind.cli import EXIT_OK, build_parser, main
-from shared_mind.workspace import Workspace
+from shared_mind.session_bootstrap import (
+    binding_path_for,
+    bootstrap_session,
+    write_project_binding,
+)
+from shared_mind.setup import setup_project
+from shared_mind.workspace import Workspace, WorkspaceError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,6 +48,21 @@ class NaturalLanguageSetupTest(unittest.TestCase):
         finally:
             os.chdir(previous)
         return exit_code, json.loads(output.getvalue())
+
+    def _direct_setup(
+        self,
+        project: Path,
+        *,
+        workspace: Path | None = None,
+        install_hooks: bool = False,
+    ) -> dict[str, object]:
+        return setup_project(
+            start=project,
+            workspace_path=workspace,
+            cold_start=False,
+            install_codex_skill=False,
+            install_claude_hooks=install_hooks,
+        )
 
     def test_setup_parser_and_skill_metadata_define_the_natural_language_surface(
         self,
@@ -124,6 +145,191 @@ class NaturalLanguageSetupTest(unittest.TestCase):
                 first["data"]["context"]["kernel_state_root"],
                 second["data"]["context"]["kernel_state_root"],
             )
+
+    def test_nested_project_implicit_setup_never_reuses_ancestor_memory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            parent = self._project(root, "parent")
+            child = parent / "vendor" / "child"
+            child.mkdir(parents=True)
+            (child / ".git").mkdir()
+            (child / "README.md").write_text("# Child\n", encoding="utf-8")
+            ancestor = Workspace.initialize(
+                root / "parent-memory", purpose="ANCESTOR_MEMORY_MUST_NOT_BE_REUSED"
+            )
+
+            result = self._direct_setup(child)
+
+            expected = child.parent / "child-memory"
+            self.assertEqual(expected.resolve().as_posix(), result["workspace"])
+            self.assertTrue(result["workspace_created"])
+            self.assertEqual("ANCESTOR_MEMORY_MUST_NOT_BE_REUSED", ancestor.purpose)
+
+    def test_nested_project_implicit_setup_reuses_only_its_verified_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            parent = self._project(root, "parent")
+            child = parent / "vendor" / "child"
+            child.mkdir(parents=True)
+            (child / ".git").mkdir()
+            (child / "README.md").write_text("# Child\n", encoding="utf-8")
+            Workspace.initialize(root / "parent-memory", purpose="Ancestor")
+            bound = Workspace.initialize(root / "child-custom-memory", purpose="Child")
+            write_project_binding(child, bound)
+
+            result = self._direct_setup(child)
+
+            self.assertEqual(bound.root.as_posix(), result["workspace"])
+            self.assertFalse(result["workspace_created"])
+
+    def test_existing_binding_conflicts_fail_without_explicit_workspace(self) -> None:
+        for case in ("malformed", "project-root", "workspace-config"):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                project = self._project(root)
+                workspace = Workspace.initialize(root / "atlas-memory", purpose="Atlas")
+                binding = write_project_binding(project, workspace)
+                if case == "malformed":
+                    binding.write_bytes(b"{not-json\n")
+                    expected = "PROJECT_BINDING_INVALID"
+                else:
+                    document = json.loads(binding.read_text(encoding="utf-8"))
+                    if case == "project-root":
+                        document["project_root"] = (root / "other").as_posix()
+                        expected = "PROJECT_BINDING_MISMATCH"
+                    else:
+                        document["workspace_config_hash"] = "sha256:" + ("0" * 64)
+                        expected = "WORKSPACE_BINDING_MISMATCH"
+                    binding.write_text(
+                        json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n",
+                        encoding="utf-8",
+                    )
+                before = binding.read_bytes()
+
+                with self.assertRaises(WorkspaceError) as caught:
+                    self._direct_setup(project, install_hooks=True)
+
+                self.assertEqual(expected, caught.exception.code)
+                self.assertEqual(before, binding.read_bytes())
+
+    def test_explicit_workspace_is_the_only_rebind_authority(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self._project(root)
+            old = Workspace.initialize(root / "old-memory", purpose="Old")
+            new = Workspace.initialize(root / "new-memory", purpose="New")
+            write_project_binding(project, old)
+
+            result = self._direct_setup(
+                project, workspace=new.root, install_hooks=True
+            )
+            resumed = bootstrap_session(cwd=project)
+
+            self.assertEqual(new.root.as_posix(), result["workspace"])
+            self.assertEqual("READY", resumed["status"], resumed)
+            self.assertEqual(new.root.as_posix(), resumed["workspace_root"])
+            self.assertIn("New", resumed["additional_context"])
+
+    def test_hook_install_publishes_binding_last(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = self._project(root)
+            workspace = Workspace.initialize(root / "atlas-memory", purpose="Atlas")
+            targets = [
+                project / ".claude" / "settings.json",
+                project / ".codex" / "hooks.json",
+                binding_path_for(project),
+            ]
+            replaced: list[Path] = []
+            original_replace = os.replace
+
+            def record_replace(source: object, destination: object) -> None:
+                target = Path(destination).resolve()
+                if target in {path.resolve() for path in targets}:
+                    replaced.append(target)
+                original_replace(source, destination)
+
+            with patch("shared_mind.setup.os.replace", side_effect=record_replace):
+                self._direct_setup(
+                    project, workspace=workspace.root, install_hooks=True
+                )
+
+            self.assertEqual([path.resolve() for path in targets], replaced)
+
+    def test_hook_install_rollback_restores_every_existing_file(self) -> None:
+        for failure_index in (1, 2, 3):
+            with self.subTest(failure_after_replace=failure_index), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                project = self._project(root)
+                old = Workspace.initialize(root / "old-memory", purpose="Old")
+                new = Workspace.initialize(root / "new-memory", purpose="New")
+                binding = write_project_binding(project, old)
+                settings = project / ".claude" / "settings.json"
+                settings.parent.mkdir()
+                settings.write_bytes(b'{"permissions":{"allow":["Read"]}}\n')
+                codex = project / ".codex" / "hooks.json"
+                codex.parent.mkdir()
+                codex.write_bytes(b'{"Notification":[]}\n')
+                targets = [settings, codex, binding]
+                originals = {path: path.read_bytes() for path in targets}
+                original_replace = os.replace
+                target_count = 0
+                injected = False
+
+                def fail_replace(source: object, destination: object) -> None:
+                    nonlocal target_count, injected
+                    target = Path(destination).resolve()
+                    if target in {path.resolve() for path in targets} and not injected:
+                        target_count += 1
+                        if target_count == failure_index:
+                            injected = True
+                            raise OSError(f"injected replace failure {failure_index}")
+                    original_replace(source, destination)
+
+                with patch("shared_mind.setup.os.replace", side_effect=fail_replace):
+                    with self.assertRaises((OSError, WorkspaceError)):
+                        self._direct_setup(
+                            project, workspace=new.root, install_hooks=True
+                        )
+
+                self.assertTrue(injected)
+                for path, original in originals.items():
+                    self.assertEqual(original, path.read_bytes(), path)
+
+    def test_hook_install_rollback_removes_every_new_destination(self) -> None:
+        for failure_index in (1, 2, 3):
+            with self.subTest(failure_after_replace=failure_index), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                project = self._project(root)
+                workspace = Workspace.initialize(root / "atlas-memory", purpose="Atlas")
+                targets = [
+                    project / ".claude" / "settings.json",
+                    project / ".codex" / "hooks.json",
+                    binding_path_for(project),
+                ]
+                original_replace = os.replace
+                target_count = 0
+                injected = False
+
+                def fail_replace(source: object, destination: object) -> None:
+                    nonlocal target_count, injected
+                    target = Path(destination).resolve()
+                    if target in {path.resolve() for path in targets} and not injected:
+                        target_count += 1
+                        if target_count == failure_index:
+                            injected = True
+                            raise OSError(f"injected replace failure {failure_index}")
+                    original_replace(source, destination)
+
+                with patch("shared_mind.setup.os.replace", side_effect=fail_replace):
+                    with self.assertRaises((OSError, WorkspaceError)):
+                        self._direct_setup(
+                            project, workspace=workspace.root, install_hooks=True
+                        )
+
+                self.assertTrue(injected)
+                for path in targets:
+                    self.assertFalse(path.exists(), path)
 
     def test_setup_retries_an_incomplete_cold_start_without_duplicate_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -219,8 +425,19 @@ class NaturalLanguageSetupTest(unittest.TestCase):
             project = self._project(root)
             settings = project / ".claude" / "settings.json"
             settings.parent.mkdir()
-            original = b'{"permissions":{"allow":["Read"]}}\n'
+            original = (
+                b'{"hooks":{"PreToolUse":[{"hooks":[{"command":"keep-claude",'
+                b'"type":"command"}],"matcher":"Read"}]},'
+                b'"permissions":{"allow":["Read"]}}\n'
+            )
             settings.write_bytes(original)
+            codex_path = project / ".codex" / "hooks.json"
+            codex_path.parent.mkdir()
+            codex_original = (
+                b'{"Notification":[{"hooks":[{"command":"keep-codex",'
+                b'"type":"command"}]}]}\n'
+            )
+            codex_path.write_bytes(codex_original)
             codex_home = root / "codex-home"
 
             default_exit, default = self._run_setup(
@@ -229,8 +446,8 @@ class NaturalLanguageSetupTest(unittest.TestCase):
 
             self.assertEqual(EXIT_OK, default_exit, default)
             self.assertEqual(original, settings.read_bytes())
+            self.assertEqual(codex_original, codex_path.read_bytes())
             self.assertFalse((project / ".shared-mind" / "project-binding.json").exists())
-            self.assertFalse((project / ".codex" / "hooks.json").exists())
             self.assertEqual("SKIPPED", default["data"]["claude_hooks"]["status"])
             self.assertEqual("SKIPPED", default["data"]["codex_hooks"]["status"])
             self.assertEqual("SKIPPED", default["data"]["project_binding"]["status"])
@@ -252,6 +469,10 @@ class NaturalLanguageSetupTest(unittest.TestCase):
             self.assertEqual(EXIT_OK, repeated_exit, repeated)
             configured = json.loads(settings.read_text(encoding="utf-8"))
             self.assertEqual(["Read"], configured["permissions"]["allow"])
+            self.assertEqual(
+                "keep-claude",
+                configured["hooks"]["PreToolUse"][0]["hooks"][0]["command"],
+            )
             self.assertIn("SessionStart", configured["hooks"])
             self.assertIn("UserPromptSubmit", configured["hooks"])
             self.assertIn("PostToolUse", configured["hooks"])
@@ -270,6 +491,10 @@ class NaturalLanguageSetupTest(unittest.TestCase):
             codex_hooks = json.loads(
                 (project / ".codex" / "hooks.json").read_text(encoding="utf-8")
             )
+            self.assertEqual(
+                "keep-codex",
+                codex_hooks["Notification"][0]["hooks"][0]["command"],
+            )
             self.assertIn("SessionStart", codex_hooks)
             self.assertIn("UserPromptSubmit", codex_hooks)
             self.assertIn("PostToolUse", codex_hooks)
@@ -278,6 +503,30 @@ class NaturalLanguageSetupTest(unittest.TestCase):
                 12000,
                 codex_hooks["SessionStart"][0]["hooks"][0]["additionalContextLimit"],
             )
+            for event, action in {
+                "SessionStart": "start",
+                "UserPromptSubmit": "prompt",
+                "PostToolUse": "append",
+                "SessionEnd": "finalize",
+                "Stop": "finalize",
+            }.items():
+                command = configured["hooks"][event][-1]["hooks"][0]["command"]
+                self.assertEqual(f"shared-mind-session-hook claude {action}", command)
+            for event, action in {
+                "SessionStart": "start",
+                "UserPromptSubmit": "prompt",
+                "PostToolUse": "append",
+                "SessionEnd": "finalize",
+            }.items():
+                hook = codex_hooks[event][-1]["hooks"][0]
+                self.assertEqual(
+                    f"shared-mind-session-hook codex {action}", hook["command"]
+                )
+                self.assertNotIn(project.as_posix(), hook["command"])
+                self.assertNotIn((root / "atlas-memory").as_posix(), hook["command"])
+                if event in {"SessionStart", "UserPromptSubmit"}:
+                    self.assertGreaterEqual(hook["additionalContextLimit"], 6144)
+                    self.assertLessEqual(hook["additionalContextLimit"], 16384)
             self.assertIn(
                 installed["data"]["claude_hooks"]["status"],
                 {"INSTALLED", "UPDATED"},
