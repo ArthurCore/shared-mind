@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import hashlib
 import json
 import os
 import tempfile
@@ -22,6 +23,62 @@ def run_hook(arguments: list[str], payload: dict) -> tuple[int, str]:
 
 
 class ClaudeCodeHooksTest(unittest.TestCase):
+    def test_post_tool_use_lazily_starts_with_payload_or_session_task(self) -> None:
+        cases = (
+            ("session:dev-102-lazy-explicit", "DEV-102", "DEV-102"),
+            ("session:dev-102-lazy-fallback", None, None),
+        )
+        for session_id, payload_task_id, expected_task_id in cases:
+            with self.subTest(session_id=session_id):
+                with tempfile.TemporaryDirectory() as temporary:
+                    workspace_root = Path(temporary) / "workspace"
+                    Workspace.initialize(workspace_root, purpose="DEV-102 lazy hook test")
+                    payload = {
+                        "session_id": session_id,
+                        "cwd": str(workspace_root),
+                        "hook_event_name": "PostToolUse",
+                        "tool_name": "Read",
+                        "tool_input": {"file_path": "README.md"},
+                        "tool_response": {"ok": True},
+                        "tool_use_id": "tool_use_dev102_lazy_001",
+                        "timestamp": "2026-08-21T03:04:05Z",
+                    }
+                    if payload_task_id is not None:
+                        payload["task_id"] = payload_task_id
+
+                    append_exit, append_errors = run_hook(
+                        ["append", "--workspace", str(workspace_root)], payload
+                    )
+                    finalize_exit, finalize_errors = run_hook(
+                        ["finalize", "--workspace", str(workspace_root)],
+                        {"session_id": session_id},
+                    )
+
+                    self.assertEqual(0, append_exit)
+                    self.assertEqual("", append_errors)
+                    self.assertEqual(0, finalize_exit)
+                    self.assertEqual("", finalize_errors)
+                    service = ProductService.open(workspace_root)
+                    try:
+                        batches = service.store.list_batches()
+                        self.assertEqual(1, len(batches))
+                        revision_id = service.store.list_ingest_items(
+                            batches[0]["batch_id"]
+                        )[0]["revision_id"]
+                        restored = json.loads(
+                            service.tool_call(
+                                "read_source_span", {"revision_id": revision_id}
+                            )["excerpt"]
+                        )
+                    finally:
+                        service.close()
+                    if expected_task_id is None:
+                        digest = hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:32]
+                        expected_task_id = f"observation-{digest}"
+                    self.assertEqual(expected_task_id, restored["task_id"])
+                    self.assertEqual("2026-08-21T03:04:05Z", restored["started_at"])
+                    self.assertEqual("2026-08-21T03:04:05Z", restored["ended_at"])
+
     def test_missing_workspace_is_fail_open_and_records_failure_without_mutation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             project = Path(temporary) / "project"

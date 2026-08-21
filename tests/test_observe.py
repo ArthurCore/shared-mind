@@ -62,6 +62,16 @@ class ObservationCaptureTest(ProductTestCase):
             capture.append(SESSION_ID, task_trace_event(sequence, event_type))
         return capture
 
+    def _capture_at(self, session_id: str, occurred_at: str) -> tuple[object, Path]:
+        capture = observation_capture(self.workspace)
+        capture.start(session_id, TASK_ID)
+        event = task_trace_event(1, "TOOL")
+        event["event_id"] = f"trace_event_{session_id.split(':', 1)[1]}"
+        event["occurred_at"] = occurred_at
+        capture.append(session_id, event)
+        result = capture.finalize(session_id, self.service)
+        return result, capture.buffer_path(session_id, state="captured")
+
     def test_start_is_idempotent_and_creates_exactly_one_pending_buffer(self) -> None:
         first_exit, first_response = self._product_cli(
             "observe", "start", "--session", SESSION_ID, "--task", TASK_ID
@@ -168,6 +178,73 @@ class ObservationCaptureTest(ProductTestCase):
             failed_items[0]["revision_id"], retried["capture_receipt"]["source_revision_id"]
         )
         self.assertFalse(pending.exists())
+
+    def test_prune_removes_only_captured_buffers_strictly_before_cutoff(self) -> None:
+        capture = observation_capture(self.workspace)
+        _, old = self._capture_at(
+            "session:dev-102-prune-old", "2026-08-21T00:59:59Z"
+        )
+        _, exact = self._capture_at(
+            "session:dev-102-prune-exact", "2026-08-21T01:00:00Z"
+        )
+        _, newer = self._capture_at(
+            "session:dev-102-prune-newer", "2026-08-21T01:00:01Z"
+        )
+        pending_session = "session:dev-102-prune-pending"
+        capture.start(pending_session, TASK_ID)
+        pending_event = task_trace_event(1, "TOOL")
+        pending_event["event_id"] = "trace_event_dev102_prune_pending"
+        pending_event["occurred_at"] = "2026-08-20T00:00:00Z"
+        capture.append(pending_session, pending_event)
+        pending = capture.buffer_path(pending_session, state="pending")
+        canonical_before = {
+            "kernel": self._kernel_snapshot(),
+            "audit": self.service.store.verify_audit(),
+            "batches": self.service.store.list_batches(),
+        }
+
+        exit_code, response = self._product_cli(
+            "observe", "prune", "--before", "2026-08-21T01:00:00Z"
+        )
+
+        self.assertEqual(EXIT_OK, exit_code, response)
+        self.assertEqual("OBSERVATIONS_PRUNED", response["code"])
+        self.assertEqual(
+            {
+                "before": "2026-08-21T01:00:00Z",
+                "removed": 1,
+                "retained": 2,
+                "scanned": 3,
+                "status": "PRUNED",
+            },
+            response["data"],
+        )
+        self.assertFalse(old.exists())
+        self.assertTrue(exact.is_file())
+        self.assertTrue(newer.is_file())
+        self.assertTrue(pending.is_file())
+        self.assertEqual(
+            canonical_before,
+            {
+                "kernel": self._kernel_snapshot(),
+                "audit": self.service.store.verify_audit(),
+                "batches": self.service.store.list_batches(),
+            },
+        )
+
+    def test_prune_rejects_non_rfc3339_cutoff_without_file_changes(self) -> None:
+        _, captured = self._capture_at(
+            "session:dev-102-prune-invalid", "2026-08-20T00:00:00Z"
+        )
+        before = captured.read_bytes()
+
+        exit_code, response = self._product_cli(
+            "observe", "prune", "--before", "2026-08-21"
+        )
+
+        self.assertNotEqual(EXIT_OK, exit_code)
+        self.assertEqual("OBSERVATION_CUTOFF_INVALID", response["code"])
+        self.assertEqual(before, captured.read_bytes())
 
 
 if __name__ == "__main__":
