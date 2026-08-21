@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import io
 from pathlib import Path
 from unittest.mock import patch
 
 from shared_mind.product import ProductError, ProductService
+from shared_mind.product_cli import EXIT_OK, main as product_main
 
 from tests.product_support import ProductTestCase
 
@@ -34,6 +36,13 @@ def observation_capture(workspace):
 
 
 class ObservationCaptureTest(ProductTestCase):
+    def _product_cli(self, *arguments: str) -> tuple[int, dict]:
+        output = io.StringIO()
+        exit_code = product_main(
+            ["--workspace", str(self.workspace_root), *arguments], stdout=output
+        )
+        return exit_code, json.loads(output.getvalue())
+
     def _kernel_snapshot(self) -> dict[str, int | str]:
         kernel = self.workspace.open_kernel()
         try:
@@ -54,11 +63,19 @@ class ObservationCaptureTest(ProductTestCase):
         return capture
 
     def test_start_is_idempotent_and_creates_exactly_one_pending_buffer(self) -> None:
-        capture = observation_capture(self.workspace)
-
-        first = capture.start(SESSION_ID, TASK_ID)
+        first_exit, first_response = self._product_cli(
+            "observe", "start", "--session", SESSION_ID, "--task", TASK_ID
+        )
+        self.assertEqual(EXIT_OK, first_exit, first_response)
+        self.assertEqual("OBSERVATION_STARTED", first_response["code"])
+        first = first_response["data"]
         first_bytes = Path(first["path"]).read_bytes()
-        second = capture.start(SESSION_ID, TASK_ID)
+        second_exit, second_response = self._product_cli(
+            "observe", "start", "--session", SESSION_ID, "--task", TASK_ID
+        )
+        self.assertEqual(EXIT_OK, second_exit, second_response)
+        self.assertEqual("OBSERVATION_STARTED", second_response["code"])
+        second = second_response["data"]
 
         pending = list((self.workspace_root / "observations" / "pending").glob("*.jsonl"))
         self.assertEqual("STARTED", first["status"])
