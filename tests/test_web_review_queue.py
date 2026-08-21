@@ -258,6 +258,34 @@ class WebReviewQueueTest(ProductTestCase):
         self.assertNotIn("https://", html)
         self.assertEqual(audit_before, self.service.store.verify_audit())
 
+    def test_existing_edit_body_remains_compatible_without_redundant_draft_id(self) -> None:
+        draft = self._draft()
+        app = WebControlApplication(self.service)
+        token = self._token(app)
+
+        status, response = self._post(
+            app,
+            f"/api/drafts/{draft['draft_id']}/edit",
+            {
+                "document": draft["document"],
+                "expected_version": draft["version"],
+            },
+            token=token,
+        )
+
+        self.assertEqual(200, status, response)
+        self.assertEqual("DRAFT_UPDATED", response["code"])
+        self.assertEqual("REVIEWED", response["data"]["status"])
+        self.assertEqual(draft["version"] + 1, response["data"]["version"])
+        missing_status, missing = self._post(
+            app,
+            f"/api/drafts/{draft['draft_id']}/commit",
+            {},
+            token=token,
+        )
+        self.assertEqual(400, missing_status, missing)
+        self.assertEqual("DRAFT_ID_MISMATCH", missing["code"])
+
 
 if __name__ == "__main__":
     unittest.main()
