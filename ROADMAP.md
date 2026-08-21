@@ -762,8 +762,8 @@ src/shared_mind/web_control.py
   observation detail cursor `812`, CSRF review commit 및 최종
   `PRODUCT_INTEGRITY_VALID`/`LEDGER_VALID` 214 entries 통과.
 - DEV-105 hardening focused: project binding/bootstrap, neutral capture, setup rollback,
-  packaging/release 구조 **52 tests 통과**, 관련 회귀 **71 tests 통과**, 최종
-  **577 tests, 0 failures/errors, 1 optional skip**. Fresh Claude/Codex process
+  packaging/release 구조 **53 tests 통과**, 관련 회귀 **72 tests 통과**, 최종
+  **578 tests, 0 failures/errors, 1 optional skip**. Fresh Claude/Codex process
   dogfooding은 아직 실행하지 않아 완료 증거로 주장하지 않는다.
 - 제품 중심 회귀군: **46 tests 통과**.
 - 별도 확장 실행에서 discovery된 **388 tests가 모두 test assertion을 통과**했으나, 동시에 실행된 두 coverage runner가 `.coverage.*`를 상호 삭제해 해당 실행의 합산 coverage 수치는 증거로 사용하지 않는다.

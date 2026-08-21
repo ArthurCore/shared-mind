@@ -21,6 +21,8 @@ recovery/custom-budget path.
 | Hardening GREEN | Same five-module command | 52/52 PASS. |
 | Mixed-hook preservation RED | `PYTHONPATH=src python3 -m unittest tests.test_natural_language_setup.NaturalLanguageSetupTest.test_setup_does_not_touch_claude_settings_without_install_hooks -v` | 1 intended failure: an unrelated command sharing an entry with a legacy managed hook was removed. |
 | Mixed-hook preservation GREEN | Same single-test command | 1/1 PASS; only the legacy managed command is reconciled. |
+| Codex hook-shape RED | Two focused `NaturalLanguageSetupTest` Codex shape/validation tests | 2 intended failures: lifecycle entries were written at document root and a non-object `hooks` field was accepted. |
+| Codex hook-shape GREEN | Same two-test command | 2/2 PASS; official nested shape and fail-closed validation are enforced. |
 
 RED checkpoint commit:
 `e2585a5 test: add RED gate for project-scoped auto resume`.
@@ -33,6 +35,9 @@ Mixed-hook RED checkpoint commit:
 
 Hardening GREEN checkpoint commit:
 `e63f8c7 fix: harden project-scoped automatic session restore`.
+
+Codex hook-shape RED checkpoint commit:
+`36e560c test: require official Codex hooks document shape`.
 
 ## Acceptance specification
 
@@ -56,6 +61,7 @@ Hardening GREEN checkpoint commit:
 | 16 | Claude/Codex/binding installation publishes binding last and rolls back each injected post-replace failure | `NaturalLanguageSetupTest.test_hook_install_publishes_binding_last`; both `test_hook_install_rollback_*` tests | PASS |
 | 17 | Generated lifecycle hooks use one portable entrypoint, preserve unrelated hooks, embed no absolute path, and use a bounded approximate Codex token limit | `NaturalLanguageSetupTest.test_setup_does_not_touch_claude_settings_without_install_hooks` | PASS |
 | 18 | The console entrypoint is packaged, the machine-local binding is gitignored, and bootstrap parity runs in the 3-OS determinism subset | `PackageMetadataTest`; `ReleaseGateStructureTest.test_determinism_subset_runs_on_linux_macos_and_windows` | PASS |
+| 19 | Codex lifecycle arrays are nested under top-level `hooks`, top-level metadata and unrelated mixed hooks survive reconciliation, and invalid `hooks` types fail before partial installation | `NaturalLanguageSetupTest.test_setup_does_not_touch_claude_settings_without_install_hooks`; `test_setup_rejects_non_mapping_codex_hooks_without_partial_install` | PASS |
 
 ## Final required gates
 
@@ -63,8 +69,8 @@ Hardening GREEN checkpoint commit:
 |---|---|
 | `python3 contracts/validate_contract.py` | PASS: 7 predicates, 16 typed fixtures, 6 negative cases, 6 semantic cases, 7 continuity operations |
 | `python3 contracts/validate_product_contract.py` | PASS: 10 typed fixtures, 14 negative cases |
-| Focused DEV-105 + manual resume/DEV-102/release regression (8 modules) | 71/71 PASS |
-| `PYTHONPATH=src python3 -m unittest discover -s tests -v` | 577 PASS, 0 failures/errors, 1 optional skip |
+| Focused DEV-105 + manual resume/DEV-102/release regression (8 modules) | 72/72 PASS |
+| `PYTHONPATH=src python3 -m unittest discover -s tests -v` | 578 PASS, 0 failures/errors, 1 optional skip |
 | `.venv/bin/ruff check` on changed Python/tests and `python3 -m compileall` on changed modules | PASS |
 
 ## Coverage and exclusions

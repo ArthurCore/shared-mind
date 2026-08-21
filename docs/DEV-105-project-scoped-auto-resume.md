@@ -91,6 +91,11 @@ With `--install-hooks`, setup now installs or reconciles:
 - `.codex/hooks.json` entries for `SessionStart`, `UserPromptSubmit`,
   `PostToolUse`, and `SessionEnd`.
 
+Codex lifecycle event arrays live under the official top-level `hooks` object;
+the top-level `description` and unrelated metadata are preserved. Setup also
+migrates the earlier DEV-105 root-level lifecycle entries into that nested
+object when encountered.
+
 Codex `SessionStart` and `UserPromptSubmit` entries set
 `additionalContextLimit` to `12000`, enough for the 24 KiB bootstrap context
 contract as a bounded approximate token threshold, not a byte count. Codex

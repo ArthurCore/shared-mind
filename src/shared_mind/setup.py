@@ -347,6 +347,12 @@ def _read_codex_hooks(project_root: Path) -> dict[str, Any] | None:
         raise WorkspaceError(
             "CODEX_HOOKS_SETTINGS_INVALID", "Codex hooks must be a JSON object."
         )
+    hooks = document.get("hooks")
+    if hooks is not None and not isinstance(hooks, dict):
+        raise WorkspaceError(
+            "CODEX_HOOKS_SETTINGS_INVALID",
+            "Codex hooks field must be a JSON object.",
+        )
     return document
 
 
@@ -429,6 +435,11 @@ def _claude_settings_bytes(existing: dict[str, Any] | None) -> bytes:
 
 def _codex_hooks_bytes(existing: dict[str, Any] | None) -> bytes:
     document = dict(existing) if existing is not None else {}
+    document.setdefault(
+        "description",
+        "Shared Mind project-scoped session restore and observation capture.",
+    )
+    hooks = dict(document.get("hooks", {}))
     commands: dict[str, tuple[str, int | None]] = {
         "SessionStart": ("shared-mind-session-hook codex start", 12000),
         "UserPromptSubmit": ("shared-mind-session-hook codex prompt", 12000),
@@ -436,8 +447,9 @@ def _codex_hooks_bytes(existing: dict[str, Any] | None) -> bytes:
         "SessionEnd": ("shared-mind-session-hook codex finalize", None),
     }
     for event_name, (command, limit) in commands.items():
-        entries = document.get(event_name, [])
-        if not isinstance(entries, list):
+        entries = hooks.get(event_name, [])
+        legacy_entries = document.pop(event_name, [])
+        if not isinstance(entries, list) or not isinstance(legacy_entries, list):
             raise WorkspaceError(
                 "CODEX_HOOKS_SETTINGS_INVALID",
                 f"Codex hook {event_name} must be an array.",
@@ -445,8 +457,9 @@ def _codex_hooks_bytes(existing: dict[str, Any] | None) -> bytes:
         hook: dict[str, Any] = {"type": "command", "command": command}
         if limit is not None:
             hook["additionalContextLimit"] = limit
-        preserved = _preserve_unmanaged_hooks(entries)
-        document[event_name] = [*preserved, {"hooks": [hook]}]
+        preserved = _preserve_unmanaged_hooks([*entries, *legacy_entries])
+        hooks[event_name] = [*preserved, {"hooks": [hook]}]
+    document["hooks"] = hooks
     return (canonical_json(document) + "\n").encode("utf-8")
 
 
@@ -516,10 +529,9 @@ def _apply_project_integration_plan(plan: Mapping[str, Any]) -> dict[str, Any]:
         for item in files:
             path = item["path"]
             temporary = staged.get(path)
-            if temporary is None:
-                continue
-            os.replace(temporary, path)
-            staged.pop(path, None)
+            if temporary is not None:
+                os.replace(temporary, path)
+                staged.pop(path, None)
     except OSError as exc:
         rollback_errors: list[str] = []
         for item in reversed(files):
