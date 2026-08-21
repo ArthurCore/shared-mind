@@ -61,6 +61,11 @@ binding at:
 <project>/.shared-mind/project-binding.json
 ```
 
+The binding contains machine-local absolute paths and is excluded from Git.
+Generated Claude/Codex hook definitions may be shared, so their commands use a
+packaged `shared-mind-session-hook` console entrypoint and contain no absolute
+interpreter, project, or workspace path.
+
 Versioned closed shape `project-binding@1`:
 
 ```json
@@ -213,6 +218,8 @@ create  src/shared_mind/session_bootstrap.py
 create  src/shared_mind/adapters/session_hooks.py
 modify  src/shared_mind/cli.py
 modify  src/shared_mind/setup.py
+modify  pyproject.toml
+modify  .gitignore
 modify  src/shared_mind/adapters/claude_code_hooks.py (compatibility wrapper if needed)
 create  tests/test_project_session_bootstrap.py
 create  tests/test_session_hook_adapters.py
@@ -255,6 +262,8 @@ create  docs/testing/dev-105-project-scoped-auto-resume.tdd.md
 13. Existing manual `shared-mind resume`, DEV-081 idempotency/conflict behavior,
     and DEV-102 capture tests remain green.
 14. Cross-client deterministic subset covers bootstrap context parity.
+15. Generated hook commands are portable (no absolute machine paths) and the
+    machine-local binding is ignored by Git.
 
 ## 10. Implementation stages and dependency graph
 
